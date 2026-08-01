@@ -115,7 +115,6 @@ export function StudyDashboard() {
           <button className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>总览</button>
           <button className={view === "os" ? "active" : ""} onClick={() => setView("os")}>操作系统</button>
           <button className={view === "today" ? "active" : ""} onClick={() => setView("today")}>今日任务</button>
-          <button className={view === "review" ? "active" : ""} onClick={() => setView("review")}>复习记录</button>
         </nav>
         <div className="course-list">
           <h2>科目进度</h2>
@@ -124,12 +123,18 @@ export function StudyDashboard() {
       </aside>
 
       <main>
-        <header className="topbar"><strong>{view === "os" ? "操作系统学习计划" : view === "overview" ? "学习总览" : view === "today" ? "今日任务" : "复习记录"}</strong><span>已完成 2 / 4 科目</span></header>
+        <header className="topbar"><strong>{view === "os" ? "操作系统学习计划" : view === "overview" ? "学习总览" : "今日任务"}</strong><span>已完成 2 / 4 科目</span></header>
 
         {view === "os" && <div className="page">
           <section className="page-heading">
             <div><h1>操作系统</h1><p>7天计划 · 5章 · 约30小时</p></div>
             <div className="progress-box"><span>{completedDays.length} / 7 天</span><div><i style={{ width: `${progress}%` }} /></div></div>
+          </section>
+
+          <section className="summary-grid">
+            <article className="summary-progress"><span>本周进度</span><strong>{progress}<small>%</small></strong><div><i style={{ width: `${progress}%` }} /></div></article>
+            <article><span>当前任务</span><strong>{currentDay.date}</strong><p>{currentDay.content}</p></article>
+            <article><span>已完成科目</span><div className="completed-course"><i>✓</i>数据结构</div><div className="completed-course"><i>✓</i>计算机组成原理</div></article>
           </section>
 
           <section className="section">
@@ -163,7 +168,6 @@ export function StudyDashboard() {
 
         {view === "today" && <div className="page"><section className="page-heading"><div><h1>今日任务</h1><p>{currentDay.date}</p></div></section><article className="today-card"><span>{currentDay.chapter}</span><h2>{currentDay.content}</h2><p>计划时长：{currentDay.time}</p><button onClick={() => toggleDay(currentDay.id)}>{completedDays.includes(currentDay.id) ? "取消完成" : "标记为完成"}</button></article></div>}
 
-        {view === "review" && <div className="page"><section className="page-heading"><div><h1>复习记录</h1><p>已完成的学习内容</p></div></section><div className="review-list">{completedDays.length === 0 ? <p className="empty">还没有完成记录。</p> : completedDays.map((id) => <article key={id}><strong>{days[id - 1].date} · {days[id - 1].chapter}</strong><span>{days[id - 1].content}</span></article>)}</div></div>}
       </main>
     </div>
   );
