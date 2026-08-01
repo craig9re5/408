@@ -555,10 +555,7 @@ export function StudyDashboard() {
           <div className="brand-logo">
             <img src="/pku-logo.svg" alt="北京大学校徽" width={38} height={38} />
           </div>
-          <div className="brand-text">
-            <strong>北京大学</strong>
-            <span>408 学习目录</span>
-          </div>
+          <strong>408 学习目录</strong>
         </div>
 
         <div className="semester-card">
