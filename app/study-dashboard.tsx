@@ -26,7 +26,7 @@ function defaultProgress(): ProgressMap {
         progress[section.id] = {
           learned: book.initiallyComplete,
           learnedAt: "",
-          reviewed: book.initiallyComplete,
+          reviewed: false,
           reviewedAt: "",
           plannedAt: section.plannedAt ?? "",
         };
@@ -138,11 +138,12 @@ function readLocalProgress(): ProgressMap | null {
       const entry = (saved as Record<string, unknown>)[sectionId];
       if (!entry || typeof entry !== "object") return;
       const value = entry as Record<string, unknown>;
+      const reviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
       defaults[sectionId] = {
         learned: Boolean(value.learned),
         learnedAt: typeof value.learnedAt === "string" ? value.learnedAt : "",
-        reviewed: Boolean(value.reviewed),
-        reviewedAt: typeof value.reviewedAt === "string" ? value.reviewedAt : "",
+        reviewed: Boolean(value.reviewed) && Boolean(reviewedAt),
+        reviewedAt,
         plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : defaults[sectionId].plannedAt,
       };
     });
@@ -158,12 +159,13 @@ function mergeRemoteProgress(remote: Record<string, SectionProgress>, includeLoc
   Object.keys(merged).forEach((sectionId) => {
     const value = remote[sectionId];
     if (!value || typeof value !== "object") return;
+    const reviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
     merged[sectionId] = {
       ...merged[sectionId],
       learned: Boolean(value.learned),
       learnedAt: typeof value.learnedAt === "string" ? value.learnedAt : "",
-      reviewed: Boolean(value.reviewed),
-      reviewedAt: typeof value.reviewedAt === "string" ? value.reviewedAt : "",
+      reviewed: Boolean(value.reviewed) && Boolean(reviewedAt),
+      reviewedAt,
       plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : merged[sectionId].plannedAt,
     };
   });
@@ -180,14 +182,8 @@ function ProgressRing({ value }: { value: number }) {
 
 function UniversityLogo() {
   return (
-    <div className="university-logo" role="img" aria-label="大学徽标">
-      <svg viewBox="0 0 88 88" aria-hidden="true">
-        <path d="M44 7 73 18v21c0 19-12 33-29 42C27 72 15 58 15 39V18L44 7Z" fill="currentColor" />
-        <path d="m23 34 21-12 21 12-21 12-21-12Z" fill="var(--coral)" />
-        <path d="M30 38v16h28V38L44 46 30 38Z" fill="var(--paper)" />
-        <path d="M25 57h38M36 48v6M44 48v6M52 48v6" fill="none" stroke="var(--paper)" strokeLinecap="round" strokeWidth="2.5" />
-        <circle cx="44" cy="64" r="2.5" fill="var(--coral)" />
-      </svg>
+    <div className="university-logo" role="img" aria-label="北京大学校徽">
+      <img src="/pku-logo.svg" alt="北京大学校徽" width={80} height={80} />
     </div>
   );
 }
@@ -480,7 +476,15 @@ export function StudyDashboard() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span>408</span><strong>学习目录</strong></div>
+        <div className="brand">
+          <div className="brand-logo">
+            <img src="/pku-logo.svg" alt="北京大学校徽" width={38} height={38} />
+          </div>
+          <div className="brand-text">
+            <strong>北京大学</strong>
+            <span>408 学习目录</span>
+          </div>
+        </div>
 
         <nav className="subject-progress" aria-label="切换学习科目">
           <h2>科目进度</h2>
@@ -592,11 +596,11 @@ export function StudyDashboard() {
                                 onChange={(value) => updateProgress(section.id, { plannedAt: value })}
                               />
                               <div className="check-with-date">
-                                <label><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><em>学完</em></label>
+                                <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /></label>
                                 {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
                               <div className="check-with-date">
-                                <label><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><em>复习</em></label>
+                                <label aria-label={`${section.number} 复习`}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /></label>
                                 {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
                               </div>
                             </div>
