@@ -2,6 +2,7 @@ export type Section = {
   id: string;
   number: string;
   title: string;
+  plannedAt?: string;
 };
 
 export type Chapter = {
@@ -19,7 +20,8 @@ export type Book = {
   chapters: Chapter[];
 };
 
-type ChapterInput = [title: string, sections: string[]];
+type SectionInput = string | [title: string, plannedAt: string];
+type ChapterInput = [title: string, sections: SectionInput[]];
 
 function makeBook(
   id: string,
@@ -39,11 +41,15 @@ function makeBook(
         id: `${id}-chapter-${chapterNumber}`,
         number: String(chapterNumber),
         title: chapterTitle,
-        sections: sections.map((sectionTitle, sectionIndex) => ({
-          id: `${id}-${chapterNumber}-${sectionIndex + 1}`,
-          number: `${chapterNumber}.${sectionIndex + 1}`,
-          title: sectionTitle,
-        })),
+        sections: sections.map((section, sectionIndex) => {
+          const [sectionTitle, plannedAt] = typeof section === "string" ? [section, ""] : section;
+          return {
+            id: `${id}-${chapterNumber}-${sectionIndex + 1}`,
+            number: `${chapterNumber}.${sectionIndex + 1}`,
+            title: sectionTitle,
+            plannedAt: plannedAt || undefined,
+          };
+        }),
       };
     }),
   };
@@ -70,10 +76,18 @@ export const books: Book[] = [
     ["输入/输出系统", ["I/O系统基本概念", "I/O接口", "I/O方式"]],
   ]),
   makeBook("operating-system", "操作系统", "操作系统", false, [
-    ["计算机系统概述", ["操作系统的基本概念", "操作系统发展历程", "操作系统的运行环境", "操作系统结构", "操作系统引导", "虚拟机"]],
-    ["进程与线程", ["进程与线程简介", "CPU调度", "同步与互斥", "死锁"]],
-    ["内存管理", ["内存管理概念", "虚拟内存管理"]],
-    ["文件管理", ["文件系统基础", "目录与文件", "文件系统", "本章难点"]],
-    ["输入/输出管理", ["I/O管理概述", "设备独立性软件", "磁盘和固态硬盘"]],
+    ["计算机系统概述", [["操作系统的基本概念", "2026-08-01"], ["操作系统发展历程", "2026-08-01"], ["操作系统的运行环境", "2026-08-01"], ["操作系统结构", "2026-08-01"], ["操作系统引导", "2026-08-01"], ["虚拟机", "2026-08-01"]]],
+    ["进程与线程", [["进程与线程简介", "2026-08-02"], ["CPU调度", "2026-08-02"], ["同步与互斥", "2026-08-03"], ["死锁", "2026-08-03"]]],
+    ["内存管理", [["内存管理概念", "2026-08-04"], ["虚拟内存管理", "2026-08-05"]]],
+    ["文件管理", [["文件系统基础", "2026-08-06"], ["目录与文件", "2026-08-06"], ["文件系统", "2026-08-06"], ["本章难点", "2026-08-06"]]],
+    ["输入/输出管理", [["I/O管理概述", "2026-08-07"], ["设备独立性软件", "2026-08-07"], ["磁盘和固态硬盘", "2026-08-07"]]],
+  ]),
+  makeBook("computer-network", "计算机网络", "计网", false, [
+    ["计算机网络体系结构", ["计算机网络概述", "计算机网络体系结构与参考模型"]],
+    ["物理层", ["通信基础", "传输介质", "物理层设备"]],
+    ["数据链路层", ["数据链路层的功能", "组帧", "差错控制", "流量控制与可靠传输机制", "介质访问控制", "局域网", "广域网", "数据链路层设备"]],
+    ["网络层", ["网络层的功能", "IPv4", "IPv6", "路由算法与路由协议", "IP多播", "移动IP", "网络层设备"]],
+    ["传输层", ["传输层提供的服务", "UDP", "TCP"]],
+    ["应用层", ["网络应用模型", "域名系统", "文件传输协议", "电子邮件", "万维网"]],
   ]),
 ];

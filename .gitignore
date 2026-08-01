@@ -30,6 +30,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.dev.vars*
 
 # vercel
 .vercel
@@ -40,3 +41,13 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local Codex / hosting configuration
+.openai/
+.codex/
+
+# local preview logs
+.local-preview*.log
+.local-start*.log
+.local-worker*.log
+*.tsbuildinfo

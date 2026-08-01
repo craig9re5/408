@@ -1,0 +1,26 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "408study",
+	"main": "./worker/index.ts",
+	"compatibility_date": "2026-05-22",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": "./dist/client"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "408-progress",
+      "database_id": "0014480c-e13a-46fa-abb8-84732288519d"
+		}
+	],
+	"secrets": {
+		"required": [
+			"INVITE_CODE",
+			"SESSION_SECRET"
+		]
+	}
+}

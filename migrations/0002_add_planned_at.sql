@@ -1,0 +1,2 @@
+ALTER TABLE progress
+  ADD COLUMN planned_at TEXT NOT NULL DEFAULT '';
