@@ -39,7 +39,7 @@ npm run start
 
 ## Cloudflare 部署
 
-项目使用 Cloudflare Workers 承载页面和 API，使用 D1 保存共享进度，不需要自建服务器。
+项目使用 Cloudflare Workers 承载页面和 API，使用 D1 保存共享进度，不需要自建服务器。项目已配置 GitHub Actions 自动化工作流，每次推送代码到 `main` 分支时会自动触发 Cloudflare 构建与部署。
 
 首次部署时：
 
