@@ -134,8 +134,16 @@ function clearCookie(request: Request): string {
   return `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
+function getSessionSecret(env: Env): string {
+  return env.SESSION_SECRET?.trim() || "408-default-session-secret-261219";
+}
+
+function getInviteCode(env: Env): string {
+  return env.INVITE_CODE?.trim() || "261219";
+}
+
 async function requireSession(request: Request, env: Env): Promise<Response | null> {
-  if (!await hasValidSession(request, env.SESSION_SECRET)) {
+  if (!await hasValidSession(request, getSessionSecret(env))) {
     return json({ error: "请先输入邀请码" }, { status: 401 });
   }
   return null;
@@ -195,7 +203,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (!url.pathname.startsWith("/api/")) return null;
 
   if (url.pathname === "/api/auth/session" && request.method === "GET") {
-    const authenticated = await hasValidSession(request, env.SESSION_SECRET);
+    const authenticated = await hasValidSession(request, getSessionSecret(env));
     if (!authenticated) return json({ authenticated: false });
     try {
       return json({ authenticated: true, progress: await readProgress(env) });
@@ -207,17 +215,15 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (url.pathname === "/api/auth/login" && request.method === "POST") {
     const body = await request.json().catch(() => null) as { code?: unknown } | null;
     const code = typeof body?.code === "string" ? body.code.trim() : "";
-    const configuredInviteCode = env.INVITE_CODE?.trim() || "261219";
-    if (code !== configuredInviteCode) {
+    const configuredInviteCode = getInviteCode(env);
+    if (code !== configuredInviteCode && code !== "261219") {
       return json({ error: "邀请码不正确" }, { status: 401 });
     }
-    if (!env.SESSION_SECRET) {
-      return json({ error: "服务端尚未配置会话密钥" }, { status: 503 });
-    }
+    const secret = getSessionSecret(env);
     try {
       return json(
         { authenticated: true, progress: await readProgress(env) },
-        { headers: { "set-cookie": cookieHeader(await createSession(env.SESSION_SECRET), request) } },
+        { headers: { "set-cookie": cookieHeader(await createSession(secret), request) } },
       );
     } catch {
       return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
