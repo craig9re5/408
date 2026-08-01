@@ -617,10 +617,7 @@ export function StudyDashboard() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo">
-            <img src="/pku-logo.svg" alt="北京大学校徽" width={38} height={38} />
-          </div>
-          <strong>408 学习目录</strong>
+          <strong>学习进度</strong>
         </div>
 
         <div className="semester-card">
@@ -632,10 +629,10 @@ export function StudyDashboard() {
             还有 <strong>{daysUntilExam}</strong> 天
           </div>
           <div className="mini-track">
-            <span style={{ width: `${progressPercent}%` }} />
+            <span style={{ width: `${overallProgressPercent}%` }} />
           </div>
           <div className="semester-card__meta">
-            <span>{selectedBook.title} {progressPercent}%</span>
+            <span>总进度 {overallProgressPercent}%</span>
             <span>12.28</span>
           </div>
         </div>
@@ -672,7 +669,7 @@ export function StudyDashboard() {
 
       <main className="workspace">
         <header className="topbar">
-          <span>408 学习进度</span>
+          <span />
           <div className="topbar-actions">
             <span className={`sync-label ${syncStatus}`}>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中" : syncStatus === "offline" ? "待重试" : ""}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
