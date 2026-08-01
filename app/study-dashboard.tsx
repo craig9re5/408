@@ -80,6 +80,68 @@ function planTone(plannedAt: string, learned: boolean): "late" | "soon" | "norma
   return days <= 2 ? "soon" : "normal";
 }
 
+function calculateDaysUntilExam(): number {
+  const today = new Date();
+  const target = new Date("2026-12-28T00:00:00");
+  const diffTime = target.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+}
+
+function getWeekDaysActivity(progress: ProgressMap) {
+  const todayStr = dateToday();
+  const now = new Date();
+  const currentDayOfWeek = now.getDay();
+  const distanceToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + distanceToMonday);
+
+  const activeDates = new Set<string>();
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt) activeDates.add(entry.learnedAt);
+    if (entry.reviewedAt) activeDates.add(entry.reviewedAt);
+  });
+
+  const weekDays = ["一", "二", "三", "四", "五", "六", "日"];
+  return weekDays.map((label, index) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + index);
+    const dateStr = new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    const isToday = dateStr === todayStr;
+    const isDone = activeDates.has(dateStr);
+    return { label, dateStr, isToday, isDone };
+  });
+}
+
+function calculateStreak(progress: ProgressMap): number {
+  const activeDates = new Set<string>();
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt) activeDates.add(entry.learnedAt);
+    if (entry.reviewedAt) activeDates.add(entry.reviewedAt);
+  });
+
+  const todayStr = dateToday();
+  let streak = 0;
+  const checkDate = new Date();
+
+  if (!activeDates.has(todayStr)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (true) {
+    const dateStr = new Date(checkDate.getTime() - checkDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    if (activeDates.has(dateStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
 function EditableDate({
   value,
   emptyLabel,
@@ -382,6 +444,19 @@ export function StudyDashboard() {
   const progressPercent = selectedSections.length ? Math.round((learnedCount / selectedSections.length) * 100) : 0;
   const currentSection = selectedSections.find((section) => !progress[section.id]?.learned);
 
+  const allBooksSections = useMemo(() => books.flatMap((b) => allSections(b)), []);
+  const totalLearnedAllBooks = useMemo(() => {
+    return allBooksSections.filter((s) => progress[s.id]?.learned).length;
+  }, [allBooksSections, progress]);
+
+  const overallProgressPercent = allBooksSections.length
+    ? Math.round((totalLearnedAllBooks / allBooksSections.length) * 100)
+    : 0;
+
+  const daysUntilExam = useMemo(() => calculateDaysUntilExam(), []);
+  const streakDays = useMemo(() => calculateStreak(progress), [progress]);
+  const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
+
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
     setProgress((current) => ({
       ...current,
@@ -486,6 +561,23 @@ export function StudyDashboard() {
           </div>
         </div>
 
+        <div className="semester-card">
+          <div className="semester-card__top">
+            <span>距离初试</span>
+            <span className="live-dot" />
+          </div>
+          <div className="semester-card__date">
+            距初试还有 <strong>{daysUntilExam}</strong> 天
+          </div>
+          <div className="mini-track">
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className="semester-card__meta">
+            <span>{selectedBook.title} {progressPercent}%</span>
+            <span>12.28</span>
+          </div>
+        </div>
+
         <nav className="subject-progress" aria-label="切换学习科目">
           <h2>科目进度</h2>
           {books.map((book) => {
@@ -526,27 +618,59 @@ export function StudyDashboard() {
         </header>
 
         <div className="page-content">
-          <section className="summary" aria-label="当前进度">
-            <article className="book-summary">
-              <ProgressRing value={progressPercent} />
-              <div>
-                <span>学习进度</span>
-                <h1>{selectedBook.title}</h1>
-                <p>学完 {learnedCount}/{selectedSections.length} 小节，复习 {reviewedCount}/{selectedSections.length} 小节</p>
+          <section className="hero-grid" aria-label="学习概览与节奏">
+            <article className="hero-card progress-card">
+              <div className="card-heading">
+                <div>
+                  <h2>{selectedBook.title}</h2>
+                </div>
+                <span className="status-pill status-pill--calm">
+                  {progressPercent === 100 ? "已完成" : "进行中"}
+                </span>
+              </div>
+
+              <div className="progress-number">
+                {progressPercent}<small>%</small>
+              </div>
+
+              <div className="big-track">
+                <span style={{ width: `${progressPercent}%` }} />
+                <i style={{ left: `${progressPercent}%` }} />
+              </div>
+
+              <div className="progress-note">
+                <p>
+                  学完 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
+                </p>
+                <p>
+                  当前学习：<strong>{currentSection ? `${currentSection.number} ${currentSection.title}` : "全部小节已学完"}</strong>
+                </p>
               </div>
             </article>
 
-            <article className="current-task">
-              <span>当前学习</span>
-              {currentSection ? (
-                <>
-                  <strong>{currentSection.number} {currentSection.title}</strong>
-                </>
-              ) : (
-                <>
-                  <strong>全部小节已学完</strong>
-                </>
-              )}
+            <article className="hero-card streak-card">
+              <div className="card-heading">
+                <div>
+                  <h2>本周节奏</h2>
+                </div>
+                <span className="streak-flame">✹</span>
+              </div>
+
+              <div className="streak-number">
+                {streakDays} <span>天连续</span>
+              </div>
+
+              <div className="week-dots" aria-label="本周打卡记录">
+                {weekDots.map((day) => (
+                  <div key={day.dateStr}>
+                    <span
+                      className={`dot ${day.isDone ? "dot--done" : ""} ${day.isToday ? "dot--today" : ""}`}
+                      title={`${day.dateStr} ${day.isDone ? "已打卡" : "未打卡"}`}
+                    />
+                    <small>{day.label}</small>
+                  </div>
+                ))}
+              </div>
             </article>
           </section>
 
