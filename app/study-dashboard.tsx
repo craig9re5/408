@@ -674,7 +674,6 @@ export function StudyDashboard() {
           <section className="catalog">
             <div className="catalog-heading">
               <div><h2>目录</h2><span>{selectedBook.chapters.length} 章 · {selectedSections.length} 小节</span></div>
-              <p>点击章节展开小节</p>
             </div>
 
             <div className="chapter-grid">
