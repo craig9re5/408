@@ -142,6 +142,48 @@ function calculateStreak(progress: ProgressMap): number {
   return streak;
 }
 
+function parseFlexibleDate(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  const currentYear = new Date().getFullYear();
+  let year = currentYear;
+  let month = 0;
+  let day = 0;
+
+  const ymdMatch = trimmed.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+  if (ymdMatch) {
+    year = parseInt(ymdMatch[1], 10);
+    month = parseInt(ymdMatch[2], 10);
+    day = parseInt(ymdMatch[3], 10);
+  } else {
+    const mdMatch = trimmed.match(/^(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+    if (mdMatch) {
+      month = parseInt(mdMatch[1], 10);
+      day = parseInt(mdMatch[2], 10);
+    } else if (/^\d{4}$/.test(trimmed)) {
+      month = parseInt(trimmed.slice(0, 2), 10);
+      day = parseInt(trimmed.slice(2, 4), 10);
+    } else if (/^\d{3}$/.test(trimmed)) {
+      month = parseInt(trimmed.slice(0, 1), 10);
+      day = parseInt(trimmed.slice(1, 3), 10);
+    } else {
+      return null;
+    }
+  }
+
+  if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+    const d = new Date(year, month - 1, day);
+    if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+      const mStr = String(month).padStart(2, "0");
+      const dStr = String(day).padStart(2, "0");
+      return `${year}-${mStr}-${dStr}`;
+    }
+  }
+
+  return null;
+}
+
 function EditableDate({
   value,
   emptyLabel,
@@ -158,25 +200,48 @@ function EditableDate({
   onChange: (value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [inputText, setInputText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const startEditing = () => {
+    setInputText(value ? formatDateShort(value).replace("/", "") : "");
+    setEditing(true);
+  };
+
   useEffect(() => {
-    if (editing) inputRef.current?.focus();
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
   }, [editing]);
+
+  const handleSave = () => {
+    setEditing(false);
+    const parsed = parseFlexibleDate(inputText);
+    if (parsed !== null) {
+      if (parsed !== value) {
+        onChange(parsed);
+      }
+    }
+  };
 
   if (editing) {
     return (
       <input
         ref={inputRef}
         className="date-editor"
-        type="date"
-        value={value}
+        type="text"
+        inputMode="numeric"
+        placeholder="如 0805"
+        value={inputText}
         aria-label={ariaLabel}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={() => setEditing(false)}
+        onChange={(event) => setInputText(event.target.value)}
+        onBlur={handleSave}
         onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === "Escape") {
-            event.currentTarget.blur();
+          if (event.key === "Enter") {
+            handleSave();
+          } else if (event.key === "Escape") {
+            setEditing(false);
           }
         }}
       />
@@ -184,7 +249,7 @@ function EditableDate({
   }
 
   return (
-    <button className={`date-text ${tone}`} type="button" onClick={() => setEditing(true)} aria-label={`${ariaLabel}，点击编辑`}>
+    <button className={`date-text ${tone}`} type="button" onClick={startEditing} aria-label={`${ariaLabel}，点击编辑`}>
       {value ? `${prefix}${formatDateShort(value)}` : emptyLabel}
     </button>
   );
@@ -564,7 +629,7 @@ export function StudyDashboard() {
             <span className="live-dot" />
           </div>
           <div className="semester-card__date">
-            距初试还有 <strong>{daysUntilExam}</strong> 天
+            还有 <strong>{daysUntilExam}</strong> 天
           </div>
           <div className="mini-track">
             <span style={{ width: `${progressPercent}%` }} />
