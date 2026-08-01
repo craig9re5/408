@@ -709,8 +709,7 @@ export function StudyDashboard() {
                               <div className="section-name"><span>{section.number}</span><strong>{section.title}</strong></div>
                               <EditableDate
                                 value={state?.plannedAt ?? ""}
-                                emptyLabel="计划未设置"
-                                prefix="计划 "
+                                emptyLabel="未设置"
                                 tone={planTone(state?.plannedAt ?? "", state?.learned ?? false)}
                                 ariaLabel={`${section.number} 计划日期`}
                                 onChange={(value) => updateProgress(section.id, { plannedAt: value })}
