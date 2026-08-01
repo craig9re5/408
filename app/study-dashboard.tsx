@@ -201,6 +201,10 @@ export function StudyDashboard() {
   const [inviteCode, setInviteCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   const loadRemoteProgress = useCallback(async (includeLocal: boolean) => {
     const response = await fetch("/api/progress", { cache: "no-store" });
@@ -284,18 +288,22 @@ export function StudyDashboard() {
     };
   }, [authState, loadRemoteProgress]);
 
-  async function login(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const performLogin = useCallback(async (codeToSubmit: string) => {
+    if (codeToSubmit.length !== 6 || isSubmitting) return;
+    setIsSubmitting(true);
     setAuthError("");
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: inviteCode }),
+        body: JSON.stringify({ code: codeToSubmit }),
       });
       const body = await response.json() as { error?: string; progress?: Record<string, SectionProgress> };
       if (!response.ok) {
         setAuthError(body.error ?? "邀请码不正确");
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 500);
+        setIsSubmitting(false);
         return;
       }
       setAuthState("authenticated");
@@ -304,8 +312,65 @@ export function StudyDashboard() {
       setSyncStatus("saved");
     } catch {
       setAuthError("暂时无法连接同步服务，请稍后重试");
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      setIsSubmitting(false);
     }
+  }, [isSubmitting]);
+
+  async function login(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await performLogin(inviteCode);
   }
+
+  const handleOtpChange = (index: number, value: string) => {
+    const digitsOnly = value.replace(/\D/g, "");
+    if (!digitsOnly && value !== "") return;
+
+    const char = digitsOnly.slice(-1);
+    const codeArr = inviteCode.padEnd(6, " ").split("").map((c) => (c === " " ? "" : c));
+    codeArr[index] = char;
+    const newCode = codeArr.join("").trim();
+    setInviteCode(newCode);
+
+    if (char && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+
+    const fullCode = codeArr.slice(0, 6).join("");
+    if (fullCode.length === 6 && !fullCode.includes(" ")) {
+      void performLogin(fullCode);
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!inviteCode[index] && index > 0) {
+        const codeArr = inviteCode.split("");
+        codeArr[index - 1] = "";
+        setInviteCode(codeArr.join(""));
+        otpInputsRef.current[index - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pastedData) {
+      setInviteCode(pastedData);
+      const nextFocusIndex = Math.min(pastedData.length, 5);
+      otpInputsRef.current[nextFocusIndex]?.focus();
+
+      if (pastedData.length === 6) {
+        void performLogin(pastedData);
+      }
+    }
+  };
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
@@ -356,24 +421,57 @@ export function StudyDashboard() {
   if (authState === "locked") {
     return (
       <main className="auth-shell">
-        <form className="auth-card" onSubmit={login}>
+        <form className={`auth-card ${isShaking ? "shaking" : ""}`} onSubmit={login}>
           <UniversityLogo />
-          <h1>学习目录</h1>
-          <label className="invite-label" htmlFor="invite-code">访问码</label>
-          <input
-            id="invite-code"
-            className="invite-input"
-            value={inviteCode}
-            onChange={(event) => setInviteCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            placeholder="000000"
-            aria-label="访问码"
-            autoFocus
-          />
-          <button className="invite-button" type="submit">进入空间</button>
-          {authError && <p className="auth-error" role="alert">{authError}</p>}
+          <h1>408 学习目录</h1>
+          <p className="auth-subtitle">请输入 6 位专属访问码进入空间</p>
+
+          <div className="otp-container">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const digit = inviteCode[i] || "";
+              return (
+                <input
+                  key={i}
+                  ref={(el) => { otpInputsRef.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  onPaste={handleOtpPaste}
+                  onFocus={(e) => e.target.select()}
+                  className={`otp-box ${digit ? "filled" : ""} ${authError ? "error" : ""}`}
+                  disabled={isSubmitting}
+                  aria-label={`访问码第 ${i + 1} 位`}
+                  autoFocus={i === 0}
+                />
+              );
+            })}
+          </div>
+
+          <button
+            className={`invite-button ${isSubmitting ? "submitting" : ""}`}
+            type="submit"
+            disabled={inviteCode.length < 6 || isSubmitting}
+          >
+            {isSubmitting ? (
+              <span className="spinner-wrap">
+                <span className="spinner" /> 正在验证...
+              </span>
+            ) : (
+              "进入空间"
+            )}
+          </button>
+          {authError && (
+            <div className="auth-error-badge" role="alert">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="error-icon">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span>{authError}</span>
+            </div>
+          )}
         </form>
       </main>
     );
