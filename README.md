@@ -55,7 +55,7 @@ npm run start
    npm run db:migrate:remote
    ```
 
-3. 设置邀请码和会话密钥。邀请码默认约定为 `666666`，输入命令后按提示填写：
+3. 设置邀请码和会话密钥。邀请码默认约定为 `261219`，输入命令后按提示填写：
 
    ```powershell
    npx wrangler secret put INVITE_CODE
@@ -68,7 +68,7 @@ npm run start
    npm run deploy
    ```
 
-本地开发使用被 Git 忽略的 `.dev.vars`，当前已配置邀请码 `666666` 和本地会话密钥。部署到 Cloudflare 时应使用 `wrangler secret put` 设置生产环境 Secret，不要把密钥写入代码或提交到仓库。
+本地开发使用被 Git 忽略的 `.dev.vars`，当前已配置邀请码 `261219` 和本地会话密钥。部署到 Cloudflare 时应使用 `wrangler secret put` 设置生产环境 Secret，不要把密钥写入代码或提交到仓库。
 
 ## 项目结构
 

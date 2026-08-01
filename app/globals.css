@@ -268,7 +268,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .date-text.empty { color: #a9aaa3; }
 .date-text.soon { color: #cc8a3c; }
 .date-text.late { color: #c85f51; }
-.date-editor { width: 104px; height: 26px; padding: 0 5px; border: 1px solid #d5d2c9; border-radius: 6px; color: #586264; background: #fff; font-size: 9px; }
+.date-editor { width: 72px; height: 24px; padding: 0 6px; border: 1.5px solid #2563eb; border-radius: 6px; color: #1e293b; background: #fff; font-size: 11px; font-family: inherit; outline: none; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); transition: all 0.15s ease; }
+.date-editor::placeholder { color: #94a3b8; font-size: 10px; }
 
 @keyframes reveal { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
 @keyframes auth-reveal { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }

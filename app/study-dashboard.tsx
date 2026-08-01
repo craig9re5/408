@@ -82,7 +82,7 @@ function planTone(plannedAt: string, learned: boolean): "late" | "soon" | "norma
 
 function calculateDaysUntilExam(): number {
   const today = new Date();
-  const target = new Date("2026-12-28T00:00:00");
+  const target = new Date("2026-12-19T00:00:00");
   const diffTime = target.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
@@ -633,7 +633,7 @@ export function StudyDashboard() {
           </div>
           <div className="semester-card__meta">
             <span>总进度 {overallProgressPercent}%</span>
-            <span>12.28</span>
+            <span>12.19</span>
           </div>
         </div>
 
