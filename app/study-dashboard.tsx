@@ -559,7 +559,7 @@ export function StudyDashboard() {
       <main className="auth-shell">
         <form className={`auth-card ${isShaking ? "shaking" : ""}`} onSubmit={login}>
           <UniversityLogo />
-          <h1>408 学习进度</h1>
+          <h1>学习进度</h1>
           <p className="auth-subtitle">请输入 6 位专属访问码进入空间</p>
 
           <div className="otp-container">
