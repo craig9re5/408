@@ -51,6 +51,20 @@ function allSections(book: Book): Section[] {
   return book.chapters.flatMap((chapter) => chapter.sections);
 }
 
+function progressStage(sections: Section[], progress: ProgressMap) {
+  const learned = sections.filter((section) => progress[section.id]?.learned).length;
+  const phase = sections.length > 0 && learned === sections.length ? "reviewed" : "learned";
+  const completed = phase === "reviewed"
+    ? sections.filter((section) => progress[section.id]?.reviewed).length
+    : learned;
+
+  return {
+    phase,
+    completed,
+    percentage: sections.length ? Math.round((completed / sections.length) * 100) : 0,
+  } as const;
+}
+
 function dateToday(): string {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
@@ -601,13 +615,16 @@ export function StudyDashboard() {
   const selectedSections = useMemo(() => allSections(selectedBook), [selectedBook]);
   const learnedCount = selectedSections.filter((section) => progress[section.id]?.learned).length;
   const reviewedCount = selectedSections.filter((section) => progress[section.id]?.reviewed).length;
-  const progressPercent = selectedSections.length ? Math.round((learnedCount / selectedSections.length) * 100) : 0;
-  const reviewPercent = selectedSections.length ? Math.round((reviewedCount / selectedSections.length) * 100) : 0;
-  const isReviewPhase = selectedSections.length > 0 && learnedCount === selectedSections.length;
-  const activeProgressPercent = isReviewPhase ? reviewPercent : progressPercent;
+  const selectedProgressStage = progressStage(selectedSections, progress);
+  const isReviewPhase = selectedProgressStage.phase === "reviewed";
+  const activeProgressPercent = selectedProgressStage.percentage;
   const activeProgressLabel = isReviewPhase ? "复习" : "第一轮";
   const manualCurrentSection = selectedSections.find((section) => progress[section.id]?.isCurrent && !progress[section.id]?.learned);
-  const currentSection = manualCurrentSection ?? selectedSections.find((section) => !progress[section.id]?.learned);
+  const currentSection = isReviewPhase
+    ? selectedSections.find((section) => !progress[section.id]?.reviewed)
+    : manualCurrentSection ?? selectedSections.find((section) => !progress[section.id]?.learned);
+  const currentSectionLabel = isReviewPhase ? "当前复习" : "当前学习";
+  const phaseCompleteLabel = isReviewPhase ? "复习已完成" : "第一轮已完成";
   const currentChapterId = currentSection
     ? selectedBook.chapters.find((chapter) => chapter.sections.some((section) => section.id === currentSection.id))?.id
     : undefined;
@@ -873,15 +890,15 @@ export function StudyDashboard() {
           <h2>{activeArea === "408" ? "408 科目" : "数学科目"}</h2>
           {areaBooks.map((book) => {
             const sections = allSections(book);
-            const completed = sections.filter((section) => progress[section.id]?.learned).length;
-            const percentage = Math.round((completed / sections.length) * 100);
+            const stage = progressStage(sections, progress);
+            const phaseLabel = stage.phase === "reviewed" ? "复习" : "第一轮";
             return (
               <button
                 className={book.id === selectedBook.id ? "current" : ""}
                 type="button"
                 key={book.id}
                 aria-current={book.id === selectedBook.id ? "page" : undefined}
-                aria-label={`切换到${book.title}，当前进度 ${percentage}%`}
+                aria-label={`切换到${book.title}，当前${phaseLabel}进度 ${stage.percentage}%`}
                 title={book.title}
                 onClick={() => {
                   setSelectedBookByArea((current) => ({ ...current, [activeArea]: book.id }));
@@ -890,8 +907,8 @@ export function StudyDashboard() {
                 }}
               >
                 <span>{book.shortTitle}</span>
-                <strong>{percentage}%</strong>
-                <i><b style={{ width: `${percentage}%` }} /></i>
+                <strong>{stage.percentage}%</strong>
+                <i><b style={{ width: `${stage.percentage}%` }} /></i>
               </button>
             );
           })}
@@ -934,7 +951,7 @@ export function StudyDashboard() {
                   <h2>{selectedBook.title}</h2>
                 </div>
                 <span className="status-pill status-pill--calm">
-                  {isReviewPhase ? (reviewPercent === 100 ? "全部完成" : "复习中") : "进行中"}
+                  {isReviewPhase ? (reviewedCount === selectedSections.length ? "全部完成" : "复习中") : "进行中"}
                 </span>
               </div>
 
@@ -955,13 +972,13 @@ export function StudyDashboard() {
                   <button
                     className="current-learning-link"
                     type="button"
-                    aria-label={`跳转到当前学习：${currentSection.number} ${currentSection.title}`}
+                    aria-label={`跳转到${currentSectionLabel}：${currentSection.number} ${currentSection.title}`}
                     onClick={jumpToCurrentSection}
                   >
-                    当前学习：<strong>{currentSection.number} {currentSection.title}</strong>
+                    {currentSectionLabel}：<strong>{currentSection.number} {currentSection.title}</strong>
                   </button>
                 ) : (
-                  <p>当前学习：<strong>第一轮已完成</strong></p>
+                  <p>{currentSectionLabel}：<strong>{phaseCompleteLabel}</strong></p>
                 )}
               </div>
             </article>
@@ -1030,8 +1047,10 @@ export function StudyDashboard() {
               {filteredChapters.map(({ chapter, visibleSections }) => {
                 const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
                 const open = catalogFilter !== "all" ? !filterChaptersCollapsed : expandedChapters.includes(chapter.id);
-                const chapterLearned = chapter.sections.filter((section) => progress[section.id]?.learned).length;
-                const chapterComplete = chapterLearned === chapter.sections.length;
+                const chapterCompleted = chapter.sections.filter((section) => isReviewPhase
+                  ? progress[section.id]?.reviewed
+                  : progress[section.id]?.learned).length;
+                const chapterComplete = chapterCompleted === chapter.sections.length;
                 const chapterOverdue = chapter.sections.some((section) => studyPlanStatus(progress[section.id]) === "overdue");
                 const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
                 const plannedDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
@@ -1064,8 +1083,11 @@ export function StudyDashboard() {
                           )}
                         </span>
                       </span>
-                      <span className={`chapter-count${chapterComplete ? " complete" : ""}`}>
-                        {chapterComplete && <i>✓</i>}{chapterLearned} / {chapter.sections.length}
+                      <span
+                        className={`chapter-count${chapterComplete ? " complete" : ""}`}
+                        aria-label={`本章${activeProgressLabel}进度 ${chapterCompleted} / ${chapter.sections.length}`}
+                      >
+                        {chapterComplete && <i>✓</i>}{chapterCompleted} / {chapter.sections.length}
                       </span>
                       <span className="chevron" aria-hidden="true" />
                     </button>
