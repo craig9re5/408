@@ -149,6 +149,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .auth-error-badge { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 16px; padding: 10px 14px; border-radius: 8px; background: rgba(229, 83, 83, 0.08); border: 1px solid rgba(229, 83, 83, 0.2); color: #d32f2f; font-size: 12px; font-weight: 500; animation: auth-reveal 0.3s ease-out both; }
 .error-icon { width: 15px; height: 15px; flex-shrink: 0; }
 .topbar-actions { display: flex; align-items: center; gap: 14px; }
+.area-switcher { display: inline-flex; align-items: center; padding: 3px; border: 1px solid #d7d4cc; border-radius: 9px; background: rgba(251, 250, 246, 0.78); box-shadow: 0 4px 14px rgba(35, 42, 44, 0.035); }
+.area-switcher button { min-width: 54px; padding: 6px 12px; border-radius: 6px; color: #7c8483; background: transparent; font-size: 10px; cursor: pointer; transition: color 0.16s, background 0.16s, box-shadow 0.16s; }
+.area-switcher button:hover { color: var(--ink); }
+.area-switcher button.active { color: #f3f1eb; background: var(--sidebar); box-shadow: 0 3px 9px rgba(17, 27, 36, 0.16); }
 .sync-label { min-width: 31px; color: var(--muted); font-size: 9px; }
 .sync-label.saving { color: var(--blue); }
 .sync-label.offline { color: var(--coral); }
@@ -301,6 +305,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .topbar { min-height: 64px; padding: 11px 18px; }
   .topbar > span { display: none; }
   .topbar-actions { margin-left: auto; gap: 9px; }
+  .area-switcher button { min-width: 46px; padding: 6px 9px; }
   .sync-label { display: none; }
   .page-content { width: calc(100% - 24px); padding: 20px 0 54px; }
   .hero-card { min-height: 200px; padding: 20px; }

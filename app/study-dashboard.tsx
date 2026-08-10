@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { books, type Book, type Section } from "./data/books";
+import { books, type Book, type Section, type StudyArea } from "./data/books";
 
 type SectionProgress = {
   learned: boolean;
@@ -316,7 +316,11 @@ function UniversityLogo() {
 }
 
 export function StudyDashboard() {
-  const [selectedBookId, setSelectedBookId] = useState("operating-system");
+  const [activeArea, setActiveArea] = useState<StudyArea>("408");
+  const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>({
+    "408": "operating-system",
+    math: "advanced-math",
+  });
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
   const [loaded, setLoaded] = useState(false);
@@ -502,7 +506,9 @@ export function StudyDashboard() {
     setProgress(defaultProgress());
   }
 
-  const selectedBook = books.find((book) => book.id === selectedBookId) ?? books[2];
+  const areaBooks = useMemo(() => books.filter((book) => book.area === activeArea), [activeArea]);
+  const selectedBookId = selectedBookByArea[activeArea];
+  const selectedBook = areaBooks.find((book) => book.id === selectedBookId) ?? areaBooks[0];
   const selectedSections = useMemo(() => allSections(selectedBook), [selectedBook]);
   const learnedCount = selectedSections.filter((section) => progress[section.id]?.learned).length;
   const reviewedCount = selectedSections.filter((section) => progress[section.id]?.reviewed).length;
@@ -637,9 +643,9 @@ export function StudyDashboard() {
           </div>
         </div>
 
-        <nav className="subject-progress" aria-label="切换学习科目">
-          <h2>科目进度</h2>
-          {books.map((book) => {
+        <nav className="subject-progress" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
+          <h2>{activeArea === "408" ? "408 科目" : "数学科目"}</h2>
+          {areaBooks.map((book) => {
             const sections = allSections(book);
             const completed = sections.filter((section) => progress[section.id]?.learned).length;
             const percentage = Math.round((completed / sections.length) * 100);
@@ -652,7 +658,7 @@ export function StudyDashboard() {
                 aria-label={`切换到${book.title}，当前进度 ${percentage}%`}
                 title={book.title}
                 onClick={() => {
-                  setSelectedBookId(book.id);
+                  setSelectedBookByArea((current) => ({ ...current, [activeArea]: book.id }));
                   setExpandedChapter(null);
                 }}
               >
@@ -671,6 +677,22 @@ export function StudyDashboard() {
         <header className="topbar">
           <span />
           <div className="topbar-actions">
+            <div className="area-switcher" role="group" aria-label="切换学习领域">
+              {(["408", "math"] as StudyArea[]).map((area) => (
+                <button
+                  className={activeArea === area ? "active" : ""}
+                  type="button"
+                  key={area}
+                  aria-pressed={activeArea === area}
+                  onClick={() => {
+                    setActiveArea(area);
+                    setExpandedChapter(null);
+                  }}
+                >
+                  {area === "408" ? "408" : "数学"}
+                </button>
+              ))}
+            </div>
             <span className={`sync-label ${syncStatus}`}>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中" : syncStatus === "offline" ? "待重试" : ""}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
