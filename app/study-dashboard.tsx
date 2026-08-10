@@ -418,6 +418,7 @@ export function StudyDashboard() {
   const [planUndo, setPlanUndo] = useState<PlanUndo | null>(null);
   const [pendingClearSectionId, setPendingClearSectionId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -610,6 +611,27 @@ export function StudyDashboard() {
   const currentChapterId = currentSection
     ? selectedBook.chapters.find((chapter) => chapter.sections.some((section) => section.id === currentSection.id))?.id
     : undefined;
+
+  useEffect(() => {
+    if (!scrollTargetSectionId || catalogFilter !== "all") return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`section-${scrollTargetSectionId}`);
+      if (!target) return;
+      const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      target.scrollIntoView({ behavior, block: "center" });
+      setScrollTargetSectionId(null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [catalogFilter, expandedChapters, scrollTargetSectionId]);
+
+  function jumpToCurrentSection() {
+    if (!currentSection || !currentChapterId) return;
+    setCatalogFilter("all");
+    setExpandedChapters((current) => current.includes(currentChapterId) ? current : [...current, currentChapterId]);
+    setScrollTargetSectionId(currentSection.id);
+  }
 
   const filteredChapters = selectedBook.chapters
     .map((chapter) => {
@@ -929,9 +951,18 @@ export function StudyDashboard() {
                 <p>
                   学完 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
                 </p>
-                <p>
-                  当前学习：<strong>{currentSection ? `${currentSection.number} ${currentSection.title}` : "第一轮已完成"}</strong>
-                </p>
+                {currentSection ? (
+                  <button
+                    className="current-learning-link"
+                    type="button"
+                    aria-label={`跳转到当前学习：${currentSection.number} ${currentSection.title}`}
+                    onClick={jumpToCurrentSection}
+                  >
+                    当前学习：<strong>{currentSection.number} {currentSection.title}</strong>
+                  </button>
+                ) : (
+                  <p>当前学习：<strong>第一轮已完成</strong></p>
+                )}
               </div>
             </article>
 
@@ -1061,7 +1092,12 @@ export function StudyDashboard() {
                           const status = studyPlanStatus(state);
                           const isCurrent = currentSection?.id === section.id;
                           return (
-                            <div className={`section-row ${status}${isCurrent ? " is-current" : ""}`} key={section.id}>
+                            <div
+                              className={`section-row ${status}${isCurrent ? " is-current" : ""}`}
+                              id={`section-${section.id}`}
+                              aria-current={isCurrent ? "step" : undefined}
+                              key={section.id}
+                            >
                               <div className="section-name">
                                 <span>{section.number}</span><strong>{section.title}</strong>
                                 {isCurrent && <i title="当前学习" />}

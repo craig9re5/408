@@ -196,6 +196,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .progress-note { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: #9da7aa; font-size: 11px; }
 .progress-note p { margin: 0; color: #9da7aa; font-size: 11px; line-height: 1.5; }
 .progress-note strong { color: #e2d9ca; font-weight: 600; }
+.current-learning-link { position: relative; display: inline-flex; width: fit-content; align-items: center; gap: 3px; padding: 0 15px 0 0; border: 0; color: #9da7aa; background: transparent; font: inherit; line-height: 1.5; text-align: left; cursor: pointer; }
+.current-learning-link::after { position: absolute; right: 0; color: #79aebf; content: "↘"; font-size: 10px; opacity: 0; transform: translate(-3px, -2px); transition: opacity .16s ease, transform .16s ease; }
+.current-learning-link strong { border-bottom: 1px solid transparent; transition: color .16s ease, border-color .16s ease; }
+.current-learning-link:hover strong { color: #fff; border-bottom-color: rgba(121, 174, 191, .55); }
+.current-learning-link:hover::after, .current-learning-link:focus-visible::after { opacity: 1; transform: translate(0, -2px); }
 
 .streak-card { border: 1px solid rgba(255, 255, 255, 0.08); color: #edf0ec; background: #4a6d7c; }
 .streak-card::after { content: "✧"; position: absolute; right: 24px; bottom: 16px; color: rgba(255, 255, 255, 0.19); font-size: 85px; line-height: 1; pointer-events: none; }
@@ -281,7 +286,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .section-head, .section-row { display: grid; grid-template-columns: minmax(190px, 1fr) 114px 170px 170px; align-items: center; column-gap: 13px; }
 .section-head { min-height: 30px; color: #9a9e9b; font-size: 8px; }
 .section-head span:not(:first-child) { padding-left: 1px; }
-.section-row { position: relative; min-height: 46px; border-top: 1px solid var(--line-soft); }
+.section-row { position: relative; min-height: 46px; scroll-margin-top: 90px; border-top: 1px solid var(--line-soft); }
 .section-row.overdue::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--coral); content: ""; }
 .section-row.due_today::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--blue); content: ""; }
 .section-name { display: flex; min-width: 0; align-items: baseline; gap: 12px; }
