@@ -9,11 +9,20 @@ type SectionProgress = {
   reviewed: boolean;
   reviewedAt: string;
   plannedAt: string;
+  isCurrent: boolean;
 };
 
 type ProgressMap = Record<string, SectionProgress>;
 type AuthState = "locked" | "authenticated";
 type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
+type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
+type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
+type ShiftScope = "chapter" | "subject";
+
+type PlanUndo = {
+  message: string;
+  values: Record<string, string>;
+};
 
 const STORAGE_KEY = "408-section-progress-v1";
 
@@ -29,6 +38,7 @@ function defaultProgress(): ProgressMap {
           reviewed: false,
           reviewedAt: "",
           plannedAt: section.plannedAt ?? "",
+          isCurrent: false,
         };
       });
     });
@@ -69,15 +79,20 @@ function formatPlanRange(plannedDates: string[]): string {
   return `计划：${formatDateChinese(first)}—${formatDateChinese(last)}`;
 }
 
-function planTone(plannedAt: string, learned: boolean): "late" | "soon" | "normal" | "empty" {
-  if (!plannedAt) return "empty";
-  if (learned) return "normal";
+function studyPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
+  if (state?.learned) return "completed";
+  if (!state?.plannedAt) return "unscheduled";
   const today = dateToday();
-  if (plannedAt < today) return "late";
-  const due = new Date(`${today}T00:00:00`);
-  const planned = new Date(`${plannedAt}T00:00:00`);
-  const days = Math.round((planned.getTime() - due.getTime()) / 86_400_000);
-  return days <= 2 ? "soon" : "normal";
+  if (state.plannedAt < today) return "overdue";
+  if (state.plannedAt === today) return "due_today";
+  return "upcoming";
+}
+
+function planTone(status: StudyPlanStatus): "late" | "soon" | "normal" | "empty" {
+  if (status === "overdue") return "late";
+  if (status === "due_today") return "soon";
+  if (status === "unscheduled") return "empty";
+  return "normal";
 }
 
 function calculateDaysUntilExam(): number {
@@ -86,6 +101,20 @@ function calculateDaysUntilExam(): number {
   const diffTime = target.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
+}
+
+function calculateTimeProgress(): number {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const start = new Date(now.getFullYear(), 2, 1).getTime();
+  const end = new Date(now.getFullYear(), 11, 18).getTime();
+  return Math.round(Math.max(0, Math.min(1, (today - start) / (end - start))) * 100);
+}
+
+function addDays(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
 function getWeekDaysActivity(progress: ProgressMap) {
@@ -112,6 +141,16 @@ function getWeekDaysActivity(progress: ProgressMap) {
     const isDone = activeDates.has(dateStr);
     return { label, dateStr, isToday, isDone };
   });
+}
+
+function calculateWeeklySectionCount(progress: ProgressMap): number {
+  const weekDates = new Set(getWeekDaysActivity(progress).map((day) => day.dateStr));
+
+  return Object.values(progress).reduce((count, entry) => {
+    const learnedCount = entry.learnedAt && weekDates.has(entry.learnedAt) ? 1 : 0;
+    const reviewedCount = entry.reviewedAt && weekDates.has(entry.reviewedAt) ? 1 : 0;
+    return count + learnedCount + reviewedCount;
+  }, 0);
 }
 
 function calculateStreak(progress: ProgressMap): number {
@@ -195,6 +234,8 @@ function EditableDate({
   ariaLabel,
   prefix = "",
   tone = "normal",
+  validate,
+  onError,
   onChange,
 }: {
   value: string;
@@ -202,6 +243,8 @@ function EditableDate({
   ariaLabel: string;
   prefix?: string;
   tone?: "late" | "soon" | "normal" | "empty";
+  validate?: (value: string) => string | null;
+  onError?: (message: string) => void;
   onChange: (value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -224,6 +267,11 @@ function EditableDate({
     setEditing(false);
     const parsed = parseFlexibleDate(inputText);
     if (parsed !== null) {
+      const validationError = validate?.(parsed);
+      if (validationError) {
+        onError?.(validationError);
+        return;
+      }
       if (parsed !== value) {
         onChange(parsed);
       }
@@ -270,13 +318,17 @@ function readLocalProgress(): ProgressMap | null {
       const entry = (saved as Record<string, unknown>)[sectionId];
       if (!entry || typeof entry !== "object") return;
       const value = entry as Record<string, unknown>;
-      const reviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
+      const learned = Boolean(value.learned);
+      const learnedAt = typeof value.learnedAt === "string" ? value.learnedAt : "";
+      const candidateReviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
+      const reviewed = learned && Boolean(value.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
       defaults[sectionId] = {
-        learned: Boolean(value.learned),
-        learnedAt: typeof value.learnedAt === "string" ? value.learnedAt : "",
-        reviewed: Boolean(value.reviewed) && Boolean(reviewedAt),
-        reviewedAt,
+        learned,
+        learnedAt,
+        reviewed,
+        reviewedAt: reviewed ? candidateReviewedAt : "",
         plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : defaults[sectionId].plannedAt,
+        isCurrent: Boolean(value.isCurrent),
       };
     });
     return defaults;
@@ -291,14 +343,18 @@ function mergeRemoteProgress(remote: Record<string, SectionProgress>, includeLoc
   Object.keys(merged).forEach((sectionId) => {
     const value = remote[sectionId];
     if (!value || typeof value !== "object") return;
-    const reviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
+    const learned = Boolean(value.learned);
+    const learnedAt = typeof value.learnedAt === "string" ? value.learnedAt : "";
+    const candidateReviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
+    const reviewed = learned && Boolean(value.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
     merged[sectionId] = {
       ...merged[sectionId],
-      learned: Boolean(value.learned),
-      learnedAt: typeof value.learnedAt === "string" ? value.learnedAt : "",
-      reviewed: Boolean(value.reviewed) && Boolean(reviewedAt),
-      reviewedAt,
+      learned,
+      learnedAt,
+      reviewed,
+      reviewedAt: reviewed ? candidateReviewedAt : "",
       plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : merged[sectionId].plannedAt,
+      isCurrent: Boolean(value.isCurrent),
     };
   });
   return merged;
@@ -326,7 +382,7 @@ export function StudyDashboard() {
     "408": "operating-system",
     math: "advanced-math",
   });
-  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
+  const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
@@ -335,6 +391,16 @@ export function StudyDashboard() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
+  const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(false);
+  const [planEditMode, setPlanEditMode] = useState(false);
+  const [chapterRanges, setChapterRanges] = useState<Record<string, { start: string; end: string; includeCompleted: boolean }>>({});
+  const [shiftSectionId, setShiftSectionId] = useState<string | null>(null);
+  const [shiftScope, setShiftScope] = useState<ShiftScope>("chapter");
+  const [shiftDays, setShiftDays] = useState(1);
+  const [planUndo, setPlanUndo] = useState<PlanUndo | null>(null);
+  const [pendingClearSectionId, setPendingClearSectionId] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -518,20 +584,36 @@ export function StudyDashboard() {
   const learnedCount = selectedSections.filter((section) => progress[section.id]?.learned).length;
   const reviewedCount = selectedSections.filter((section) => progress[section.id]?.reviewed).length;
   const progressPercent = selectedSections.length ? Math.round((learnedCount / selectedSections.length) * 100) : 0;
-  const currentSection = selectedSections.find((section) => !progress[section.id]?.learned);
+  const reviewPercent = selectedSections.length ? Math.round((reviewedCount / selectedSections.length) * 100) : 0;
+  const isReviewPhase = selectedSections.length > 0 && learnedCount === selectedSections.length;
+  const activeProgressPercent = isReviewPhase ? reviewPercent : progressPercent;
+  const activeProgressLabel = isReviewPhase ? "复习" : "第一轮";
+  const manualCurrentSection = selectedSections.find((section) => progress[section.id]?.isCurrent && !progress[section.id]?.learned);
+  const currentSection = manualCurrentSection ?? selectedSections.find((section) => !progress[section.id]?.learned);
+  const currentChapterId = currentSection
+    ? selectedBook.chapters.find((chapter) => chapter.sections.some((section) => section.id === currentSection.id))?.id
+    : undefined;
 
-  const allBooksSections = useMemo(() => books.flatMap((b) => allSections(b)), []);
-  const totalLearnedAllBooks = useMemo(() => {
-    return allBooksSections.filter((s) => progress[s.id]?.learned).length;
-  }, [allBooksSections, progress]);
-
-  const overallProgressPercent = allBooksSections.length
-    ? Math.round((totalLearnedAllBooks / allBooksSections.length) * 100)
-    : 0;
+  const filteredChapters = selectedBook.chapters
+    .map((chapter) => {
+      const visibleSections = chapter.sections.filter((section) => {
+        const state = progress[section.id];
+        if (catalogFilter === "unlearned") return !state?.learned;
+        if (catalogFilter === "unreviewed") return Boolean(state?.learned) && !state?.reviewed;
+        if (catalogFilter === "overdue") return studyPlanStatus(state) === "overdue";
+        return true;
+      });
+      return { chapter, visibleSections };
+    })
+    .filter(({ visibleSections }) => visibleSections.length > 0);
+  const allExpanded = selectedBook.chapters.every((chapter) => expandedChapters.includes(chapter.id));
+  const effectiveAllExpanded = catalogFilter === "all" ? allExpanded : !filterChaptersCollapsed;
 
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(), []);
+  const timeProgressPercent = useMemo(() => calculateTimeProgress(), []);
   const streakDays = useMemo(() => calculateStreak(progress), [progress]);
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
+  const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
     setProgress((current) => ({
@@ -540,25 +622,125 @@ export function StudyDashboard() {
     }));
   }
 
-  function toggleLearned(sectionId: string, checked: boolean) {
-    if (checked) {
-      updateProgress(sectionId, { learned: true, learnedAt: dateToday() });
-      return;
-    }
+  function setCurrentSection(sectionId: string) {
+    setProgress((current) => {
+      const next = { ...current };
+      selectedSections.forEach((section) => {
+        next[section.id] = { ...next[section.id], isCurrent: section.id === sectionId };
+      });
+      return next;
+    });
+    setFeedbackMessage("已设为当前学习");
+  }
 
+  function clearLearned(sectionId: string) {
     updateProgress(sectionId, {
       learned: false,
       learnedAt: "",
       reviewed: false,
       reviewedAt: "",
+      isCurrent: false,
     });
   }
 
+  function toggleLearned(sectionId: string, checked: boolean) {
+    if (checked) {
+      updateProgress(sectionId, { learned: true, learnedAt: dateToday(), isCurrent: false });
+      return;
+    }
+    if (progress[sectionId]?.reviewed) {
+      setPendingClearSectionId(sectionId);
+      return;
+    }
+    clearLearned(sectionId);
+  }
+
   function toggleReviewed(sectionId: string, checked: boolean) {
+    if (checked && !progress[sectionId]?.learned) return;
     updateProgress(sectionId, {
       reviewed: checked,
       reviewedAt: checked ? dateToday() : "",
     });
+  }
+
+  function applyPlanChanges(values: Record<string, string>, message: string) {
+    const ids = Object.keys(values);
+    if (!ids.length) {
+      setFeedbackMessage("没有符合条件的计划日期可调整");
+      return;
+    }
+    const previous = Object.fromEntries(ids.map((sectionId) => [sectionId, progress[sectionId]?.plannedAt ?? ""]));
+    setProgress((current) => {
+      const next = { ...current };
+      ids.forEach((sectionId) => {
+        next[sectionId] = { ...next[sectionId], plannedAt: values[sectionId] };
+      });
+      return next;
+    });
+    setPlanUndo({ message, values: previous });
+    setFeedbackMessage("");
+  }
+
+  function undoPlanChange() {
+    if (!planUndo) return;
+    setProgress((current) => {
+      const next = { ...current };
+      Object.entries(planUndo.values).forEach(([sectionId, plannedAt]) => {
+        next[sectionId] = { ...next[sectionId], plannedAt };
+      });
+      return next;
+    });
+    setPlanUndo(null);
+    setFeedbackMessage("已撤销上一次计划调整");
+  }
+
+  function setChapterPlan(
+    sections: Section[],
+    range: { start: string; end: string; includeCompleted: boolean },
+    mode: "uniform" | "spread",
+  ) {
+    if (!range.start || (mode === "spread" && !range.end)) {
+      setFeedbackMessage("请先设置完整的计划日期或区间");
+      return;
+    }
+    if (mode === "spread" && range.end < range.start) {
+      setFeedbackMessage("计划结束日期不能早于开始日期");
+      return;
+    }
+    const eligible = sections.filter((section) => range.includeCompleted || !progress[section.id]?.learned);
+    const targets = mode === "uniform"
+      ? eligible.filter((section) => !progress[section.id]?.plannedAt)
+      : eligible;
+    const values: Record<string, string> = {};
+    if (mode === "uniform") {
+      targets.forEach((section) => { values[section.id] = range.start; });
+    } else {
+      const start = new Date(`${range.start}T00:00:00`).getTime();
+      const end = new Date(`${range.end}T00:00:00`).getTime();
+      const dayCount = Math.floor((end - start) / 86_400_000) + 1;
+      targets.forEach((section, index) => {
+        const offset = Math.floor((index * dayCount) / Math.max(targets.length, 1));
+        values[section.id] = addDays(range.start, Math.min(offset, dayCount - 1));
+      });
+    }
+    applyPlanChanges(values, mode === "uniform" ? "已统一设置章节计划" : "已按天均分章节计划");
+  }
+
+  function shiftPlans(startSectionId: string, scope: ShiftScope, days: number) {
+    if (!Number.isInteger(days) || days <= 0) {
+      setFeedbackMessage("顺延天数必须是正整数");
+      return;
+    }
+    const chapter = selectedBook.chapters.find((item) => item.sections.some((section) => section.id === startSectionId));
+    const source = scope === "chapter" ? chapter?.sections ?? [] : selectedSections;
+    const startIndex = source.findIndex((section) => section.id === startSectionId);
+    const values: Record<string, string> = {};
+    source.slice(Math.max(startIndex, 0)).forEach((section) => {
+      const state = progress[section.id];
+      if (state?.plannedAt && !state.learned) values[section.id] = addDays(state.plannedAt, days);
+    });
+    applyPlanChanges(values, `已将后续计划顺延 ${days} 天`);
+    setShiftSectionId(null);
   }
 
   if (authState === "authenticated" && !loaded) {
@@ -640,11 +822,11 @@ export function StudyDashboard() {
             还有 <strong>{daysUntilExam}</strong> 天
           </div>
           <div className="mini-track">
-            <span style={{ width: `${overallProgressPercent}%` }} />
+            <span style={{ width: `${timeProgressPercent}%` }} />
           </div>
           <div className="semester-card__meta">
-            <span>总进度 {overallProgressPercent}%</span>
-            <span>12.19</span>
+            <span>时间进度 {timeProgressPercent}%</span>
+            <span>12.18</span>
           </div>
         </div>
 
@@ -664,7 +846,8 @@ export function StudyDashboard() {
                 title={book.title}
                 onClick={() => {
                   setSelectedBookByArea((current) => ({ ...current, [activeArea]: book.id }));
-                  setExpandedChapter(null);
+                  setExpandedChapters([]);
+                  setCatalogFilter("all");
                 }}
               >
                 <span>{book.shortTitle}</span>
@@ -691,7 +874,8 @@ export function StudyDashboard() {
                   aria-pressed={activeArea === area}
                   onClick={() => {
                     setActiveArea(area);
-                    setExpandedChapter(null);
+                    setExpandedChapters([]);
+                    setCatalogFilter("all");
                   }}
                 >
                   {area === "408" ? "408" : "数学"}
@@ -711,17 +895,17 @@ export function StudyDashboard() {
                   <h2>{selectedBook.title}</h2>
                 </div>
                 <span className="status-pill status-pill--calm">
-                  {progressPercent === 100 ? "已完成" : "进行中"}
+                  {isReviewPhase ? (reviewPercent === 100 ? "全部完成" : "复习中") : "进行中"}
                 </span>
               </div>
 
               <div className="progress-number">
-                {progressPercent}<small>%</small>
+                {activeProgressPercent}<small>%</small><em>{activeProgressLabel}</em>
               </div>
 
-              <div className="big-track">
-                <span style={{ width: `${progressPercent}%` }} />
-                <i style={{ left: `${progressPercent}%` }} />
+              <div className={`big-track ${isReviewPhase ? "big-track--review" : ""}`}>
+                <span style={{ width: `${activeProgressPercent}%` }} />
+                <i style={{ left: `${activeProgressPercent}%` }} />
               </div>
 
               <div className="progress-note">
@@ -729,7 +913,7 @@ export function StudyDashboard() {
                   学完 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
                 </p>
                 <p>
-                  当前学习：<strong>{currentSection ? `${currentSection.number} ${currentSection.title}` : "全部小节已学完"}</strong>
+                  当前学习：<strong>{currentSection ? `${currentSection.number} ${currentSection.title}` : "第一轮已完成"}</strong>
                 </p>
               </div>
             </article>
@@ -742,8 +926,14 @@ export function StudyDashboard() {
                 <span className="streak-flame">✹</span>
               </div>
 
-              <div className="streak-number">
-                {streakDays} <span>天连续</span>
+              <div className="rhythm-metrics" aria-label={`本周连续学习 ${streakDays} 天，完成 ${weeklySectionCount} 小节`}>
+                <div className="rhythm-metric">
+                  <strong>{streakDays}</strong><span>天连续</span>
+                </div>
+                <i aria-hidden="true" />
+                <div className="rhythm-metric">
+                  <strong>{weeklySectionCount}</strong><span>小节已学</span>
+                </div>
               </div>
 
               <div className="week-dots" aria-label="本周打卡记录">
@@ -763,19 +953,51 @@ export function StudyDashboard() {
           <section className="catalog">
             <div className="catalog-heading">
               <div><h2>目录</h2><span>{selectedBook.chapters.length} 章 · {selectedSections.length} 小节</span></div>
+              <div className="catalog-tools">
+                <div className="catalog-filters" aria-label="目录筛选">
+                  {([
+                    ["all", "全部"],
+                    ["unlearned", "未学完"],
+                    ["unreviewed", "未复习"],
+                    ["overdue", "逾期"],
+                  ] as [CatalogFilter, string][]).map(([value, label]) => (
+                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}>{label}</button>
+                  ))}
+                </div>
+                <button className={`catalog-action${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
+                <button
+                  className="catalog-action"
+                  type="button"
+                  onClick={() => catalogFilter === "all" ? setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id)) : setFilterChaptersCollapsed((value) => !value)}
+                >
+                  {effectiveAllExpanded ? "全部折叠" : "全部展开"}
+                </button>
+              </div>
             </div>
 
+            {planUndo && <div className="plan-notice"><span>{planUndo.message}</span><button type="button" onClick={undoPlanChange}>撤销</button></div>}
+            {feedbackMessage && <div className="feedback-notice"><span>{feedbackMessage}</span><button type="button" onClick={() => setFeedbackMessage("")}>×</button></div>}
+
             <div className="chapter-grid">
-              {selectedBook.chapters.map((chapter, chapterIndex) => {
-                const open = expandedChapter === chapter.id;
+              {filteredChapters.map(({ chapter, visibleSections }) => {
+                const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
+                const open = catalogFilter !== "all" ? !filterChaptersCollapsed : expandedChapters.includes(chapter.id);
                 const chapterLearned = chapter.sections.filter((section) => progress[section.id]?.learned).length;
                 const chapterComplete = chapterLearned === chapter.sections.length;
+                const chapterOverdue = chapter.sections.some((section) => studyPlanStatus(progress[section.id]) === "overdue");
+                const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
+                const plannedDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
+                const range = chapterRanges[chapter.id] ?? {
+                  start: plannedDates[0] ?? "",
+                  end: plannedDates[plannedDates.length - 1] ?? plannedDates[0] ?? "",
+                  includeCompleted: false,
+                };
 
                 return (
-                  <article className={`chapter-card${open ? " open" : ""}`} key={chapter.id}>
+                  <article className={`chapter-card ${chapterState}${open ? " open" : ""}`} key={chapter.id}>
                     <button
                       className="chapter-button"
-                      onClick={() => setExpandedChapter(open ? null : chapter.id)}
+                      onClick={() => setExpandedChapters((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}
                       aria-expanded={open}
                     >
                       <span className="chapter-index">{String(chapterIndex + 1).padStart(2, "0")}</span>
@@ -787,34 +1009,70 @@ export function StudyDashboard() {
                     </button>
 
                     {open && (
-                      <div className="section-table">
+                      <>
+                      {planEditMode && (
+                        <div className="chapter-plan-editor">
+                          <span>计划区间</span>
+                          <input type="date" value={range.start} aria-label={`${chapter.title}计划开始日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, start: event.target.value } }))} />
+                          <b>—</b>
+                          <input type="date" value={range.end} aria-label={`${chapter.title}计划结束日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, end: event.target.value } }))} />
+                          <label><input type="checkbox" checked={range.includeCompleted} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, includeCompleted: event.target.checked } }))} />包含已完成项</label>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "uniform")}>统一日期</button>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "spread")}>按天均分</button>
+                        </div>
+                      )}
+                      <div className={`section-table${planEditMode ? " editing" : ""}`}>
                         <div className="section-head" aria-hidden="true">
                           <span>小节</span><span>计划</span><span>学完</span><span>复习</span>
                         </div>
-                        {chapter.sections.map((section) => {
+                        {visibleSections.map((section) => {
                           const state = progress[section.id];
+                          const status = studyPlanStatus(state);
+                          const isCurrent = currentSection?.id === section.id;
                           return (
-                            <div className="section-row" key={section.id}>
-                              <div className="section-name"><span>{section.number}</span><strong>{section.title}</strong></div>
-                              <EditableDate
-                                value={state?.plannedAt ?? ""}
-                                emptyLabel="未设置"
-                                tone={planTone(state?.plannedAt ?? "", state?.learned ?? false)}
-                                ariaLabel={`${section.number} 计划日期`}
-                                onChange={(value) => updateProgress(section.id, { plannedAt: value })}
-                              />
+                            <div className={`section-row ${status}${isCurrent ? " is-current" : ""}`} key={section.id}>
+                              <div className="section-name">
+                                <span>{section.number}</span><strong>{section.title}</strong>
+                                {isCurrent && <i title="当前学习" />}
+                                {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
+                              </div>
+                              {planEditMode ? (
+                                <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 计划日期`} onChange={(event) => updateProgress(section.id, { plannedAt: event.target.value })} />
+                              ) : (
+                                <EditableDate
+                                  value={state?.plannedAt ?? ""}
+                                  emptyLabel="未设置"
+                                  tone={planTone(status)}
+                                  ariaLabel={`${section.number} 计划日期`}
+                                  onChange={(value) => updateProgress(section.id, { plannedAt: value })}
+                                />
+                              )}
                               <div className="check-with-date">
                                 <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /></label>
-                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
+                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} validate={(value) => state.reviewedAt && value > state.reviewedAt ? "学完日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
                               <div className="check-with-date">
-                                <label aria-label={`${section.number} 复习`}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /></label>
-                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
+                                <label aria-label={`${section.number} 复习`} title={!state?.learned ? "学完后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /></label>
+                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} validate={(value) => state.learnedAt && value < state.learnedAt ? "复习日期不能早于学完日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
                               </div>
+                              {planEditMode && (
+                                <div className="shift-anchor">
+                                  <button type="button" onClick={() => setShiftSectionId(shiftSectionId === section.id ? null : section.id)}>顺延</button>
+                                  {shiftSectionId === section.id && (
+                                    <div className="shift-popover">
+                                      <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="顺延范围"><option value="chapter">本章后续</option><option value="subject">本科目后续</option></select>
+                                      {[1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days)}>+{days}天</button>)}
+                                      <input type="number" min="1" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义顺延天数" />
+                                      <button type="button" onClick={() => shiftPlans(section.id, shiftScope, shiftDays)}>确定</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
+                      </>
                     )}
                   </article>
                 );
@@ -823,6 +1081,15 @@ export function StudyDashboard() {
           </section>
         </div>
       </main>
+      {pendingClearSectionId && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-progress-title">
+            <h2 id="clear-progress-title">清除学习与复习记录？</h2>
+            <p>该小节已经记录过复习。取消“学完”会同时清除复习记录。</p>
+            <div><button type="button" onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -36,6 +36,7 @@ type ProgressValue = {
   reviewed: boolean;
   reviewedAt: string;
   plannedAt: string;
+  isCurrent: boolean;
 };
 
 type ProgressRow = {
@@ -45,6 +46,7 @@ type ProgressRow = {
   reviewed: number;
   reviewed_at: string;
   planned_at: string;
+  is_current: number;
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -153,12 +155,17 @@ function normalizeProgress(value: unknown): ProgressValue | null {
   if (!value || typeof value !== "object") return null;
   const entry = value as Record<string, unknown>;
   const date = (candidate: unknown) => typeof candidate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : "";
+  const learned = Boolean(entry.learned);
+  const learnedAt = date(entry.learnedAt);
+  const candidateReviewedAt = date(entry.reviewedAt);
+  const reviewed = learned && Boolean(entry.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
   return {
-    learned: Boolean(entry.learned),
-    learnedAt: date(entry.learnedAt),
-    reviewed: Boolean(entry.reviewed),
-    reviewedAt: date(entry.reviewedAt),
+    learned,
+    learnedAt,
+    reviewed,
+    reviewedAt: reviewed ? candidateReviewedAt : "",
     plannedAt: date(entry.plannedAt),
+    isCurrent: Boolean(entry.isCurrent),
   };
 }
 
@@ -168,7 +175,7 @@ function isSafeSectionId(sectionId: string): boolean {
 
 async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
   const result = await env.DB.prepare(
-    "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at FROM progress WHERE workspace_id = ?",
+    "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current FROM progress WHERE workspace_id = ?",
   ).bind(WORKSPACE_ID).all<ProgressRow>();
 
   return Object.fromEntries(result.results.map((row: ProgressRow) => [row.section_id, {
@@ -177,6 +184,7 @@ async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
     reviewed: Boolean(row.reviewed),
     reviewedAt: row.reviewed_at,
     plannedAt: row.planned_at,
+    isCurrent: Boolean(row.is_current),
   }]));
 }
 
@@ -184,16 +192,17 @@ async function writeProgress(env: Env, values: Record<string, ProgressValue>): P
   const statements = Object.entries(values)
     .filter(([sectionId]) => isSafeSectionId(sectionId))
     .map(([sectionId, value]) => env.DB.prepare(
-      `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(workspace_id, section_id) DO UPDATE SET
          learned = excluded.learned,
          learned_at = excluded.learned_at,
          reviewed = excluded.reviewed,
          reviewed_at = excluded.reviewed_at,
          planned_at = excluded.planned_at,
+         is_current = excluded.is_current,
          updated_at = CURRENT_TIMESTAMP`,
-    ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt));
+    ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
 
   if (statements.length > 0) await env.DB.batch(statements);
 }
