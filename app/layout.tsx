@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "408 学习目录",
+  title: "408 学习进度",
   description: "记录数据结构、计算机组成原理、操作系统和计算机网络各小节的学习与复习进度。",
 };
 
