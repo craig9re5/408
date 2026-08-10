@@ -892,6 +892,7 @@ export function StudyDashboard() {
             const sections = allSections(book);
             const stage = progressStage(sections, progress);
             const phaseLabel = stage.phase === "reviewed" ? "复习" : "第一轮";
+            const shortPhaseLabel = stage.phase === "reviewed" ? "复习" : "一轮";
             return (
               <button
                 className={book.id === selectedBook.id ? "current" : ""}
@@ -907,7 +908,7 @@ export function StudyDashboard() {
                 }}
               >
                 <span>{book.shortTitle}</span>
-                <strong>{stage.percentage}%</strong>
+                <strong><em>{shortPhaseLabel}</em><small>{stage.percentage}%</small></strong>
                 <i><b style={{ width: `${stage.percentage}%` }} /></i>
               </button>
             );
