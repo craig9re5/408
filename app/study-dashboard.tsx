@@ -124,12 +124,17 @@ function calculateStreak(progress: ProgressMap): number {
   const todayStr = dateToday();
   let streak = 0;
   const checkDate = new Date();
+  const currentDayOfWeek = checkDate.getDay();
+  const distanceToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+  const monday = new Date(checkDate);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(checkDate.getDate() + distanceToMonday);
 
   if (!activeDates.has(todayStr)) {
     checkDate.setDate(checkDate.getDate() - 1);
   }
 
-  while (true) {
+  while (checkDate.getTime() >= monday.getTime()) {
     const dateStr = new Date(checkDate.getTime() - checkDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
     if (activeDates.has(dateStr)) {
       streak++;
