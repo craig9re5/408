@@ -49,7 +49,9 @@ function makeBook(
         sections: sections.map((section, sectionIndex) => {
           const [sectionTitle, plannedAt] = typeof section === "string" ? [section, ""] : section;
           return {
-            id: `${id}-${chapterNumber}-${sectionIndex + 1}`,
+            id: sectionTitle === "880题目练习"
+              ? `${id}-${chapterNumber}-880`
+              : `${id}-${chapterNumber}-${sectionIndex + 1}`,
             number: `${chapterNumber}.${sectionIndex + 1}`,
             title: sectionTitle,
             plannedAt: plannedAt || undefined,
