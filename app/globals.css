@@ -259,7 +259,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .chapter-name { display: flex; flex-direction: column; gap: 4px; }
 .chapter-name small { color: var(--muted); font-size: 9px; }
 .chapter-name strong { font: 600 16px var(--serif); letter-spacing: 0.02em; }
-.chapter-name em { color: #9b9b91; font-size: 9px; font-style: normal; }
+.chapter-meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 11px; }
+.chapter-meta em { color: #9b9b91; font-size: 9px; font-style: normal; }
+.chapter-completion-dates { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; }
+.chapter-completion-date { display: inline-flex; align-items: center; gap: 4px; color: #76807b; font-size: 8px; white-space: nowrap; }
+.chapter-completion-date::before { width: 4px; height: 4px; flex: 0 0 auto; border-radius: 50%; background: currentColor; content: ""; }
+.chapter-completion-date.learned { color: #66836c; }
+.chapter-completion-date.reviewed { color: #668c9a; }
 .chapter-count { color: #8c9290; font-size: 10px; text-align: right; }
 .chapter-count i { display: inline-grid; width: 17px; height: 17px; margin-right: 7px; place-items: center; border-radius: 50%; color: #fff; background: var(--green); font-size: 9px; font-style: normal; }
 .chapter-count.complete { color: #5e8066; }

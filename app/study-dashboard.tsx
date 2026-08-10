@@ -79,6 +79,23 @@ function formatPlanRange(plannedDates: string[]): string {
   return `计划：${formatDateChinese(first)}—${formatDateChinese(last)}`;
 }
 
+function chapterCompletionDate(
+  sections: Section[],
+  progress: ProgressMap,
+  phase: "learned" | "reviewed",
+): string {
+  if (!sections.length) return "";
+
+  const dates = sections.map((section) => {
+    const state = progress[section.id];
+    const completed = phase === "learned" ? state?.learned : state?.reviewed;
+    return completed ? (phase === "learned" ? state.learnedAt : state.reviewedAt) : "";
+  });
+
+  if (dates.some((date) => !date)) return "";
+  return dates.sort().at(-1) ?? "";
+}
+
 function studyPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
   if (state?.learned) return "completed";
   if (!state?.plannedAt) return "unscheduled";
@@ -987,6 +1004,8 @@ export function StudyDashboard() {
                 const chapterOverdue = chapter.sections.some((section) => studyPlanStatus(progress[section.id]) === "overdue");
                 const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
                 const plannedDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
+                const learnedCompletedAt = chapterCompletionDate(chapter.sections, progress, "learned");
+                const reviewedCompletedAt = chapterCompletionDate(chapter.sections, progress, "reviewed");
                 const range = chapterRanges[chapter.id] ?? {
                   start: plannedDates[0] ?? "",
                   end: plannedDates[plannedDates.length - 1] ?? plannedDates[0] ?? "",
@@ -1001,7 +1020,19 @@ export function StudyDashboard() {
                       aria-expanded={open}
                     >
                       <span className="chapter-index">{String(chapterIndex + 1).padStart(2, "0")}</span>
-                      <span className="chapter-name"><small>第{chapter.number}章</small><strong>{chapter.title}</strong><em>{formatPlanRange(chapter.sections.map((section) => progress[section.id]?.plannedAt ?? ""))}</em></span>
+                      <span className="chapter-name">
+                        <small>第{chapter.number}章</small>
+                        <strong>{chapter.title}</strong>
+                        <span className="chapter-meta">
+                          <em>{formatPlanRange(chapter.sections.map((section) => progress[section.id]?.plannedAt ?? ""))}</em>
+                          {(learnedCompletedAt || reviewedCompletedAt) && (
+                            <span className="chapter-completion-dates">
+                              {learnedCompletedAt && <span className="chapter-completion-date learned">第一轮 {formatDateChinese(learnedCompletedAt)}</span>}
+                              {reviewedCompletedAt && <span className="chapter-completion-date reviewed">复习 {formatDateChinese(reviewedCompletedAt)}</span>}
+                            </span>
+                          )}
+                        </span>
+                      </span>
                       <span className={`chapter-count${chapterComplete ? " complete" : ""}`}>
                         {chapterComplete && <i>✓</i>}{chapterLearned} / {chapter.sections.length}
                       </span>
