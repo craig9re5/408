@@ -1,6 +1,7 @@
 name: Deploy to Cloudflare Workers
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -37,3 +38,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            INVITE_CODE
+            SESSION_SECRET
+        env:
+          INVITE_CODE: ${{ secrets.INVITE_CODE }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}

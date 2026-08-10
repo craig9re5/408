@@ -45,6 +45,8 @@ npm run start
 
 项目使用 Cloudflare Workers 承载页面和 API，使用 D1 保存共享进度，不需要自建服务器。项目已配置 GitHub Actions 自动化工作流，每次推送代码到 `main` 分支时会自动触发 Cloudflare 构建与部署。
 
+生产环境 Worker 名称为 `study`，默认访问地址为 <https://study.craig9re5.workers.dev>。D1 数据库继续沿用内部名称 `408-progress`，以保留已有的数学与 408 学习进度。
+
 首次部署时：
 
 1. 创建 D1 数据库，并将返回的 `database_id` 写入 [`wrangler.jsonc`](wrangler.jsonc)；文件中的全零 ID 只是本地占位符。
@@ -66,7 +68,9 @@ npm run start
    npx wrangler secret put SESSION_SECRET
    ```
 
-4. 构建并部署：
+4. 使用 GitHub Actions 自动部署时，还需要在仓库的 Actions Secrets 中配置同名的 `INVITE_CODE` 和 `SESSION_SECRET`。工作流会在部署时自动将它们同步到 `study` Worker。
+
+5. 构建并部署：
 
    ```powershell
    npm run deploy
