@@ -19,6 +19,13 @@ export type SectionProgress = {
 
 export type ProgressMap = Record<string, SectionProgress>;
 export type PlanChangeSource = "manual" | "batchSchedule" | "shift" | "undo";
+export type ChapterPlanMode = "uniform" | "spread";
+
+export type ChapterPlanSection = {
+  id: string;
+  learned: boolean;
+  plannedAt: string;
+};
 
 export type PlanHistoryEntry = {
   id: string;
@@ -107,6 +114,73 @@ function isDate(value: unknown): value is string {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+export function addCalendarDays(value: string, days: number): string {
+  if (!isDate(value) || !Number.isInteger(days)) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function buildChapterPlanChanges(
+  sections: ChapterPlanSection[],
+  range: { start: string; end: string; includeCompleted: boolean },
+  mode: ChapterPlanMode,
+): Record<string, string> {
+  if (!isDate(range.start) || (mode === "spread" && (!isDate(range.end) || range.end < range.start))) return {};
+
+  const eligible = sections.filter((section) => {
+    if (!range.includeCompleted && section.learned) return false;
+    // “统一日期”用于补齐尚未安排的项目，不能覆盖已有计划。
+    return mode !== "uniform" || !section.plannedAt;
+  });
+
+  if (mode === "uniform") {
+    return Object.fromEntries(eligible.map((section) => [section.id, range.start]));
+  }
+
+  const [startYear, startMonth, startDay] = range.start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = range.end.split("-").map(Number);
+  const start = Date.UTC(startYear, startMonth - 1, startDay);
+  const end = Date.UTC(endYear, endMonth - 1, endDay);
+  const dayCount = Math.floor((end - start) / 86_400_000) + 1;
+
+  return Object.fromEntries(eligible.map((section, index) => {
+    const offset = Math.floor((index * dayCount) / Math.max(eligible.length, 1));
+    return [section.id, addCalendarDays(range.start, Math.min(offset, dayCount - 1))];
+  }));
+}
+
+export function normalizeSectionProgress(value: unknown, fallback?: SectionProgress): SectionProgress {
+  const base = fallback ?? {
+    learned: false,
+    learnedAt: "",
+    reviewed: false,
+    reviewedAt: "",
+    plannedAt: "",
+    isCurrent: false,
+  };
+  if (!isRecord(value)) return base;
+
+  const learned = Boolean(value.learned);
+  const learnedAt = isDate(value.learnedAt) ? value.learnedAt : "";
+  const candidateReviewedAt = isDate(value.reviewedAt) ? value.reviewedAt : "";
+  const reviewed = learned
+    && Boolean(learnedAt)
+    && Boolean(value.reviewed)
+    && Boolean(candidateReviewedAt)
+    && candidateReviewedAt >= learnedAt;
+
+  return {
+    learned,
+    learnedAt,
+    reviewed,
+    reviewedAt: reviewed ? candidateReviewedAt : "",
+    plannedAt: value.plannedAt === "" || isDate(value.plannedAt) ? value.plannedAt : base.plannedAt,
+    isCurrent: !learned && Boolean(value.isCurrent),
+  };
+}
+
 function normalizeProgressMap(value: unknown, fallback: ProgressMap): ProgressMap {
   if (!isRecord(value)) return fallback;
   const normalized = { ...fallback };
@@ -115,27 +189,7 @@ function normalizeProgressMap(value: unknown, fallback: ProgressMap): ProgressMa
   sectionIds.forEach((sectionId) => {
     const entry = value[sectionId];
     if (!isRecord(entry)) return;
-    const base = fallback[sectionId] ?? {
-      learned: false,
-      learnedAt: "",
-      reviewed: false,
-      reviewedAt: "",
-      plannedAt: "",
-      isCurrent: false,
-    };
-    const learned = Boolean(entry.learned);
-    const learnedAt = isDate(entry.learnedAt) ? entry.learnedAt : "";
-    const candidateReviewedAt = isDate(entry.reviewedAt) ? entry.reviewedAt : "";
-    const reviewed = learned && Boolean(entry.reviewed) && Boolean(candidateReviewedAt)
-      && (!learnedAt || candidateReviewedAt >= learnedAt);
-    normalized[sectionId] = {
-      learned,
-      learnedAt,
-      reviewed,
-      reviewedAt: reviewed ? candidateReviewedAt : "",
-      plannedAt: isDate(entry.plannedAt) ? entry.plannedAt : base.plannedAt,
-      isCurrent: Boolean(entry.isCurrent),
-    };
+    normalized[sectionId] = normalizeSectionProgress(entry, fallback[sectionId]);
   });
 
   return normalized;

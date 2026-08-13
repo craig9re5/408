@@ -6,6 +6,8 @@ import {
   APP_VERSION,
   SCHEMA_VERSION,
   StorageRepository,
+  addCalendarDays,
+  buildChapterPlanChanges,
   calculateRecentStreak,
   createAppData,
   defaultProjectSettings,
@@ -13,6 +15,7 @@ import {
   isTodayPlan,
   isUnreviewedTask,
   normalizeAppData,
+  normalizeSectionProgress,
   summarizeImport,
   type LocalBackup,
   type PlanChangeSource,
@@ -177,12 +180,6 @@ function calculateTimeProgress(examDate: string): number {
   const end = new Date(`${examDate}T00:00:00`).getTime();
   if (end <= start) return today >= end ? 100 : 0;
   return Math.round(Math.max(0, Math.min(1, (today - start) / (end - start))) * 100);
-}
-
-function addDays(value: string, days: number): string {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
 type TaskEntry = {
@@ -383,19 +380,7 @@ function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = def
   Object.keys(merged).forEach((sectionId) => {
     const value = remote[sectionId];
     if (!value || typeof value !== "object") return;
-    const learned = Boolean(value.learned);
-    const learnedAt = typeof value.learnedAt === "string" ? value.learnedAt : "";
-    const candidateReviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
-    const reviewed = learned && Boolean(value.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
-    merged[sectionId] = {
-      ...merged[sectionId],
-      learned,
-      learnedAt,
-      reviewed,
-      reviewedAt: reviewed ? candidateReviewedAt : "",
-      plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : merged[sectionId].plannedAt,
-      isCurrent: Boolean(value.isCurrent),
-    };
+    merged[sectionId] = normalizeSectionProgress(value, merged[sectionId]);
   });
   return merged;
 }
@@ -732,10 +717,13 @@ export function StudyDashboard() {
   const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
-    setProgress((current) => ({
-      ...current,
-      [sectionId]: { ...current[sectionId], ...next },
-    }));
+    setProgress((current) => {
+      const previous = current[sectionId];
+      return {
+        ...current,
+        [sectionId]: normalizeSectionProgress({ ...previous, ...next }, previous),
+      };
+    });
   }
 
   function updatePlannedAt(sectionId: string, plannedAt: string) {
@@ -792,7 +780,10 @@ export function StudyDashboard() {
   }
 
   function toggleReviewed(sectionId: string, checked: boolean) {
-    if (checked && !progress[sectionId]?.learned) return;
+    if (checked && (!progress[sectionId]?.learned || !progress[sectionId]?.learnedAt)) {
+      setFeedbackMessage("请先记录学完日期，再标记复习");
+      return;
+    }
     updateProgress(sectionId, {
       reviewed: checked,
       reviewedAt: checked ? dateToday() : "",
@@ -872,20 +863,15 @@ export function StudyDashboard() {
       setFeedbackMessage("计划结束日期不能早于开始日期");
       return;
     }
-    const eligible = sections.filter((section) => range.includeCompleted || !progress[section.id]?.learned);
-    const targets = eligible;
-    const values: Record<string, string> = {};
-    if (mode === "uniform") {
-      targets.forEach((section) => { values[section.id] = range.start; });
-    } else {
-      const start = new Date(`${range.start}T00:00:00`).getTime();
-      const end = new Date(`${range.end}T00:00:00`).getTime();
-      const dayCount = Math.floor((end - start) / 86_400_000) + 1;
-      targets.forEach((section, index) => {
-        const offset = Math.floor((index * dayCount) / Math.max(targets.length, 1));
-        values[section.id] = addDays(range.start, Math.min(offset, dayCount - 1));
-      });
-    }
+    const values = buildChapterPlanChanges(
+      sections.map((section) => ({
+        id: section.id,
+        learned: Boolean(progress[section.id]?.learned),
+        plannedAt: progress[section.id]?.plannedAt ?? "",
+      })),
+      range,
+      mode,
+    );
     previewPlanChanges(
       values,
       mode === "uniform" ? "已统一设置章节计划" : "已按天均分章节计划",
@@ -904,7 +890,7 @@ export function StudyDashboard() {
     const values: Record<string, string> = {};
     source.slice(Math.max(startIndex, 0)).forEach((section) => {
       const state = progress[section.id];
-      if (state?.plannedAt && !state.learned) values[section.id] = addDays(state.plannedAt, days);
+      if (state?.plannedAt && !state.learned) values[section.id] = addCalendarDays(state.plannedAt, days);
     });
     previewPlanChanges(values, `已将后续计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift");
     setShiftSectionId(null);
@@ -1421,11 +1407,11 @@ export function StudyDashboard() {
                               )}
                               <div className="check-with-date check-with-date--learned">
                                 <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><b className="mobile-check-label">学完</b></label>
-                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} validate={(value) => state.reviewedAt && value > state.reviewedAt ? "学完日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
+                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} validate={(value) => !value ? "学完日期不能为空；如需取消，请取消勾选" : state.reviewedAt && value > state.reviewedAt ? "学完日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
                               <div className="check-with-date check-with-date--reviewed">
-                                <label aria-label={`${section.number} 复习`} title={!state?.learned ? "学完后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
-                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} validate={(value) => state.learnedAt && value < state.learnedAt ? "复习日期不能早于学完日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
+                                <label aria-label={`${section.number} 复习`} title={!state?.learnedAt ? "记录学完日期后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learnedAt} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
+                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : state.learnedAt && value < state.learnedAt ? "复习日期不能早于学完日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
                               </div>
                               {planEditMode && (
                                 <div className="shift-anchor">

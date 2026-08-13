@@ -160,18 +160,18 @@ async function requireSession(request: Request, env: Env): Promise<Response | nu
 function normalizeProgress(value: unknown): ProgressValue | null {
   if (!value || typeof value !== "object") return null;
   const entry = value as Record<string, unknown>;
-  const date = (candidate: unknown) => typeof candidate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : "";
+  const date = (candidate: unknown) => isDate(candidate) ? candidate : "";
   const learned = Boolean(entry.learned);
   const learnedAt = date(entry.learnedAt);
   const candidateReviewedAt = date(entry.reviewedAt);
-  const reviewed = learned && Boolean(entry.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
+  const reviewed = learned && Boolean(learnedAt) && Boolean(entry.reviewed) && Boolean(candidateReviewedAt) && candidateReviewedAt >= learnedAt;
   return {
     learned,
     learnedAt,
     reviewed,
     reviewedAt: reviewed ? candidateReviewedAt : "",
     plannedAt: date(entry.plannedAt),
-    isCurrent: Boolean(entry.isCurrent),
+    isCurrent: !learned && Boolean(entry.isCurrent),
   };
 }
 
@@ -184,14 +184,17 @@ async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
     "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current FROM progress WHERE workspace_id = ?",
   ).bind(WORKSPACE_ID).all<ProgressRow>();
 
-  return Object.fromEntries(result.results.map((row: ProgressRow) => [row.section_id, {
-    learned: Boolean(row.learned),
-    learnedAt: row.learned_at,
-    reviewed: Boolean(row.reviewed),
-    reviewedAt: row.reviewed_at,
-    plannedAt: row.planned_at,
-    isCurrent: Boolean(row.is_current),
-  }]));
+  return Object.fromEntries(result.results.flatMap((row: ProgressRow) => {
+    const normalized = normalizeProgress({
+      learned: Boolean(row.learned),
+      learnedAt: row.learned_at,
+      reviewed: Boolean(row.reviewed),
+      reviewedAt: row.reviewed_at,
+      plannedAt: row.planned_at,
+      isCurrent: Boolean(row.is_current),
+    });
+    return normalized ? [[row.section_id, normalized]] : [];
+  }));
 }
 
 async function writeProgress(env: Env, values: Record<string, ProgressValue>): Promise<void> {
