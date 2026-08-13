@@ -1503,7 +1503,7 @@ export function StudyDashboard() {
                 </section>
 
                 <section className="settings-card settings-card--about">
-                  <header><h2>Study Dashboard</h2></header>
+                  <header><h2>版本信息</h2></header>
                   <dl><div><dt>应用版本</dt><dd>{APP_VERSION}</dd></div><div><dt>数据结构</dt><dd>Schema v{SCHEMA_VERSION}</dd></div><div><dt>计划历史</dt><dd>{planHistory.length} 条</dd></div></dl>
                 </section>
               </div>
