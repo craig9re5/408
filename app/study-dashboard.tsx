@@ -703,9 +703,8 @@ export function StudyDashboard() {
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayPlan.filter(({ section }) => progress[section.id]?.learned).length;
 
-  const examDate = activePage === "today"
-    ? [projectSettings["408"].examDate, projectSettings.math.examDate].sort()[0]
-    : projectSettings[activeArea].examDate;
+  const nearestExamDate = [projectSettings["408"].examDate, projectSettings.math.examDate].sort()[0];
+  const examDate = activePage === "progress" ? projectSettings[activeArea].examDate : nearestExamDate;
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
   const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
   const streakDays = calculateRecentStreak(progress, today);
@@ -989,9 +988,9 @@ export function StudyDashboard() {
     setFeedbackMessage("备份恢复完成，已保留恢复前备份");
   }
 
-  function updateExamDate(value: string) {
+  function updateExamDate(area: StudyArea, value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    setProjectSettings((current) => ({ ...current, [activeArea]: { examDate: value } }));
+    setProjectSettings((current) => ({ ...current, [area]: { examDate: value } }));
   }
 
   function renderTaskList(
@@ -1182,7 +1181,7 @@ export function StudyDashboard() {
         <header className="topbar">
           <span />
           <div className="topbar-actions">
-            {activePage !== "today" && <div className="area-switcher" role="group" aria-label="切换学习领域">
+            {activePage === "progress" && <div className="area-switcher" role="group" aria-label="切换学习领域">
               {(["408", "math"] as StudyArea[]).map((area) => (
                 <button
                   className={activeArea === area ? "active" : ""}
@@ -1458,29 +1457,34 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view placeholder-page" aria-labelledby="analytics-title">
-              <header className="page-heading"><div><h1 id="analytics-title">数据分析</h1></div><p>当前项目：{activeArea === "408" ? "408" : "数学"}</p></header>
+              <header className="page-heading"><div><h1 id="analytics-title">数据分析</h1></div></header>
               <article className="placeholder-card">
                 <span aria-hidden="true">↗</span>
-                <div><h2>分析视图正在整理</h2><p>这里会承接长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
+                <div><h2>分析视图正在整理</h2><p>这里会汇总全部学习项目的长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
               </article>
             </section>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
               <header className="page-heading">
                 <div><h1 id="settings-title">设置</h1></div>
-                <p>当前项目：{activeArea === "408" ? "408" : "数学"}</p>
               </header>
 
               <div className="settings-grid">
                 <section className="settings-card settings-card--project">
-                  <header><span>项目</span><h2>{activeArea === "408" ? "408" : "数学"} 考试日期</h2></header>
-                  <p>倒计时和左侧时间进度会随当前项目独立计算。</p>
-                  <label className="settings-date"><span>考试日期</span><input type="date" value={examDate} onChange={(event) => updateExamDate(event.target.value)} /></label>
-                  <dl><div><dt>包含科目</dt><dd>{books.filter((book) => book.area === activeArea).length} 门</dd></div><div><dt>距离考试</dt><dd>{daysUntilExam} 天</dd></div><div><dt>时间进度</dt><dd>{timeProgressPercent}%</dd></div></dl>
+                  <header><h2>考试日期</h2></header>
+                  <p>所有学习项目统一在这里管理。全局页面的左侧倒计时显示最近一场考试。</p>
+                  <div className="settings-project-list">
+                    {(["408", "math"] as StudyArea[]).map((area) => (
+                      <label className="settings-project-row" key={area}>
+                        <span><strong>{area === "408" ? "408" : "数学"}</strong><small>{books.filter((book) => book.area === area).length} 门科目</small></span>
+                        <input type="date" aria-label={`${area === "408" ? "408" : "数学"}考试日期`} value={projectSettings[area].examDate} onChange={(event) => updateExamDate(area, event.target.value)} />
+                      </label>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="settings-card">
-                  <header><span>数据</span><h2>导出与导入</h2></header>
+                  <header><h2>导出与导入</h2></header>
                   <p>JSON 包含两个项目的学习记录、计划、设置与操作历史。</p>
                   <div className="settings-actions"><button type="button" onClick={downloadExport}>导出全部数据</button><button type="button" onClick={() => importInputRef.current?.click()}>导入 JSON</button></div>
                   {storageLoadIssue && <button className="recovery-export" type="button" onClick={downloadRecoveryData}>导出无法迁移的原始数据</button>}
@@ -1488,7 +1492,7 @@ export function StudyDashboard() {
                 </section>
 
                 <section className="settings-card settings-card--backups">
-                  <header><span>恢复</span><h2>本地备份</h2></header>
+                  <header><h2>本地备份</h2></header>
                   <p>最多保留 15 份；导入、恢复和旧数据迁移前会自动创建。本地备份用于防误操作，清除浏览器站点数据时也会丢失；请用 JSON 导出做外部备份。</p>
                   <button className="backup-create" type="button" onClick={createManualBackup}>立即创建备份</button>
                   <div className="backup-list">
@@ -1499,7 +1503,7 @@ export function StudyDashboard() {
                 </section>
 
                 <section className="settings-card settings-card--about">
-                  <header><span>关于</span><h2>Study Dashboard</h2></header>
+                  <header><h2>Study Dashboard</h2></header>
                   <dl><div><dt>应用版本</dt><dd>{APP_VERSION}</dd></div><div><dt>数据结构</dt><dd>Schema v{SCHEMA_VERSION}</dd></div><div><dt>计划历史</dt><dd>{planHistory.length} 条</dd></div></dl>
                 </section>
               </div>
