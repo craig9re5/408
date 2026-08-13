@@ -31,6 +31,26 @@ type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "today" | "analytics" | "settings";
 
+const pageNavigation: { page: AppPage; index: string; label: string; detail: string }[] = [
+  { page: "progress", index: "01", label: "学习进度", detail: "科目与目录" },
+  { page: "today", index: "02", label: "今日", detail: "计划与积压" },
+  { page: "analytics", index: "03", label: "数据分析", detail: "趋势与复盘" },
+];
+
+const pageTitles: Record<AppPage, string> = {
+  progress: "学习进度",
+  today: "今日安排",
+  analytics: "数据分析",
+  settings: "设置",
+};
+
+const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
+  { page: "progress", mark: "进", label: "进度" },
+  { page: "today", mark: "今", label: "今日" },
+  { page: "analytics", mark: "析", label: "分析" },
+  { page: "settings", mark: "设", label: "设置" },
+];
+
 type PlanUndo = {
   message: string;
   values: Record<string, string>;
@@ -743,6 +763,12 @@ export function StudyDashboard() {
     setFeedbackMessage("已设为当前学习");
   }
 
+  function selectBook(bookId: string) {
+    setSelectedBookByArea((current) => ({ ...current, [activeArea]: bookId }));
+    setExpandedChapters([]);
+    setCatalogFilter("all");
+  }
+
   function clearLearned(sectionId: string) {
     updateProgress(sectionId, {
       learned: false,
@@ -1104,7 +1130,8 @@ export function StudyDashboard() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <strong>学习进度</strong>
+          <span className="brand-mark" aria-hidden="true">4</span>
+          <span className="brand-copy"><strong>408 Atlas</strong><small>STUDY CONTROL</small></span>
         </div>
 
         <div className="semester-card">
@@ -1125,11 +1152,8 @@ export function StudyDashboard() {
         </div>
 
         <nav className="page-navigation" aria-label="页面导航">
-          {([
-            ["progress", "学习进度"],
-            ["today", "今日"],
-            ["analytics", "数据分析"],
-          ] as [AppPage, string][]).map(([page, label]) => (
+          <span className="navigation-kicker">工作台</span>
+          {pageNavigation.map(({ page, index, label, detail }) => (
             <button
               className={activePage === page ? "active" : ""}
               type="button"
@@ -1137,66 +1161,65 @@ export function StudyDashboard() {
               aria-current={activePage === page ? "page" : undefined}
               onClick={() => setActivePage(page)}
             >
-              <i aria-hidden="true" />{label}
+              <span className="navigation-index" aria-hidden="true">{index}</span>
+              <span className="navigation-copy"><strong>{label}</strong><small>{detail}</small></span>
             </button>
           ))}
         </nav>
 
-        {activePage === "progress" && <nav className="subject-progress" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
-          <h2>{activeArea === "408" ? "408 科目" : "数学科目"}</h2>
-          {areaBooks.map((book) => {
-            const sections = allSections(book);
-            const stage = progressStage(sections, progress);
-            const phaseLabel = stage.phase === "reviewed" ? "复习" : "第一轮";
-            const shortPhaseLabel = stage.phase === "reviewed" ? "复习" : "一轮";
-            return (
-              <button
-                className={book.id === selectedBook.id ? "current" : ""}
-                type="button"
-                key={book.id}
-                aria-current={book.id === selectedBook.id ? "page" : undefined}
-                aria-label={`切换到${book.title}，当前${phaseLabel}进度 ${stage.percentage}%`}
-                title={book.title}
-                onClick={() => {
-                  setSelectedBookByArea((current) => ({ ...current, [activeArea]: book.id }));
-                  setExpandedChapters([]);
-                  setCatalogFilter("all");
-                }}
-              >
-                <span>{book.shortTitle}</span>
-                <strong><em>{shortPhaseLabel}</em><small>{stage.percentage}%</small></strong>
-                <i><b style={{ width: `${stage.percentage}%` }} /></i>
-              </button>
-            );
-          })}
-        </nav>}
-
         <div className="sidebar-footer">
-          <button className={`settings-navigation${activePage === "settings" ? " active" : ""}`} type="button" onClick={() => setActivePage("settings")}><i aria-hidden="true" />设置</button>
+          <button className={`settings-navigation${activePage === "settings" ? " active" : ""}`} type="button" onClick={() => setActivePage("settings")}>
+            <span className="navigation-index" aria-hidden="true">04</span>
+            <span className="navigation-copy"><strong>设置</strong><small>偏好与备份</small></span>
+          </button>
           <p className="storage-note"><i className={syncStatus === "saved" ? "synced" : ""} />{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</p>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
-          <span />
+          <div className="topbar-context">
+            <span>WORKSPACE</span>
+            <strong>{pageTitles[activePage]}</strong>
+          </div>
           <div className="topbar-actions">
-            {activePage === "progress" && <div className="area-switcher" role="group" aria-label="切换学习领域">
-              {(["408", "math"] as StudyArea[]).map((area) => (
-                <button
-                  className={activeArea === area ? "active" : ""}
-                  type="button"
-                  key={area}
-                  aria-pressed={activeArea === area}
-                  onClick={() => {
-                    setActiveArea(area);
-                    setExpandedChapters([]);
-                    setCatalogFilter("all");
-                  }}
-                >
-                  {area === "408" ? "408" : "数学"}
-                </button>
-              ))}
+            {activePage === "progress" && <div className="study-switchers">
+              <div className="area-switcher" role="group" aria-label="切换学习领域">
+                {(["408", "math"] as StudyArea[]).map((area) => (
+                  <button
+                    className={activeArea === area ? "active" : ""}
+                    type="button"
+                    key={area}
+                    aria-pressed={activeArea === area}
+                    onClick={() => {
+                      setActiveArea(area);
+                      setExpandedChapters([]);
+                      setCatalogFilter("all");
+                    }}
+                  >
+                    {area === "408" ? "408" : "数学"}
+                  </button>
+                ))}
+              </div>
+              <nav className="book-switcher" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
+                {areaBooks.map((book) => (
+                  <button
+                    className={book.id === selectedBook.id ? "active" : ""}
+                    type="button"
+                    key={book.id}
+                    aria-current={book.id === selectedBook.id ? "page" : undefined}
+                    onClick={() => selectBook(book.id)}
+                  >
+                    {book.shortTitle}
+                  </button>
+                ))}
+              </nav>
+              <label className="book-select">
+                <span className="visually-hidden">切换{activeArea === "408" ? "408" : "数学"}科目</span>
+                <select value={selectedBook.id} onChange={(event) => selectBook(event.target.value)}>
+                  {areaBooks.map((book) => <option value={book.id} key={book.id}>{book.shortTitle}</option>)}
+                </select>
+              </label>
             </div>}
             <span className={`sync-label ${syncStatus}`}>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中" : syncStatus === "offline" ? "待重试" : ""}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
@@ -1396,12 +1419,12 @@ export function StudyDashboard() {
                                   onChange={(value) => updatePlannedAt(section.id, value)}
                                 />
                               )}
-                              <div className="check-with-date">
-                                <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /></label>
+                              <div className="check-with-date check-with-date--learned">
+                                <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><b className="mobile-check-label">学完</b></label>
                                 {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} validate={(value) => state.reviewedAt && value > state.reviewedAt ? "学完日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
-                              <div className="check-with-date">
-                                <label aria-label={`${section.number} 复习`} title={!state?.learned ? "学完后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /></label>
+                              <div className="check-with-date check-with-date--reviewed">
+                                <label aria-label={`${section.number} 复习`} title={!state?.learned ? "学完后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learned} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
                                 {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} validate={(value) => state.learnedAt && value < state.learnedAt ? "复习日期不能早于学完日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
                               </div>
                               {planEditMode && (
@@ -1511,6 +1534,23 @@ export function StudyDashboard() {
           )}
         </div>
       </main>
+      <nav className="mobile-navigation" aria-label="移动端页面导航">
+        {mobileNavigation.map(({ page, mark, label }) => (
+          <button
+            className={activePage === page ? "active" : ""}
+            type="button"
+            key={page}
+            aria-current={activePage === page ? "page" : undefined}
+            onClick={() => {
+              setActivePage(page);
+              window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            }}
+          >
+            <span aria-hidden="true">{mark}</span>
+            <strong>{label}</strong>
+          </button>
+        ))}
+      </nav>
       {planPreview && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="plan-preview-title">

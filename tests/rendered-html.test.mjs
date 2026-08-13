@@ -130,7 +130,9 @@ test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () =
   for (const label of ["学习进度", "今日", "数据分析", "设置"]) assert.match(dashboard, new RegExp(label));
   assert.match(dashboard, /\/api\/app-data/);
   assert.match(dashboard, /projectTaskEntries\("408"\)[\s\S]*projectTaskEntries\("math"\)/);
-  assert.match(dashboard, /activePage === "progress" && <div className="area-switcher"/);
+  assert.match(dashboard, /activePage === "progress" && <div className="study-switchers"/);
+  assert.match(dashboard, /className="area-switcher"/);
+  assert.match(dashboard, /className="book-switcher"/);
   assert.match(dashboard, /allFirstRoundComplete && <section className="task-panel task-panel--review"/);
   assert.match(dashboard, /\["408", "math"\][\s\S]*settings-project-row/);
   assert.doesNotMatch(dashboard, /<article><span>待复习<\/span>/);
