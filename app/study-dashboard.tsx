@@ -6,6 +6,7 @@ import {
   APP_VERSION,
   SCHEMA_VERSION,
   StorageRepository,
+  calculateRecentStreak,
   createAppData,
   defaultProjectSettings,
   isOverdueTask,
@@ -233,39 +234,6 @@ function calculateWeeklySectionCount(progress: ProgressMap): number {
     const reviewedCount = entry.reviewedAt && weekDates.has(entry.reviewedAt) ? 1 : 0;
     return count + learnedCount + reviewedCount;
   }, 0);
-}
-
-function calculateStreak(progress: ProgressMap): number {
-  const activeDates = new Set<string>();
-  Object.values(progress).forEach((entry) => {
-    if (entry.learnedAt) activeDates.add(entry.learnedAt);
-    if (entry.reviewedAt) activeDates.add(entry.reviewedAt);
-  });
-
-  const todayStr = dateToday();
-  let streak = 0;
-  const checkDate = new Date();
-  const currentDayOfWeek = checkDate.getDay();
-  const distanceToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
-  const monday = new Date(checkDate);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(checkDate.getDate() + distanceToMonday);
-
-  if (!activeDates.has(todayStr)) {
-    checkDate.setDate(checkDate.getDate() - 1);
-  }
-
-  while (checkDate.getTime() >= monday.getTime()) {
-    const dateStr = new Date(checkDate.getTime() - checkDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-    if (activeDates.has(dateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return streak;
 }
 
 function parseFlexibleDate(input: string): string | null {
@@ -720,20 +688,27 @@ export function StudyDashboard() {
   const effectiveAllExpanded = catalogFilter === "all" ? allExpanded : !filterChaptersCollapsed;
 
   const projectTasks = useMemo(() => projectTaskEntries(activeArea), [activeArea]);
+  const todayTasks = useMemo(() => [
+    ...projectTaskEntries("408"),
+    ...projectTaskEntries("math"),
+  ], []);
   const today = dateToday();
-  const todayPlan = projectTasks.filter(({ section }) => isTodayPlan(progress[section.id], today));
-  const overdueTasks = projectTasks
+  const todayPlan = todayTasks.filter(({ section }) => isTodayPlan(progress[section.id], today));
+  const overdueTasks = todayTasks
     .filter(({ section }) => isOverdueTask(progress[section.id], today))
     .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
-  const unreviewedTasks = projectTasks
+  const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
+  const unreviewedTasks = todayTasks
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayPlan.filter(({ section }) => progress[section.id]?.learned).length;
 
-  const examDate = projectSettings[activeArea].examDate;
+  const examDate = activePage === "today"
+    ? [projectSettings["408"].examDate, projectSettings.math.examDate].sort()[0]
+    : projectSettings[activeArea].examDate;
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
   const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
-  const streakDays = useMemo(() => calculateStreak(progress), [progress]);
+  const streakDays = calculateRecentStreak(progress, today);
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
   const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
 
@@ -1207,7 +1182,7 @@ export function StudyDashboard() {
         <header className="topbar">
           <span />
           <div className="topbar-actions">
-            <div className="area-switcher" role="group" aria-label="切换学习领域">
+            {activePage !== "today" && <div className="area-switcher" role="group" aria-label="切换学习领域">
               {(["408", "math"] as StudyArea[]).map((area) => (
                 <button
                   className={activeArea === area ? "active" : ""}
@@ -1223,7 +1198,7 @@ export function StudyDashboard() {
                   {area === "408" ? "408" : "数学"}
                 </button>
               ))}
-            </div>
+            </div>}
             <span className={`sync-label ${syncStatus}`}>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中" : syncStatus === "offline" ? "待重试" : ""}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
@@ -1457,15 +1432,13 @@ export function StudyDashboard() {
           </> : activePage === "today" ? (
             <section className="page-view today-page" aria-labelledby="today-title">
               <header className="page-heading">
-                <div><span className="page-kicker">{activeArea === "408" ? "408 项目" : "数学项目"}</span><h1 id="today-title">今日</h1></div>
-                <p>{formatDateChinese(today)} · 只展示需要你现在处理的事项</p>
+                <div><span className="page-kicker">TODAY</span><h1 id="today-title">今日</h1></div>
+                <p>{formatDateChinese(today)}</p>
               </header>
 
               <div className="summary-strip" aria-label="今日任务概览">
                 <article><span>今日计划</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
                 <article><span>逾期未学</span><strong>{overdueTasks.length}</strong><small>按原计划日期排序</small></article>
-                <article><span>待复习</span><strong>{unreviewedTasks.length}</strong><small>不预测复习日期</small></article>
-                <article><span>项目进度</span><strong>{Math.round(projectTasks.filter(({ section }) => progress[section.id]?.learned).length / Math.max(projectTasks.length, 1) * 100)}%</strong><small>{projectTasks.filter(({ section }) => progress[section.id]?.learned).length}/{projectTasks.length} 小节</small></article>
               </div>
 
               <div className="today-sections">
@@ -1477,15 +1450,15 @@ export function StudyDashboard() {
                   <header><div><span>02</span><h2 id="overdue-title">逾期</h2></div><strong>{overdueTasks.length}</strong></header>
                   {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
                 </section>
-                <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
+                {allFirstRoundComplete && <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
                   <header><div><span>03</span><h2 id="unreviewed-title">未复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
                   {renderTaskList(unreviewedTasks, "unreviewed", "没有积压的复习任务。")}
-                </section>
+                </section>}
               </div>
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view placeholder-page" aria-labelledby="analytics-title">
-              <header className="page-heading"><div><span className="page-kicker">V1.5 beta</span><h1 id="analytics-title">数据分析</h1></div><p>当前项目：{activeArea === "408" ? "408" : "数学"}</p></header>
+              <header className="page-heading"><div><h1 id="analytics-title">数据分析</h1></div><p>当前项目：{activeArea === "408" ? "408" : "数学"}</p></header>
               <article className="placeholder-card">
                 <span aria-hidden="true">↗</span>
                 <div><h2>分析视图正在整理</h2><p>这里会承接长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
@@ -1494,7 +1467,7 @@ export function StudyDashboard() {
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
               <header className="page-heading">
-                <div><span className="page-kicker">数据与项目</span><h1 id="settings-title">设置</h1></div>
+                <div><h1 id="settings-title">设置</h1></div>
                 <p>当前项目：{activeArea === "408" ? "408" : "数学"}</p>
               </header>
 

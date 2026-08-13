@@ -69,6 +69,28 @@ export function isUnreviewedTask(state: SectionProgress | undefined, today: stri
   return Boolean(state?.learned && !state.reviewed && state.learnedAt && state.learnedAt < today);
 }
 
+export function calculateRecentStreak(progress: ProgressMap, today: string): number {
+  const activeDates = new Set<string>();
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt && entry.learnedAt <= today) activeDates.add(entry.learnedAt);
+    if (entry.reviewedAt && entry.reviewedAt <= today) activeDates.add(entry.reviewedAt);
+  });
+  if (!activeDates.size) return 0;
+
+  const latestActiveDate = [...activeDates].sort().at(-1);
+  if (!latestActiveDate) return 0;
+
+  let streak = 0;
+  let cursor = latestActiveDate;
+  while (activeDates.has(cursor)) {
+    streak += 1;
+    const date = new Date(`${cursor}T00:00:00`);
+    date.setDate(date.getDate() - 1);
+    cursor = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  }
+  return streak;
+}
+
 export const defaultProjectSettings = (): ProjectSettings => ({
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },

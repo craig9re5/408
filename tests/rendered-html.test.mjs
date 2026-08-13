@@ -6,6 +6,7 @@ import {
   MAX_BACKUPS,
   SCHEMA_VERSION,
   StorageRepository,
+  calculateRecentStreak,
   createAppData,
   isOverdueTask,
   isTodayPlan,
@@ -43,6 +44,18 @@ test("今日、逾期、未复习规则只由同一条小节记录派生", () =>
   assert.equal(isUnreviewedTask(emptyProgress({ learned: true, learnedAt: today }), today), false);
   assert.equal(isUnreviewedTask(emptyProgress({ learned: true, learnedAt: "2026-08-12" }), today), true);
   assert.equal(isUnreviewedTask(emptyProgress({ learned: true, learnedAt: "2026-08-12", reviewed: true, reviewedAt: today }), today), false);
+});
+
+test("连续学习按最近一次活动向前计算，不因今天暂未学习错误归零", () => {
+  assert.equal(calculateRecentStreak({
+    monday: emptyProgress({ learned: true, learnedAt: "2026-08-10" }),
+    tuesday: emptyProgress({ learned: true, learnedAt: "2026-08-11" }),
+  }, "2026-08-13"), 2);
+  assert.equal(calculateRecentStreak({
+    monday: emptyProgress({ learned: true, learnedAt: "2026-08-10" }),
+    wednesday: emptyProgress({ learned: true, learnedAt: "2026-08-12" }),
+  }, "2026-08-13"), 1);
+  assert.equal(calculateRecentStreak({}, "2026-08-13"), 0);
 });
 
 test("数据校验保留 schemaVersion 并修复不合法复习状态", () => {
@@ -116,6 +129,11 @@ test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () =
 
   for (const label of ["学习进度", "今日", "数据分析", "设置"]) assert.match(dashboard, new RegExp(label));
   assert.match(dashboard, /\/api\/app-data/);
+  assert.match(dashboard, /projectTaskEntries\("408"\)[\s\S]*projectTaskEntries\("math"\)/);
+  assert.match(dashboard, /activePage !== "today" && <div className="area-switcher"/);
+  assert.match(dashboard, /allFirstRoundComplete && <section className="task-panel task-panel--review"/);
+  assert.doesNotMatch(dashboard, /<article><span>待复习<\/span>/);
+  assert.doesNotMatch(dashboard, /<article><span>项目进度<\/span>/);
   assert.doesNotMatch(dashboard, /useState[^\n]*(todayTask|todayReviewTask|todayCompleted)/i);
   assert.match(worker, /plan_history/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS app_state/);
