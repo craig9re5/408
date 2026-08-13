@@ -2,34 +2,6 @@ const WORKSPACE_ID = "main";
 const SESSION_COOKIE = "408_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-interface AssetFetcher {
-  fetch(request: Request): Promise<Response>;
-}
-
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  all<T>(): Promise<{ results: T[] }>;
-}
-
-interface D1DatabaseBinding {
-  prepare(query: string): D1PreparedStatement;
-  batch(statements: D1PreparedStatement[]): Promise<unknown[]>;
-}
-
-export interface Env {
-  ASSETS: AssetFetcher;
-  DB: D1DatabaseBinding;
-  IMAGES: {
-    input(stream: ReadableStream): {
-      transform(options: Record<string, unknown>): {
-        output(options: { format: string; quality: number }): Promise<{ response(): Response }>;
-      };
-    };
-  };
-  INVITE_CODE?: string;
-  SESSION_SECRET?: string;
-}
-
 type ProgressValue = {
   learned: boolean;
   learnedAt: string;
@@ -47,6 +19,40 @@ type ProgressRow = {
   reviewed_at: string;
   planned_at: string;
   is_current: number;
+};
+
+type PlanChangeSource = "manual" | "batchSchedule" | "shift" | "undo";
+
+type PlanHistoryEntry = {
+  id: string;
+  sectionId: string;
+  from: string;
+  to: string;
+  changedAt: string;
+  source: PlanChangeSource;
+};
+
+type ProjectSettings = {
+  "408": { examDate: string };
+  math: { examDate: string };
+};
+
+type AppStateRow = {
+  schema_version: number;
+  project_settings: string;
+  plan_history: string;
+};
+
+type AppData = {
+  schemaVersion: number;
+  progress: Record<string, ProgressValue>;
+  projectSettings: ProjectSettings;
+  planHistory: PlanHistoryEntry[];
+};
+
+const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
+  "408": { examDate: "2026-12-19" },
+  math: { examDate: "2026-12-19" },
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -207,6 +213,127 @@ async function writeProgress(env: Env, values: Record<string, ProgressValue>): P
   if (statements.length > 0) await env.DB.batch(statements);
 }
 
+function isDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function normalizeProjectSettings(value: unknown): ProjectSettings {
+  const normalized = structuredClone(DEFAULT_PROJECT_SETTINGS);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return normalized;
+  const settings = value as Record<string, unknown>;
+  (["408", "math"] as const).forEach((area) => {
+    const candidate = settings[area];
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      const examDate = (candidate as Record<string, unknown>).examDate;
+      if (isDate(examDate)) normalized[area] = { examDate };
+    }
+  });
+  return normalized;
+}
+
+function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  const sources: PlanChangeSource[] = ["manual", "batchSchedule", "shift", "undo"];
+  return value.flatMap((entry): PlanHistoryEntry[] => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const candidate = entry as Record<string, unknown>;
+    if (typeof candidate.id !== "string"
+      || typeof candidate.sectionId !== "string"
+      || !isSafeSectionId(candidate.sectionId)
+      || typeof candidate.changedAt !== "string"
+      || typeof candidate.source !== "string"
+      || !sources.includes(candidate.source as PlanChangeSource)) return [];
+    return [{
+      id: candidate.id.slice(0, 120),
+      sectionId: candidate.sectionId,
+      from: candidate.from === "" || isDate(candidate.from) ? candidate.from : "",
+      to: candidate.to === "" || isDate(candidate.to) ? candidate.to : "",
+      changedAt: candidate.changedAt.slice(0, 64),
+      source: candidate.source as PlanChangeSource,
+    }];
+  }).slice(-1000);
+}
+
+async function readAppData(env: Env): Promise<AppData> {
+  const [progress, stateResult] = await Promise.all([
+    readProgress(env),
+    env.DB.prepare(
+      "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
+    ).bind(WORKSPACE_ID).all<AppStateRow>(),
+  ]);
+  const state = stateResult.results[0];
+  let parsedSettings: unknown = null;
+  let parsedHistory: unknown = null;
+  try { parsedSettings = state ? JSON.parse(state.project_settings) : null; } catch { parsedSettings = null; }
+  try { parsedHistory = state ? JSON.parse(state.plan_history) : null; } catch { parsedHistory = null; }
+  return {
+    schemaVersion: state?.schema_version ?? 1,
+    progress,
+    projectSettings: normalizeProjectSettings(parsedSettings),
+    planHistory: normalizePlanHistory(parsedHistory),
+  };
+}
+
+async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<void> {
+  const statements: ReturnType<Env["DB"]["prepare"]>[] = [];
+  if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(WORKSPACE_ID));
+  Object.entries(data.progress)
+    .filter(([sectionId]) => isSafeSectionId(sectionId))
+    .forEach(([sectionId, value]) => {
+      statements.push(env.DB.prepare(
+        `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(workspace_id, section_id) DO UPDATE SET
+           learned = excluded.learned,
+           learned_at = excluded.learned_at,
+           reviewed = excluded.reviewed,
+           reviewed_at = excluded.reviewed_at,
+           planned_at = excluded.planned_at,
+           is_current = excluded.is_current,
+           updated_at = CURRENT_TIMESTAMP`,
+      ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
+    });
+  statements.push(env.DB.prepare(
+    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(workspace_id) DO UPDATE SET
+       schema_version = excluded.schema_version,
+       project_settings = excluded.project_settings,
+       plan_history = excluded.plan_history,
+       updated_at = CURRENT_TIMESTAMP`,
+  ).bind(
+    WORKSPACE_ID,
+    1,
+    JSON.stringify(data.projectSettings),
+    JSON.stringify(data.planHistory),
+  ));
+  await env.DB.batch(statements);
+}
+
+function normalizeAppDataBody(body: unknown): AppData | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const candidate = body as Record<string, unknown>;
+  if (candidate.schemaVersion !== 1) return null;
+  if (!candidate.progress || typeof candidate.progress !== "object" || Array.isArray(candidate.progress)) return null;
+  const entries = Object.entries(candidate.progress as Record<string, unknown>);
+  if (entries.length > 1000) return null;
+  const progress: Record<string, ProgressValue> = {};
+  for (const [sectionId, value] of entries) {
+    const normalized = normalizeProgress(value);
+    if (!isSafeSectionId(sectionId) || !normalized) return null;
+    progress[sectionId] = normalized;
+  }
+  return {
+    schemaVersion: 1,
+    progress,
+    projectSettings: normalizeProjectSettings(candidate.projectSettings),
+    planHistory: normalizePlanHistory(candidate.planHistory),
+  };
+}
+
 export async function handleApi(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/")) return null;
@@ -215,7 +342,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     const authenticated = await hasValidSession(request, getSessionSecret(env));
     if (!authenticated) return json({ authenticated: false });
     try {
-      return json({ authenticated: true, progress: await readProgress(env) });
+      return json({ authenticated: true, ...(await readAppData(env)) });
     } catch {
       return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
     }
@@ -231,7 +358,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     const secret = getSessionSecret(env);
     try {
       return json(
-        { authenticated: true, progress: await readProgress(env) },
+        { authenticated: true, ...(await readAppData(env)) },
         { headers: { "set-cookie": cookieHeader(await createSession(secret), request) } },
       );
     } catch {
@@ -250,6 +377,32 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       return json({ progress: await readProgress(env) });
     } catch {
       return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
+    }
+  }
+
+  if (url.pathname === "/api/app-data" && request.method === "GET") {
+    const unauthorized = await requireSession(request, env);
+    if (unauthorized) return unauthorized;
+    try {
+      return json(await readAppData(env));
+    } catch {
+      return json({ error: "读取应用数据失败，请稍后重试" }, { status: 503 });
+    }
+  }
+
+  if (url.pathname === "/api/app-data" && request.method === "PUT") {
+    const unauthorized = await requireSession(request, env);
+    if (unauthorized) return unauthorized;
+    const body = await request.json().catch(() => null);
+    const data = normalizeAppDataBody(body);
+    if (!data) return json({ error: "应用数据格式不正确" }, { status: 400 });
+    const replace = Boolean(body && typeof body === "object" && !Array.isArray(body)
+      && (body as Record<string, unknown>).replace);
+    try {
+      await writeAppData(env, data, replace);
+      return json({ saved: true });
+    } catch {
+      return json({ error: "保存应用数据失败，请稍后重试" }, { status: 503 });
     }
   }
 

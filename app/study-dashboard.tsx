@@ -2,29 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
+import {
+  APP_VERSION,
+  SCHEMA_VERSION,
+  StorageRepository,
+  createAppData,
+  defaultProjectSettings,
+  isOverdueTask,
+  isTodayPlan,
+  isUnreviewedTask,
+  normalizeAppData,
+  summarizeImport,
+  type LocalBackup,
+  type PlanChangeSource,
+  type PlanHistoryEntry,
+  type ProgressMap,
+  type ProjectSettings,
+  type SectionProgress,
+  type StorageLoadIssue,
+  type StudyAppData,
+} from "./study-data";
 
-type SectionProgress = {
-  learned: boolean;
-  learnedAt: string;
-  reviewed: boolean;
-  reviewedAt: string;
-  plannedAt: string;
-  isCurrent: boolean;
-};
-
-type ProgressMap = Record<string, SectionProgress>;
 type AuthState = "locked" | "authenticated";
 type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
 type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
+type AppPage = "progress" | "today" | "analytics" | "settings";
 
 type PlanUndo = {
   message: string;
   values: Record<string, string>;
 };
 
-const STORAGE_KEY = "408-section-progress-v1";
+type PlanPreview = {
+  message: string;
+  source: Exclude<PlanChangeSource, "manual" | "undo">;
+  values: Record<string, string>;
+};
 
 function defaultProgress(): ProgressMap {
   const progress: ProgressMap = {};
@@ -126,19 +141,20 @@ function planTone(status: StudyPlanStatus): "late" | "soon" | "normal" | "empty"
   return "normal";
 }
 
-function calculateDaysUntilExam(): number {
+function calculateDaysUntilExam(examDate: string): number {
   const today = new Date();
-  const target = new Date("2026-12-19T00:00:00");
+  const target = new Date(`${examDate}T00:00:00`);
   const diffTime = target.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
 }
 
-function calculateTimeProgress(): number {
+function calculateTimeProgress(examDate: string): number {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const start = new Date(now.getFullYear(), 2, 1).getTime();
-  const end = new Date(now.getFullYear(), 11, 18).getTime();
+  const end = new Date(`${examDate}T00:00:00`).getTime();
+  if (end <= start) return today >= end ? 100 : 0;
   return Math.round(Math.max(0, Math.min(1, (today - start) / (end - start))) * 100);
 }
 
@@ -146,6 +162,41 @@ function addDays(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00`);
   date.setDate(date.getDate() + days);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+type TaskEntry = {
+  book: Book;
+  chapterTitle: string;
+  section: Section;
+};
+
+function projectTaskEntries(area: StudyArea): TaskEntry[] {
+  return books
+    .filter((book) => book.area === area)
+    .flatMap((book) => book.chapters.flatMap((chapter) => chapter.sections.map((section) => ({
+      book,
+      chapterTitle: chapter.title,
+      section,
+    }))));
+}
+
+function formatLocalDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function backupKindLabel(kind: LocalBackup["kind"]): string {
+  if (kind === "manual") return "手动备份";
+  if (kind === "before-import") return "导入前";
+  if (kind === "before-restore") return "恢复前";
+  return "迁移前";
 }
 
 function getWeekDaysActivity(progress: ProgressMap) {
@@ -339,38 +390,8 @@ function EditableDate({
   );
 }
 
-function readLocalProgress(): ProgressMap | null {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
-
-    const defaults = defaultProgress();
-    Object.keys(defaults).forEach((sectionId) => {
-      const entry = (saved as Record<string, unknown>)[sectionId];
-      if (!entry || typeof entry !== "object") return;
-      const value = entry as Record<string, unknown>;
-      const learned = Boolean(value.learned);
-      const learnedAt = typeof value.learnedAt === "string" ? value.learnedAt : "";
-      const candidateReviewedAt = typeof value.reviewedAt === "string" ? value.reviewedAt : "";
-      const reviewed = learned && Boolean(value.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
-      defaults[sectionId] = {
-        learned,
-        learnedAt,
-        reviewed,
-        reviewedAt: reviewed ? candidateReviewedAt : "",
-        plannedAt: typeof value.plannedAt === "string" ? value.plannedAt : defaults[sectionId].plannedAt,
-        isCurrent: Boolean(value.isCurrent),
-      };
-    });
-    return defaults;
-  } catch {
-    return null;
-  }
-}
-
-function mergeRemoteProgress(remote: Record<string, SectionProgress>, includeLocal: boolean): ProgressMap {
-  const local = includeLocal ? readLocalProgress() : null;
-  const merged = local ?? defaultProgress();
+function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = defaultProgress()): ProgressMap {
+  const merged = { ...base };
   Object.keys(merged).forEach((sectionId) => {
     const value = remote[sectionId];
     if (!value || typeof value !== "object") return;
@@ -408,6 +429,7 @@ function UniversityLogo() {
 }
 
 export function StudyDashboard() {
+  const [activePage, setActivePage] = useState<AppPage>("progress");
   const [activeArea, setActiveArea] = useState<StudyArea>("408");
   const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>({
     "408": "operating-system",
@@ -415,6 +437,9 @@ export function StudyDashboard() {
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
+  const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
+  const [backups, setBackups] = useState<LocalBackup[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
   const [inviteCode, setInviteCode] = useState("");
@@ -430,38 +455,64 @@ export function StudyDashboard() {
   const [shiftScope, setShiftScope] = useState<ShiftScope>("chapter");
   const [shiftDays, setShiftDays] = useState(1);
   const [planUndo, setPlanUndo] = useState<PlanUndo | null>(null);
+  const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
   const [pendingClearSectionId, setPendingClearSectionId] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<StudyAppData | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<LocalBackup | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [storageLoadIssue, setStorageLoadIssue] = useState<StorageLoadIssue | null>(null);
   const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const repositoryRef = useRef<StorageRepository | null>(null);
 
-  const loadRemoteProgress = useCallback(async (includeLocal: boolean) => {
-    const response = await fetch("/api/progress", { cache: "no-store" });
+  const repository = useCallback((): StorageRepository => {
+    if (!repositoryRef.current) repositoryRef.current = new StorageRepository(window.localStorage);
+    return repositoryRef.current;
+  }, []);
+
+  const applyRemoteData = useCallback((body: Partial<StudyAppData>, includeLocal: boolean) => {
+    const fallback = defaultProgress();
+    const local = includeLocal ? repository().load(fallback) : null;
+    const localIssue = repository().takeLoadIssue();
+    if (localIssue) {
+      setStorageLoadIssue(localIssue);
+      setFeedbackMessage(localIssue.message);
+    }
+    const remoteProgress = body.progress ?? {};
+    const base = Object.keys(remoteProgress).length === 0 && local ? local.progress : fallback;
+    setProgress(mergeRemoteProgress(remoteProgress, base));
+    setProjectSettings(body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings());
+    setPlanHistory(body.planHistory ?? local?.planHistory ?? []);
+    setBackups(repository().backups());
+  }, [repository]);
+
+  const loadRemoteData = useCallback(async (includeLocal: boolean) => {
+    const response = await fetch("/api/app-data", { cache: "no-store" });
     if (response.status === 401) {
       setAuthState("locked");
       setLoaded(false);
       return;
     }
-    if (!response.ok) throw new Error("progress-load-failed");
+    if (!response.ok) throw new Error("app-data-load-failed");
 
-    const body = await response.json() as { progress?: Record<string, SectionProgress> };
-    const remote = body.progress ?? {};
-    setProgress(mergeRemoteProgress(remote, includeLocal && Object.keys(remote).length === 0));
+    const body = await response.json() as Partial<StudyAppData>;
+    applyRemoteData(body, includeLocal);
     setLoaded(true);
     setSyncStatus("saved");
-  }, []);
+  }, [applyRemoteData]);
 
   useEffect(() => {
     let cancelled = false;
     async function initialize() {
       try {
         const response = await fetch("/api/auth/session", { cache: "no-store" });
-        const body = await response.json() as { authenticated?: boolean; progress?: Record<string, SectionProgress> };
+        const body = await response.json() as { authenticated?: boolean } & Partial<StudyAppData>;
         if (cancelled) return;
         if (!body.authenticated) return;
         setAuthState("authenticated");
-        setProgress(mergeRemoteProgress(body.progress ?? {}, true));
+        applyRemoteData(body, true);
         setLoaded(true);
         setSyncStatus("saved");
       } catch {
@@ -471,19 +522,20 @@ export function StudyDashboard() {
     }
     void initialize();
     return () => { cancelled = true; };
-  }, [loadRemoteProgress]);
+  }, [applyRemoteData]);
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    const appData = createAppData(progress, projectSettings, planHistory);
+    repository().save(appData);
 
     const timer = window.setTimeout(async () => {
       setSyncStatus("saving");
       try {
-        const response = await fetch("/api/progress", {
+        const response = await fetch("/api/app-data", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ progress }),
+          body: JSON.stringify(appData),
         });
         if (response.status === 401) {
           setAuthState("locked");
@@ -498,14 +550,14 @@ export function StudyDashboard() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [authState, loaded, progress]);
+  }, [authState, loaded, planHistory, progress, projectSettings, repository]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
 
     const refresh = async () => {
       try {
-        await loadRemoteProgress(false);
+        await loadRemoteData(false);
       } catch {
         setSyncStatus("offline");
       }
@@ -516,7 +568,7 @@ export function StudyDashboard() {
       window.removeEventListener("focus", refresh);
       window.clearInterval(interval);
     };
-  }, [authState, loadRemoteProgress]);
+  }, [authState, loadRemoteData]);
 
   const performLogin = useCallback(async (codeToSubmit: string) => {
     if (codeToSubmit.length !== 6 || isSubmitting) return;
@@ -528,7 +580,7 @@ export function StudyDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: codeToSubmit }),
       });
-      const body = await response.json() as { error?: string; progress?: Record<string, SectionProgress> };
+      const body = await response.json() as { error?: string } & Partial<StudyAppData>;
       if (!response.ok) {
         setAuthError(body.error ?? "邀请码不正确");
         setIsShaking(true);
@@ -537,7 +589,7 @@ export function StudyDashboard() {
         return;
       }
       setAuthState("authenticated");
-      setProgress(mergeRemoteProgress(body.progress ?? {}, true));
+      applyRemoteData(body, true);
       setLoaded(true);
       setSyncStatus("saved");
     } catch {
@@ -546,7 +598,7 @@ export function StudyDashboard() {
       setTimeout(() => setIsShaking(false), 500);
       setIsSubmitting(false);
     }
-  }, [isSubmitting]);
+  }, [applyRemoteData, isSubmitting]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -607,6 +659,8 @@ export function StudyDashboard() {
     setAuthState("locked");
     setLoaded(false);
     setProgress(defaultProgress());
+    setProjectSettings(defaultProjectSettings());
+    setPlanHistory([]);
   }
 
   const areaBooks = useMemo(() => books.filter((book) => book.area === activeArea), [activeArea]);
@@ -665,8 +719,20 @@ export function StudyDashboard() {
   const allExpanded = selectedBook.chapters.every((chapter) => expandedChapters.includes(chapter.id));
   const effectiveAllExpanded = catalogFilter === "all" ? allExpanded : !filterChaptersCollapsed;
 
-  const daysUntilExam = useMemo(() => calculateDaysUntilExam(), []);
-  const timeProgressPercent = useMemo(() => calculateTimeProgress(), []);
+  const projectTasks = useMemo(() => projectTaskEntries(activeArea), [activeArea]);
+  const today = dateToday();
+  const todayPlan = projectTasks.filter(({ section }) => isTodayPlan(progress[section.id], today));
+  const overdueTasks = projectTasks
+    .filter(({ section }) => isOverdueTask(progress[section.id], today))
+    .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
+  const unreviewedTasks = projectTasks
+    .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
+    .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
+  const todayCompleted = todayPlan.filter(({ section }) => progress[section.id]?.learned).length;
+
+  const examDate = projectSettings[activeArea].examDate;
+  const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
+  const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
   const streakDays = useMemo(() => calculateStreak(progress), [progress]);
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
   const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
@@ -676,6 +742,20 @@ export function StudyDashboard() {
       ...current,
       [sectionId]: { ...current[sectionId], ...next },
     }));
+  }
+
+  function updatePlannedAt(sectionId: string, plannedAt: string) {
+    const previous = progress[sectionId]?.plannedAt ?? "";
+    if (previous === plannedAt) return;
+    updateProgress(sectionId, { plannedAt });
+    setPlanHistory((current) => [...current, {
+      id: crypto.randomUUID(),
+      sectionId,
+      from: previous,
+      to: plannedAt,
+      changedAt: new Date().toISOString(),
+      source: "manual" as const,
+    }].slice(-1000));
   }
 
   function setCurrentSection(sectionId: string) {
@@ -719,13 +799,14 @@ export function StudyDashboard() {
     });
   }
 
-  function applyPlanChanges(values: Record<string, string>, message: string) {
+  function applyPlanChanges(values: Record<string, string>, message: string, source: PlanChangeSource) {
     const ids = Object.keys(values);
     if (!ids.length) {
       setFeedbackMessage("没有符合条件的计划日期可调整");
       return;
     }
     const previous = Object.fromEntries(ids.map((sectionId) => [sectionId, progress[sectionId]?.plannedAt ?? ""]));
+    const changedAt = new Date().toISOString();
     setProgress((current) => {
       const next = { ...current };
       ids.forEach((sectionId) => {
@@ -733,12 +814,32 @@ export function StudyDashboard() {
       });
       return next;
     });
+    setPlanHistory((current) => [...current, ...ids.map((sectionId) => ({
+      id: crypto.randomUUID(),
+      sectionId,
+      from: previous[sectionId],
+      to: values[sectionId],
+      changedAt,
+      source,
+    }))].slice(-1000));
     setPlanUndo({ message, values: previous });
     setFeedbackMessage("");
   }
 
+  function previewPlanChanges(values: Record<string, string>, message: string, source: PlanPreview["source"]) {
+    const changedValues = Object.fromEntries(Object.entries(values).filter(([sectionId, plannedAt]) => (
+      (progress[sectionId]?.plannedAt ?? "") !== plannedAt
+    )));
+    if (!Object.keys(changedValues).length) {
+      setFeedbackMessage("没有符合条件的计划日期可调整");
+      return;
+    }
+    setPlanPreview({ values: changedValues, message, source });
+  }
+
   function undoPlanChange() {
     if (!planUndo) return;
+    const changedAt = new Date().toISOString();
     setProgress((current) => {
       const next = { ...current };
       Object.entries(planUndo.values).forEach(([sectionId, plannedAt]) => {
@@ -746,6 +847,14 @@ export function StudyDashboard() {
       });
       return next;
     });
+    setPlanHistory((current) => [...current, ...Object.entries(planUndo.values).map(([sectionId, plannedAt]) => ({
+      id: crypto.randomUUID(),
+      sectionId,
+      from: progress[sectionId]?.plannedAt ?? "",
+      to: plannedAt,
+      changedAt,
+      source: "undo" as const,
+    }))].slice(-1000));
     setPlanUndo(null);
     setFeedbackMessage("已撤销上一次计划调整");
   }
@@ -764,9 +873,7 @@ export function StudyDashboard() {
       return;
     }
     const eligible = sections.filter((section) => range.includeCompleted || !progress[section.id]?.learned);
-    const targets = mode === "uniform"
-      ? eligible.filter((section) => !progress[section.id]?.plannedAt)
-      : eligible;
+    const targets = eligible;
     const values: Record<string, string> = {};
     if (mode === "uniform") {
       targets.forEach((section) => { values[section.id] = range.start; });
@@ -779,12 +886,16 @@ export function StudyDashboard() {
         values[section.id] = addDays(range.start, Math.min(offset, dayCount - 1));
       });
     }
-    applyPlanChanges(values, mode === "uniform" ? "已统一设置章节计划" : "已按天均分章节计划");
+    previewPlanChanges(
+      values,
+      mode === "uniform" ? "已统一设置章节计划" : "已按天均分章节计划",
+      "batchSchedule",
+    );
   }
 
   function shiftPlans(startSectionId: string, scope: ShiftScope, days: number) {
-    if (!Number.isInteger(days) || days <= 0) {
-      setFeedbackMessage("顺延天数必须是正整数");
+    if (!Number.isInteger(days) || days === 0) {
+      setFeedbackMessage("移动天数必须是非零整数");
       return;
     }
     const chapter = selectedBook.chapters.find((item) => item.sections.some((section) => section.id === startSectionId));
@@ -795,9 +906,162 @@ export function StudyDashboard() {
       const state = progress[section.id];
       if (state?.plannedAt && !state.learned) values[section.id] = addDays(state.plannedAt, days);
     });
-    applyPlanChanges(values, `已将后续计划顺延 ${days} 天`);
+    previewPlanChanges(values, `已将后续计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift");
     setShiftSectionId(null);
   }
+
+  function currentAppData(): StudyAppData {
+    return createAppData(progress, projectSettings, planHistory);
+  }
+
+  async function replaceCloudData(data: StudyAppData): Promise<boolean> {
+    setSyncStatus("saving");
+    try {
+      const response = await fetch("/api/app-data", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...data, replace: true }),
+      });
+      if (!response.ok) throw new Error("app-data-replace-failed");
+      setSyncStatus("saved");
+      return true;
+    } catch {
+      setSyncStatus("offline");
+      setFeedbackMessage("数据暂时无法写入云端，请稍后重试");
+      return false;
+    }
+  }
+
+  function downloadExport() {
+    const data = currentAppData();
+    const payload = {
+      ...data,
+      exportedAt: new Date().toISOString(),
+      projects: (["408", "math"] as StudyArea[]).map((area) => ({
+        id: area,
+        name: area === "408" ? "408" : "数学",
+        subjects: books.filter((book) => book.area === area).map((book) => book.id),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `study-progress-backup-${dateToday()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setFeedbackMessage("已导出全部学习数据");
+  }
+
+  function downloadRecoveryData() {
+    if (!storageLoadIssue) return;
+    const blob = new Blob([storageLoadIssue.raw], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `study-unmigrated-data-${dateToday()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function readImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 2_000_000) {
+      setFeedbackMessage("导入文件过大，请选择 2MB 以内的 JSON 文件");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      const normalized = normalizeAppData(parsed, defaultProgress());
+      if (!normalized) throw new Error("invalid-schema");
+      setPendingImport({ ...normalized, appVersion: APP_VERSION });
+      setFeedbackMessage("");
+    } catch {
+      setFeedbackMessage("导入失败：文件不是受支持的学习数据 JSON");
+    }
+  }
+
+  async function confirmImport() {
+    if (!pendingImport) return;
+    setBackups(repository().createBackup(currentAppData(), "before-import"));
+    if (!await replaceCloudData(pendingImport)) return;
+    setProgress(mergeRemoteProgress(pendingImport.progress));
+    setProjectSettings(pendingImport.projectSettings);
+    setPlanHistory(pendingImport.planHistory);
+    repository().save(pendingImport);
+    setPendingImport(null);
+    setFeedbackMessage("数据导入完成，已自动保留导入前备份");
+  }
+
+  function createManualBackup() {
+    setBackups(repository().createBackup(currentAppData(), "manual"));
+    setFeedbackMessage("已创建本地备份");
+  }
+
+  async function confirmRestore() {
+    if (!pendingRestore) return;
+    setBackups(repository().createBackup(currentAppData(), "before-restore"));
+    const restored = normalizeAppData(pendingRestore.data, defaultProgress());
+    if (!restored || !await replaceCloudData(restored)) return;
+    setProgress(mergeRemoteProgress(restored.progress));
+    setProjectSettings(restored.projectSettings);
+    setPlanHistory(restored.planHistory);
+    repository().save(restored);
+    setBackups(repository().backups());
+    setPendingRestore(null);
+    setFeedbackMessage("备份恢复完成，已保留恢复前备份");
+  }
+
+  function updateExamDate(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    setProjectSettings((current) => ({ ...current, [activeArea]: { examDate: value } }));
+  }
+
+  function renderTaskList(
+    tasks: TaskEntry[],
+    kind: "today" | "overdue" | "unreviewed",
+    emptyMessage: string,
+  ) {
+    if (!tasks.length) return <p className="task-empty">{emptyMessage}</p>;
+    return (
+      <div className="task-list">
+        {tasks.map(({ book, chapterTitle, section }) => {
+          const state = progress[section.id];
+          const checked = kind === "unreviewed" ? state?.reviewed : state?.learned;
+          return (
+            <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${section.id}`}>
+              <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
+              <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
+              <span className={`task-date ${kind}`}>
+                {kind === "today"
+                  ? state?.learned ? `完成 ${formatDateShort(state.learnedAt)}` : "计划今天"
+                  : kind === "overdue"
+                    ? `原计划 ${formatDateShort(state?.plannedAt ?? "")}`
+                    : `学完 ${formatDateShort(state?.learnedAt ?? "")}`}
+              </span>
+              <label className="task-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(checked)}
+                  onChange={(event) => kind === "unreviewed"
+                    ? toggleReviewed(section.id, event.target.checked)
+                    : toggleLearned(section.id, event.target.checked)}
+                />
+                <span />
+                <em>{kind === "unreviewed" ? "复习" : "学完"}</em>
+              </label>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const pendingImportSummary = pendingImport
+    ? summarizeImport(pendingImport, 2, books.length)
+    : null;
 
   if (authState === "authenticated" && !loaded) {
     return <main className="auth-shell"><div className="auth-card"><UniversityLogo /><strong>正在连接学习空间</strong><p>正在读取云端进度…</p></div></main>;
@@ -882,11 +1146,29 @@ export function StudyDashboard() {
           </div>
           <div className="semester-card__meta">
             <span>时间进度 {timeProgressPercent}%</span>
-            <span>12.18</span>
+            <span>{formatDateShort(examDate)}</span>
           </div>
         </div>
 
-        <nav className="subject-progress" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
+        <nav className="page-navigation" aria-label="页面导航">
+          {([
+            ["progress", "学习进度"],
+            ["today", "今日"],
+            ["analytics", "数据分析"],
+          ] as [AppPage, string][]).map(([page, label]) => (
+            <button
+              className={activePage === page ? "active" : ""}
+              type="button"
+              key={page}
+              aria-current={activePage === page ? "page" : undefined}
+              onClick={() => setActivePage(page)}
+            >
+              <i aria-hidden="true" />{label}
+            </button>
+          ))}
+        </nav>
+
+        {activePage === "progress" && <nav className="subject-progress" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
           <h2>{activeArea === "408" ? "408 科目" : "数学科目"}</h2>
           {areaBooks.map((book) => {
             const sections = allSections(book);
@@ -913,9 +1195,12 @@ export function StudyDashboard() {
               </button>
             );
           })}
-        </nav>
+        </nav>}
 
-        <p className="storage-note"><i className={syncStatus === "saved" ? "synced" : ""} />{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</p>
+        <div className="sidebar-footer">
+          <button className={`settings-navigation${activePage === "settings" ? " active" : ""}`} type="button" onClick={() => setActivePage("settings")}><i aria-hidden="true" />设置</button>
+          <p className="storage-note"><i className={syncStatus === "saved" ? "synced" : ""} />{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</p>
+        </div>
       </aside>
 
       <main className="workspace">
@@ -944,7 +1229,9 @@ export function StudyDashboard() {
           </div>
         </header>
 
-        <div className="page-content">
+        <div className={`page-content page-content--${activePage}`}>
+          {feedbackMessage && <div className="feedback-notice feedback-notice--global"><span>{feedbackMessage}</span><button type="button" onClick={() => setFeedbackMessage("")}>×</button></div>}
+          {activePage === "progress" ? <>
           <section className="hero-grid" aria-label="学习概览与节奏">
             <article className="hero-card progress-card">
               <div className="card-heading">
@@ -1042,8 +1329,6 @@ export function StudyDashboard() {
             </div>
 
             {planUndo && <div className="plan-notice"><span>{planUndo.message}</span><button type="button" onClick={undoPlanChange}>撤销</button></div>}
-            {feedbackMessage && <div className="feedback-notice"><span>{feedbackMessage}</span><button type="button" onClick={() => setFeedbackMessage("")}>×</button></div>}
-
             <div className="chapter-grid">
               {filteredChapters.map(({ chapter, visibleSections }) => {
                 const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
@@ -1127,14 +1412,14 @@ export function StudyDashboard() {
                                 {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
                               </div>
                               {planEditMode ? (
-                                <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 计划日期`} onChange={(event) => updateProgress(section.id, { plannedAt: event.target.value })} />
+                                <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 计划日期`} onChange={(event) => updatePlannedAt(section.id, event.target.value)} />
                               ) : (
                                 <EditableDate
                                   value={state?.plannedAt ?? ""}
                                   emptyLabel="未设置"
                                   tone={planTone(status)}
                                   ariaLabel={`${section.number} 计划日期`}
-                                  onChange={(value) => updateProgress(section.id, { plannedAt: value })}
+                                  onChange={(value) => updatePlannedAt(section.id, value)}
                                 />
                               )}
                               <div className="check-with-date">
@@ -1147,13 +1432,13 @@ export function StudyDashboard() {
                               </div>
                               {planEditMode && (
                                 <div className="shift-anchor">
-                                  <button type="button" onClick={() => setShiftSectionId(shiftSectionId === section.id ? null : section.id)}>顺延</button>
+                                  <button type="button" onClick={() => setShiftSectionId(shiftSectionId === section.id ? null : section.id)}>移动</button>
                                   {shiftSectionId === section.id && (
                                     <div className="shift-popover">
-                                      <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="顺延范围"><option value="chapter">本章后续</option><option value="subject">本科目后续</option></select>
-                                      {[1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days)}>+{days}天</button>)}
-                                      <input type="number" min="1" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义顺延天数" />
-                                      <button type="button" onClick={() => shiftPlans(section.id, shiftScope, shiftDays)}>确定</button>
+                                      <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="移动范围"><option value="chapter">本章后续</option><option value="subject">本科目后续</option></select>
+                                      {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days)}>{days > 0 ? "+" : ""}{days}天</button>)}
+                                      <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
+                                      <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(section.id, shiftScope, shiftDays)}>确定</button>
                                     </div>
                                   )}
                                 </div>
@@ -1169,8 +1454,120 @@ export function StudyDashboard() {
               })}
             </div>
           </section>
+          </> : activePage === "today" ? (
+            <section className="page-view today-page" aria-labelledby="today-title">
+              <header className="page-heading">
+                <div><span className="page-kicker">{activeArea === "408" ? "408 项目" : "数学项目"}</span><h1 id="today-title">今日</h1></div>
+                <p>{formatDateChinese(today)} · 只展示需要你现在处理的事项</p>
+              </header>
+
+              <div className="summary-strip" aria-label="今日任务概览">
+                <article><span>今日计划</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
+                <article><span>逾期未学</span><strong>{overdueTasks.length}</strong><small>按原计划日期排序</small></article>
+                <article><span>待复习</span><strong>{unreviewedTasks.length}</strong><small>不预测复习日期</small></article>
+                <article><span>项目进度</span><strong>{Math.round(projectTasks.filter(({ section }) => progress[section.id]?.learned).length / Math.max(projectTasks.length, 1) * 100)}%</strong><small>{projectTasks.filter(({ section }) => progress[section.id]?.learned).length}/{projectTasks.length} 小节</small></article>
+              </div>
+
+              <div className="today-sections">
+                <section className="task-panel task-panel--today" aria-labelledby="today-plan-title">
+                  <header><div><span>01</span><h2 id="today-plan-title">今日计划</h2></div><strong>{todayCompleted}/{todayPlan.length}</strong></header>
+                  {renderTaskList(todayPlan, "today", "今天没有安排小节，完成的今日任务也会保留在这里。")}
+                </section>
+                <section className="task-panel task-panel--overdue" aria-labelledby="overdue-title">
+                  <header><div><span>02</span><h2 id="overdue-title">逾期</h2></div><strong>{overdueTasks.length}</strong></header>
+                  {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
+                </section>
+                <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
+                  <header><div><span>03</span><h2 id="unreviewed-title">未复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
+                  {renderTaskList(unreviewedTasks, "unreviewed", "没有积压的复习任务。")}
+                </section>
+              </div>
+            </section>
+          ) : activePage === "analytics" ? (
+            <section className="page-view placeholder-page" aria-labelledby="analytics-title">
+              <header className="page-heading"><div><span className="page-kicker">V1.5 beta</span><h1 id="analytics-title">数据分析</h1></div><p>当前项目：{activeArea === "408" ? "408" : "数学"}</p></header>
+              <article className="placeholder-card">
+                <span aria-hidden="true">↗</span>
+                <div><h2>分析视图正在整理</h2><p>这里会承接长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
+              </article>
+            </section>
+          ) : (
+            <section className="page-view settings-page" aria-labelledby="settings-title">
+              <header className="page-heading">
+                <div><span className="page-kicker">数据与项目</span><h1 id="settings-title">设置</h1></div>
+                <p>当前项目：{activeArea === "408" ? "408" : "数学"}</p>
+              </header>
+
+              <div className="settings-grid">
+                <section className="settings-card settings-card--project">
+                  <header><span>项目</span><h2>{activeArea === "408" ? "408" : "数学"} 考试日期</h2></header>
+                  <p>倒计时和左侧时间进度会随当前项目独立计算。</p>
+                  <label className="settings-date"><span>考试日期</span><input type="date" value={examDate} onChange={(event) => updateExamDate(event.target.value)} /></label>
+                  <dl><div><dt>包含科目</dt><dd>{books.filter((book) => book.area === activeArea).length} 门</dd></div><div><dt>距离考试</dt><dd>{daysUntilExam} 天</dd></div><div><dt>时间进度</dt><dd>{timeProgressPercent}%</dd></div></dl>
+                </section>
+
+                <section className="settings-card">
+                  <header><span>数据</span><h2>导出与导入</h2></header>
+                  <p>JSON 包含两个项目的学习记录、计划、设置与操作历史。</p>
+                  <div className="settings-actions"><button type="button" onClick={downloadExport}>导出全部数据</button><button type="button" onClick={() => importInputRef.current?.click()}>导入 JSON</button></div>
+                  {storageLoadIssue && <button className="recovery-export" type="button" onClick={downloadRecoveryData}>导出无法迁移的原始数据</button>}
+                  <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readImportFile} />
+                </section>
+
+                <section className="settings-card settings-card--backups">
+                  <header><span>恢复</span><h2>本地备份</h2></header>
+                  <p>最多保留 15 份；导入、恢复和旧数据迁移前会自动创建。本地备份用于防误操作，清除浏览器站点数据时也会丢失；请用 JSON 导出做外部备份。</p>
+                  <button className="backup-create" type="button" onClick={createManualBackup}>立即创建备份</button>
+                  <div className="backup-list">
+                    {backups.length ? backups.map((backup) => (
+                      <article key={backup.id}><div><strong>{backupKindLabel(backup.kind)}</strong><span>{formatLocalDateTime(backup.createdAt)}</span></div><button type="button" onClick={() => setPendingRestore(backup)}>恢复</button></article>
+                    )) : <p>还没有本地备份。</p>}
+                  </div>
+                </section>
+
+                <section className="settings-card settings-card--about">
+                  <header><span>关于</span><h2>Study Dashboard</h2></header>
+                  <dl><div><dt>应用版本</dt><dd>{APP_VERSION}</dd></div><div><dt>数据结构</dt><dd>Schema v{SCHEMA_VERSION}</dd></div><div><dt>计划历史</dt><dd>{planHistory.length} 条</dd></div></dl>
+                </section>
+              </div>
+            </section>
+          )}
         </div>
       </main>
+      {planPreview && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="plan-preview-title">
+            <span className="dialog-kicker">变更预览</span><h2 id="plan-preview-title">确认调整学习计划？</h2>
+            <p>{planPreview.message}，共影响 {Object.keys(planPreview.values).length} 个未完成小节。</p>
+            <div className="plan-preview-list">
+              {Object.entries(planPreview.values).map(([sectionId, nextDate]) => {
+                const task = projectTasks.find(({ section }) => section.id === sectionId) ?? projectTaskEntries(activeArea === "408" ? "math" : "408").find(({ section }) => section.id === sectionId);
+                return <article key={sectionId}><div><strong>{task ? `${task.book.shortTitle} · ${task.section.number} ${task.section.title}` : sectionId}</strong><span>{task?.chapterTitle ?? ""}</span></div><p><del>{progress[sectionId]?.plannedAt ? formatDateShort(progress[sectionId].plannedAt) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
+              })}
+            </div>
+            <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
+          </div>
+        </div>
+      )}
+      {pendingImport && pendingImportSummary && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
+            <span className="dialog-kicker">导入检查通过</span><h2 id="import-title">用文件数据替换当前数据？</h2>
+            <p>导入前会自动保留一份本地备份。云端与本机数据都会更新。</p>
+            <dl className="import-summary"><div><dt>项目</dt><dd>{pendingImportSummary.projects}</dd></div><div><dt>科目</dt><dd>{pendingImportSummary.subjects}</dd></div><div><dt>小节</dt><dd>{pendingImportSummary.sections}</dd></div><div><dt>计划历史</dt><dd>{pendingImportSummary.planHistory}</dd></div></dl>
+            <div><button type="button" onClick={() => setPendingImport(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmImport()}>确认导入</button></div>
+          </div>
+        </div>
+      )}
+      {pendingRestore && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="restore-title">
+            <span className="dialog-kicker">{backupKindLabel(pendingRestore.kind)} · {formatLocalDateTime(pendingRestore.createdAt)}</span><h2 id="restore-title">恢复这份备份？</h2>
+            <p>恢复前也会自动备份当前数据，随后同步替换云端与本机记录。</p>
+            <div><button type="button" onClick={() => setPendingRestore(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmRestore()}>确认恢复</button></div>
+          </div>
+        </div>
+      )}
       {pendingClearSectionId && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-progress-title">

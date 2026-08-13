@@ -7,6 +7,7 @@ const config = [
     "dist/**",
     ".next/**",
     ".wrangler/**",
+    "worker-configuration.d.ts",
     "node_modules/**",
     "tsconfig.tsbuildinfo",
   ]),
