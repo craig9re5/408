@@ -97,3 +97,51 @@ test("导入时修复复习早于学完日期的非法状态", () => {
   assert.equal(data.progress.section.reviewed, false);
   assert.equal(data.progress.section.reviewedAt, "");
 });
+
+test("数据分析：近14天学力速率与结课冲刺预测推导准确", async () => {
+  const {
+    calculateVelocityAndForecast,
+    calculateActivityHeatmap,
+    calculateWeeklyTrends,
+    calculateDisciplineStats,
+    calculateMaxStreak,
+  } = await import("../app/study-data.ts");
+
+  const today = "2026-08-14";
+  const examDate = "2026-12-19";
+
+  const p = {
+    s1: progress({ learned: true, learnedAt: "2026-08-10", plannedAt: "2026-08-11" }),
+    s2: progress({ learned: true, learnedAt: "2026-08-12", plannedAt: "2026-08-10" }),
+    s3: progress({ learned: true, learnedAt: "2026-08-14", reviewed: true, reviewedAt: "2026-08-14" }),
+    s4: progress({ learned: false, plannedAt: "2026-08-20" }),
+  };
+
+  const forecast = calculateVelocityAndForecast(p, ["s1", "s2", "s3", "s4"], examDate, today);
+  assert.equal(forecast.totalSections, 4);
+  assert.equal(forecast.learnedTotal, 3);
+  assert.equal(forecast.remainingSections, 1);
+  assert.equal(forecast.learnedLast14d, 3);
+  assert.ok(forecast.dailyVelocity14d > 0);
+  assert.ok(forecast.estimatedCompletionDate !== null);
+  assert.ok(forecast.sprintDays !== null);
+
+  const heatmap = calculateActivityHeatmap(p, today, 13);
+  assert.equal(heatmap.length, 91);
+  const todayEntry = heatmap.find((d) => d.date === today);
+  assert.ok(todayEntry);
+  assert.equal(todayEntry.learnedCount, 1);
+  assert.equal(todayEntry.reviewedCount, 1);
+  assert.equal(todayEntry.totalActions, 2);
+
+  const weekly = calculateWeeklyTrends(p, today, 8);
+  assert.equal(weekly.length, 8);
+  assert.equal(weekly[weekly.length - 1].isCurrentWeek, true);
+
+  const discipline = calculateDisciplineStats(p, [], today);
+  assert.equal(discipline.currentStreak, 1);
+  assert.equal(discipline.maxStreak >= 1, true);
+  assert.equal(discipline.totalActions, 4); // 3 learned + 1 reviewed
+  assert.equal(discipline.onTimeLearnedCount, 1); // s1 completed 08-10 <= planned 08-11
+  assert.equal(discipline.onTimeRate, 50); // 2 planned & learned (s1, s2), 1 on time = 50%
+});

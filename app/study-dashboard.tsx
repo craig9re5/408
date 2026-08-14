@@ -7,6 +7,11 @@ import {
   StorageRepository,
   addCalendarDays,
   buildChapterPlanChanges,
+  calculateActivityHeatmap,
+  calculateDisciplineStats,
+  calculateMaxStreak,
+  calculateVelocityAndForecast,
+  calculateWeeklyTrends,
   createAppData,
   defaultProjectSettings,
   isOverdueTask,
@@ -15,6 +20,9 @@ import {
   normalizeAppData,
   normalizeSectionProgress,
   summarizeImport,
+  type DisciplineStats,
+  type ForecastHealth,
+  type HeatmapDay,
   type LocalBackup,
   type PlanChangeSource,
   type PlanHistoryEntry,
@@ -23,6 +31,8 @@ import {
   type SectionProgress,
   type StorageLoadIssue,
   type StudyAppData,
+  type VelocityForecast,
+  type WeeklyTrend,
 } from "./study-data";
 
 type AuthState = "locked" | "authenticated";
@@ -434,6 +444,8 @@ export function StudyDashboard() {
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [storageLoadIssue, setStorageLoadIssue] = useState<StorageLoadIssue | null>(null);
   const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
+  const [analyticsScope, setAnalyticsScope] = useState<"all" | StudyArea>("all");
+  const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -714,6 +726,38 @@ export function StudyDashboard() {
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
   const weeklyDaysCount = useMemo(() => weekDots.filter((day) => day.isDone).length, [weekDots]);
   const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
+  const analyticsSections = useMemo(() => {
+    if (analyticsScope === "all") return books.flatMap(allSections);
+    return books.filter((b) => b.area === analyticsScope).flatMap(allSections);
+  }, [analyticsScope]);
+  const analyticsSectionIds = useMemo(() => analyticsSections.map((s) => s.id), [analyticsSections]);
+  const analyticsExamDate = useMemo(() => {
+    if (analyticsScope === "all") return nearestExamDate;
+    return projectSettings[analyticsScope].examDate;
+  }, [analyticsScope, nearestExamDate, projectSettings]);
+  const forecast = useMemo(() => {
+    return calculateVelocityAndForecast(progress, analyticsSectionIds, analyticsExamDate, dateToday());
+  }, [progress, analyticsSectionIds, analyticsExamDate]);
+  const analyticsTimeProgress = useMemo(() => calculateTimeProgress(analyticsExamDate), [analyticsExamDate]);
+  const analyticsLearnedPercent = forecast.totalSections > 0
+    ? Math.round((forecast.learnedTotal / forecast.totalSections) * 100)
+    : 0;
+  const analyticsReviewedPercent = forecast.totalSections > 0
+    ? Math.round((forecast.reviewedTotal / forecast.totalSections) * 100)
+    : 0;
+  const heatmapDays = useMemo(() => {
+    return calculateActivityHeatmap(progress, dateToday(), 13);
+  }, [progress]);
+  const weeklyTrends = useMemo(() => {
+    return calculateWeeklyTrends(progress, dateToday(), 8);
+  }, [progress]);
+  const disciplineStats = useMemo(() => {
+    return calculateDisciplineStats(progress, planHistory, dateToday());
+  }, [progress, planHistory]);
+  const maxWeeklyAction = useMemo(() => {
+    const max = Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
+    return Math.max(max, 6);
+  }, [weeklyTrends]);
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
     setProgress((current) => {
@@ -1465,11 +1509,313 @@ export function StudyDashboard() {
               </div>
             </section>
           ) : activePage === "analytics" ? (
-            <section className="page-view placeholder-page" aria-labelledby="analytics-title">
-              <article className="placeholder-card">
-                <span aria-hidden="true">↗</span>
-                <div><h2>分析视图正在整理</h2><p>这里会汇总全部学习项目的长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
-              </article>
+            <section className="page-view analytics-page" aria-labelledby="analytics-title">
+              <div className="analytics-toolbar">
+                <div className="analytics-scope-switch" role="tablist" aria-label="数据分析范围切换">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={analyticsScope === "all"}
+                    className={analyticsScope === "all" ? "active" : ""}
+                    onClick={() => setAnalyticsScope("all")}
+                  >
+                    全部大盘 (408 + 数学)
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={analyticsScope === "408"}
+                    className={analyticsScope === "408" ? "active" : ""}
+                    onClick={() => setAnalyticsScope("408")}
+                  >
+                    408 统考
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={analyticsScope === "math"}
+                    className={analyticsScope === "math" ? "active" : ""}
+                    onClick={() => setAnalyticsScope("math")}
+                  >
+                    考研数学
+                  </button>
+                </div>
+
+                <div className="analytics-exam-tag">
+                  <span>目标初试</span>
+                  <strong>{analyticsExamDate}</strong>
+                  <small>剩 {forecast.daysUntilExam} 天</small>
+                </div>
+              </div>
+
+              <div className="analytics-section-title">
+                <div className="section-dot" />
+                <h2>备考宏观罗盘与工期预测</h2>
+                <span className="section-sub">基于真实学力速率推算备考裕量与冲刺窗口</span>
+              </div>
+
+              <div className="analytics-overview-grid">
+                <article className="analytics-card macro-card">
+                  <div className="macro-card__top">
+                    <span className="macro-card__label">初试倒计时</span>
+                    <span className={`macro-badge ${forecast.daysUntilExam <= 60 && forecast.daysUntilExam > 0 ? "urgent" : ""}`}>
+                      {forecast.daysUntilExam > 0 ? `剩 ${forecast.daysUntilExam} 天` : "初试已结束"}
+                    </span>
+                  </div>
+                  <div className="macro-card__val">
+                    <strong>{forecast.daysUntilExam}</strong>
+                    <span className="macro-card__unit">天</span>
+                  </div>
+                  <div className="macro-card__progress-wrap">
+                    <div className="macro-card__progress-bar">
+                      <span style={{ width: `${Math.min(100, Math.max(0, analyticsTimeProgress))}%` }} />
+                    </div>
+                    <div className="macro-card__meta">
+                      <span>时间流逝 (自 03/01 起)</span>
+                      <strong>{analyticsTimeProgress}%</strong>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="analytics-card macro-card">
+                  <div className="macro-card__top">
+                    <span className="macro-card__label">推进完成度</span>
+                    <span className="macro-badge status-badge">
+                      {analyticsLearnedPercent >= analyticsTimeProgress ? "进度超前" : "平稳跟进"}
+                    </span>
+                  </div>
+                  <div className="macro-card__dual-val">
+                    <div>
+                      <small>第一轮</small>
+                      <strong className="coral-text">{analyticsLearnedPercent}%</strong>
+                    </div>
+                    <div className="divider" />
+                    <div>
+                      <small>深度复习</small>
+                      <strong className="blue-text">{analyticsReviewedPercent}%</strong>
+                    </div>
+                  </div>
+                  <div className="macro-card__dual-bar">
+                    <div className="dual-bar-track">
+                      <span className="dual-bar-learned" style={{ width: `${analyticsLearnedPercent}%` }} />
+                    </div>
+                    <div className="dual-bar-track review-track">
+                      <span className="dual-bar-reviewed" style={{ width: `${analyticsReviewedPercent}%` }} />
+                    </div>
+                    <div className="macro-card__meta">
+                      <span>已学 {forecast.learnedTotal}/{forecast.totalSections} 节</span>
+                      <span>已复习 {forecast.reviewedTotal} 节</span>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="analytics-card macro-card">
+                  <div className="macro-card__top">
+                    <span className="macro-card__label">近 14 天学力速率</span>
+                    <span className="macro-badge rate-badge">
+                      {forecast.dailyVelocity14d > 0 ? "学力活跃" : "积累中"}
+                    </span>
+                  </div>
+                  <div className="macro-card__val">
+                    <strong>{forecast.dailyVelocity14d > 0 ? forecast.dailyVelocity14d : (forecast.dailyVelocityAllTime > 0 ? forecast.dailyVelocityAllTime : "0.0")}</strong>
+                    <span className="macro-card__unit">节 / 天</span>
+                  </div>
+                  <div className="macro-card__meta-box">
+                    <div>近 14 天学完 <strong>{forecast.learnedLast14d}</strong> 节</div>
+                    <div>近 14 天复习 <strong>{forecast.reviewedLast14d}</strong> 节</div>
+                    {forecast.dailyVelocityAllTime > 0 && (
+                      <div className="meta-sub">历史全周期均速 {forecast.dailyVelocityAllTime} 节/天</div>
+                    )}
+                  </div>
+                </article>
+
+                <article className="analytics-card macro-card">
+                  <div className="macro-card__top">
+                    <span className="macro-card__label">工期预测与冲刺</span>
+                    <span className={`macro-badge health-${forecast.health}`}>
+                      {forecast.health === "completed" ? "一轮结项" : forecast.health === "healthy" ? "冲刺充裕" : forecast.health === "steady" ? "节奏稳健" : forecast.health === "tight" ? "工期紧凑" : forecast.health === "behind" ? "需加速" : "数据积累中"}
+                    </span>
+                  </div>
+                  <div className="macro-card__val">
+                    {forecast.health === "completed" ? (
+                      <strong className="finish-text">全部学完</strong>
+                    ) : forecast.estimatedCompletionDate ? (
+                      <>
+                        <strong className="date-text">{formatDateShort(forecast.estimatedCompletionDate)}</strong>
+                        <span className="macro-card__unit">预计结课</span>
+                      </>
+                    ) : (
+                      <strong className="pending-text">数据积累中</strong>
+                    )}
+                  </div>
+                  <div className="macro-card__meta-box">
+                    {forecast.health === "completed" ? (
+                      <div>剩余 <strong>{forecast.daysUntilExam}</strong> 天全量用于真题与二轮</div>
+                    ) : forecast.sprintDays !== null ? (
+                      <div>
+                        预计留出 <strong className={forecast.sprintDays >= 30 ? "green-text" : "coral-text"}>{Math.max(0, forecast.sprintDays)}</strong> 天真题冲刺
+                      </div>
+                    ) : (
+                      <div>持续打卡后自动测算</div>
+                    )}
+                    <div className="meta-sub">剩余 <strong>{forecast.remainingSections}</strong> 节未学完</div>
+                  </div>
+                </article>
+              </div>
+
+              <div className="forecast-insight-banner">
+                <div className="insight-icon">💡</div>
+                <div className="insight-content">
+                  <strong>备考节奏诊断：</strong>
+                  {forecast.health === "completed" ? (
+                    <span>恭喜！所选范围的小节已全部学完第一轮。建议把备考重心全面切换至历年真题模拟、错题重做和弱项深度复习。</span>
+                  ) : forecast.dailyVelocity14d > 0 && forecast.estimatedCompletionDate && forecast.sprintDays !== null ? (
+                    <span>
+                      按近 14 天日均 <strong>{forecast.dailyVelocity14d} 节</strong> 的推进节奏，剩余 <strong>{forecast.remainingSections} 节</strong> 预计将于 <strong>{formatDateChinese(forecast.estimatedCompletionDate)}</strong> 完成第一轮。届时距离 <strong>{analyticsExamDate}</strong> 考试仍有 <strong>{forecast.sprintDays} 天</strong> 充裕期，非常有利于展开真题模考与知识回炉。
+                    </span>
+                  ) : (
+                    <span>
+                      目前所选范围仍有 <strong>{forecast.remainingSections} 节</strong> 待完成第一轮。保持规律学习并在今日或进度页面勾选学完/复习，系统将自动根据真实速率推算结课节点与冲刺窗口。
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="analytics-section-title">
+                <div className="section-dot" />
+                <h2>学习动量与沉淀热力</h2>
+                <span className="section-sub">记录 91 天打卡轨迹与每周产出动量演进</span>
+              </div>
+
+              <div className="analytics-activity-grid">
+                <article className="analytics-card heatmap-card">
+                  <div className="card-header-row">
+                    <div>
+                      <h3>91 天打卡轨迹</h3>
+                      <p>近 13 周打卡沉淀（学完 + 复习动作）</p>
+                    </div>
+                    <div className="heatmap-legend">
+                      <span>少</span>
+                      <i className="level-0" />
+                      <i className="level-1" />
+                      <i className="level-2" />
+                      <i className="level-3" />
+                      <span>多</span>
+                    </div>
+                  </div>
+
+                  <div className="heatmap-viewport">
+                    <div className="heatmap-labels-col">
+                      <span>一</span>
+                      <span>三</span>
+                      <span>五</span>
+                      <span>日</span>
+                    </div>
+                    <div className="heatmap-matrix">
+                      {Array.from({ length: 13 }).map((_, colIdx) => (
+                        <div className="heatmap-col" key={colIdx}>
+                          {heatmapDays.slice(colIdx * 7, (colIdx + 1) * 7).map((day) => (
+                            <div
+                              key={day.date}
+                              className={`heatmap-cell level-${day.level} ${day.isToday ? "today-cell" : ""} ${day.isFuture ? "future-cell" : ""}`}
+                              onMouseEnter={() => setHoveredHeatmapDay(day)}
+                              onMouseLeave={() => setHoveredHeatmapDay((curr) => curr?.date === day.date ? null : curr)}
+                              title={`${day.date}: 学完 ${day.learnedCount} 节, 复习 ${day.reviewedCount} 节`}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="heatmap-hover-info">
+                    {hoveredHeatmapDay ? (
+                      <div className="hover-detail">
+                        <strong>{formatDateChinese(hoveredHeatmapDay.date)} ({hoveredHeatmapDay.date})</strong>
+                        <span>
+                          {hoveredHeatmapDay.isFuture
+                            ? "未来日期"
+                            : hoveredHeatmapDay.totalActions > 0
+                            ? `学完 ${hoveredHeatmapDay.learnedCount} 节 · 复习 ${hoveredHeatmapDay.reviewedCount} 节 · 共 ${hoveredHeatmapDay.totalActions} 项动作`
+                            : "当日无打卡记录"}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="hover-detail placeholder">
+                        <span>鼠标悬停方块查看当日打卡详情</span>
+                      </div>
+                    )}
+                  </div>
+                </article>
+
+                <article className="analytics-card trend-card">
+                  <div className="card-header-row">
+                    <div>
+                      <h3>周度产出趋势</h3>
+                      <p>近 8 周新学与复习动作对比</p>
+                    </div>
+                    <div className="trend-legend">
+                      <span className="legend-item learned"><i /> 新学</span>
+                      <span className="legend-item reviewed"><i /> 复习</span>
+                    </div>
+                  </div>
+
+                  <div className="trend-chart-wrap">
+                    <div className="trend-bars-container">
+                      {weeklyTrends.map((week) => {
+                        const learnedHeight = Math.round((week.learnedCount / maxWeeklyAction) * 100);
+                        const reviewedHeight = Math.round((week.reviewedCount / maxWeeklyAction) * 100);
+                        return (
+                          <div className={`trend-col ${week.isCurrentWeek ? "current-week" : ""}`} key={week.startDate}>
+                            <div className="trend-col-track" title={`${week.weekLabel}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节`}>
+                              <div className="trend-bar-stack">
+                                <div className="bar-segment bar-reviewed" style={{ height: `${reviewedHeight}%` }} />
+                                <div className="bar-segment bar-learned" style={{ height: `${learnedHeight}%` }} />
+                              </div>
+                              <span className="bar-total-num">{week.totalActions > 0 ? week.totalActions : ""}</span>
+                            </div>
+                            <span className="trend-col-label">{week.weekLabel}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div className="analytics-discipline-grid">
+                <article className="analytics-card discipline-card">
+                  <div className="discipline-icon">🔥</div>
+                  <div className="discipline-info">
+                    <span>当前连续学习</span>
+                    <strong>{disciplineStats.currentStreak} <em>天</em></strong>
+                  </div>
+                </article>
+
+                <article className="analytics-card discipline-card">
+                  <div className="discipline-icon">🏆</div>
+                  <div className="discipline-info">
+                    <span>历史最高连续</span>
+                    <strong>{disciplineStats.maxStreak} <em>天</em></strong>
+                  </div>
+                </article>
+
+                <article className="analytics-card discipline-card">
+                  <div className="discipline-icon">📚</div>
+                  <div className="discipline-info">
+                    <span>累计学习动作</span>
+                    <strong>{disciplineStats.totalActions} <em>项</em></strong>
+                  </div>
+                </article>
+
+                <article className="analytics-card discipline-card">
+                  <div className="discipline-icon">🎯</div>
+                  <div className="discipline-info">
+                    <span>计划按期履约率</span>
+                    <strong>{disciplineStats.onTimeRate !== null ? `${disciplineStats.onTimeRate}%` : "—"}</strong>
+                  </div>
+                </article>
+              </div>
             </section>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">

@@ -98,6 +98,339 @@ export function calculateRecentStreak(progress: ProgressMap, today: string): num
   return streak;
 }
 
+export function calculateMaxStreak(progress: ProgressMap): number {
+  const activeDates = new Set<string>();
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt) activeDates.add(entry.learnedAt);
+    if (entry.reviewedAt) activeDates.add(entry.reviewedAt);
+  });
+  if (!activeDates.size) return 0;
+  const sorted = [...activeDates].sort();
+  let max = 0;
+  let current = 0;
+  let prev: string | null = null;
+  for (const dateStr of sorted) {
+    if (!prev) {
+      current = 1;
+    } else {
+      const expectedNext = addCalendarDays(prev, 1);
+      if (dateStr === expectedNext) {
+        current += 1;
+      } else {
+        current = 1;
+      }
+    }
+    if (current > max) max = current;
+    prev = dateStr;
+  }
+  return max;
+}
+
+export type ForecastHealth = "completed" | "healthy" | "steady" | "tight" | "behind" | "pending";
+
+export type VelocityForecast = {
+  dailyVelocity14d: number;
+  dailyVelocityAllTime: number;
+  learnedLast14d: number;
+  reviewedLast14d: number;
+  totalSections: number;
+  learnedTotal: number;
+  reviewedTotal: number;
+  remainingSections: number;
+  daysNeeded: number | null;
+  estimatedCompletionDate: string | null;
+  daysUntilExam: number;
+  sprintDays: number | null;
+  health: ForecastHealth;
+};
+
+export function calculateVelocityAndForecast(
+  progress: ProgressMap,
+  sectionIds: string[],
+  examDate: string,
+  today: string,
+): VelocityForecast {
+  const totalSections = sectionIds.length;
+  const learnedTotal = sectionIds.filter((id) => progress[id]?.learned).length;
+  const reviewedTotal = sectionIds.filter((id) => progress[id]?.reviewed).length;
+  const remainingSections = Math.max(0, totalSections - learnedTotal);
+
+  // 14 天时间窗口
+  const windowStart = addCalendarDays(today, -13);
+  let learnedLast14d = 0;
+  let reviewedLast14d = 0;
+  const allLearnedDates: string[] = [];
+
+  sectionIds.forEach((id) => {
+    const item = progress[id];
+    if (!item) return;
+    if (item.learnedAt && item.learnedAt <= today) {
+      allLearnedDates.push(item.learnedAt);
+      if (item.learnedAt >= windowStart) learnedLast14d += 1;
+    }
+    if (item.reviewedAt && item.reviewedAt <= today && item.reviewedAt >= windowStart) {
+      reviewedLast14d += 1;
+    }
+  });
+
+  const dailyVelocity14d = Number((learnedLast14d / 14).toFixed(2));
+
+  // 全周期日均速率
+  let dailyVelocityAllTime = 0;
+  if (allLearnedDates.length > 0) {
+    allLearnedDates.sort();
+    const earliest = allLearnedDates[0];
+    const diffDays = Math.max(1, Math.ceil((new Date(`${today}T00:00:00`).getTime() - new Date(`${earliest}T00:00:00`).getTime()) / 86_400_000) + 1);
+    dailyVelocityAllTime = Number((learnedTotal / diffDays).toFixed(2));
+  }
+
+  // 考研倒计时
+  const targetTime = new Date(`${examDate}T00:00:00`).getTime();
+  const todayTime = new Date(`${today}T00:00:00`).getTime();
+  const daysUntilExam = Math.max(0, Math.ceil((targetTime - todayTime) / 86_400_000));
+
+  let daysNeeded: number | null = null;
+  let estimatedCompletionDate: string | null = null;
+  let sprintDays: number | null = null;
+  let health: ForecastHealth = "pending";
+
+  if (remainingSections === 0 && totalSections > 0) {
+    health = "completed";
+    daysNeeded = 0;
+    estimatedCompletionDate = today;
+    sprintDays = daysUntilExam;
+  } else {
+    // 优先采用近 14 天速率，若为 0 则尝试历史总平均
+    const effectiveVelocity = dailyVelocity14d > 0 ? dailyVelocity14d : dailyVelocityAllTime;
+    if (effectiveVelocity > 0) {
+      daysNeeded = Math.ceil(remainingSections / effectiveVelocity);
+      estimatedCompletionDate = addCalendarDays(today, daysNeeded);
+      sprintDays = daysUntilExam - daysNeeded;
+
+      if (sprintDays >= 45) {
+        health = "healthy";
+      } else if (sprintDays >= 15) {
+        health = "steady";
+      } else if (sprintDays >= 0) {
+        health = "tight";
+      } else {
+        health = "behind";
+      }
+    } else {
+      health = "pending";
+    }
+  }
+
+  return {
+    dailyVelocity14d,
+    dailyVelocityAllTime,
+    learnedLast14d,
+    reviewedLast14d,
+    totalSections,
+    learnedTotal,
+    reviewedTotal,
+    remainingSections,
+    daysNeeded,
+    estimatedCompletionDate,
+    daysUntilExam,
+    sprintDays,
+    health,
+  };
+}
+
+export type HeatmapDay = {
+  date: string;
+  dayOfWeek: number; // 0 for Mon ... 6 for Sun
+  learnedCount: number;
+  reviewedCount: number;
+  totalActions: number;
+  level: 0 | 1 | 2 | 3;
+  isToday: boolean;
+  isFuture: boolean;
+};
+
+export function calculateActivityHeatmap(
+  progress: ProgressMap,
+  today: string,
+  weeksCount = 13,
+): HeatmapDay[] {
+  const todayDate = new Date(`${today}T00:00:00`);
+  const rawDow = todayDate.getDay(); // 0 is Sun, 1 is Mon...
+  const dow = rawDow === 0 ? 6 : rawDow - 1; // 0 is Mon, 6 is Sun
+
+  // 当前周的周日
+  const currentWeekSunday = addCalendarDays(today, 6 - dow);
+  const totalDays = weeksCount * 7;
+  const startDate = addCalendarDays(currentWeekSunday, -(totalDays - 1));
+
+  // 索引打卡数据
+  const learnedByDate: Record<string, number> = {};
+  const reviewedByDate: Record<string, number> = {};
+
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt) {
+      learnedByDate[entry.learnedAt] = (learnedByDate[entry.learnedAt] || 0) + 1;
+    }
+    if (entry.reviewedAt) {
+      reviewedByDate[entry.reviewedAt] = (reviewedByDate[entry.reviewedAt] || 0) + 1;
+    }
+  });
+
+  const days: HeatmapDay[] = [];
+  for (let i = 0; i < totalDays; i += 1) {
+    const dateStr = addCalendarDays(startDate, i);
+    const isFuture = dateStr > today;
+    const isToday = dateStr === today;
+    const dayDate = new Date(`${dateStr}T00:00:00`);
+    const dayDowRaw = dayDate.getDay();
+    const dayOfWeek = dayDowRaw === 0 ? 6 : dayDowRaw - 1;
+
+    const learnedCount = isFuture ? 0 : (learnedByDate[dateStr] || 0);
+    const reviewedCount = isFuture ? 0 : (reviewedByDate[dateStr] || 0);
+    const totalActions = learnedCount + reviewedCount;
+
+    let level: 0 | 1 | 2 | 3 = 0;
+    if (totalActions === 1) level = 1;
+    else if (totalActions >= 2 && totalActions <= 3) level = 2;
+    else if (totalActions >= 4) level = 3;
+
+    days.push({
+      date: dateStr,
+      dayOfWeek,
+      learnedCount,
+      reviewedCount,
+      totalActions,
+      level,
+      isToday,
+      isFuture,
+    });
+  }
+
+  return days;
+}
+
+export type WeeklyTrend = {
+  weekLabel: string;
+  startDate: string;
+  endDate: string;
+  learnedCount: number;
+  reviewedCount: number;
+  totalActions: number;
+  isCurrentWeek: boolean;
+};
+
+export function calculateWeeklyTrends(
+  progress: ProgressMap,
+  today: string,
+  weeksCount = 8,
+): WeeklyTrend[] {
+  const todayDate = new Date(`${today}T00:00:00`);
+  const rawDow = todayDate.getDay();
+  const dow = rawDow === 0 ? 6 : rawDow - 1; // 0 for Mon
+  const currentMonday = addCalendarDays(today, -dow);
+
+  const learnedByDate: Record<string, number> = {};
+  const reviewedByDate: Record<string, number> = {};
+
+  Object.values(progress).forEach((entry) => {
+    if (entry.learnedAt && entry.learnedAt <= today) {
+      learnedByDate[entry.learnedAt] = (learnedByDate[entry.learnedAt] || 0) + 1;
+    }
+    if (entry.reviewedAt && entry.reviewedAt <= today) {
+      reviewedByDate[entry.reviewedAt] = (reviewedByDate[entry.reviewedAt] || 0) + 1;
+    }
+  });
+
+  const trends: WeeklyTrend[] = [];
+
+  for (let w = weeksCount - 1; w >= 0; w -= 1) {
+    const startDate = addCalendarDays(currentMonday, -w * 7);
+    const endDate = addCalendarDays(startDate, 6);
+    const isCurrentWeek = w === 0;
+
+    let learnedCount = 0;
+    let reviewedCount = 0;
+
+    for (let d = 0; d < 7; d += 1) {
+      const curDate = addCalendarDays(startDate, d);
+      if (curDate <= today) {
+        learnedCount += learnedByDate[curDate] || 0;
+        reviewedCount += reviewedByDate[curDate] || 0;
+      }
+    }
+
+    const startMonth = Number(startDate.slice(5, 7));
+    const startDay = Number(startDate.slice(8, 10));
+    const endMonth = Number(endDate.slice(5, 7));
+    const endDay = Number(endDate.slice(8, 10));
+    const weekLabel = isCurrentWeek ? "本周" : `${startMonth}/${startDay}-${endMonth}/${endDay}`;
+
+    trends.push({
+      weekLabel,
+      startDate,
+      endDate,
+      learnedCount,
+      reviewedCount,
+      totalActions: learnedCount + reviewedCount,
+      isCurrentWeek,
+    });
+  }
+
+  return trends;
+}
+
+export type DisciplineStats = {
+  currentStreak: number;
+  maxStreak: number;
+  totalActions: number;
+  plannedCount: number;
+  onTimeLearnedCount: number;
+  onTimeRate: number | null;
+  planAdjustmentCount: number;
+};
+
+export function calculateDisciplineStats(
+  progress: ProgressMap,
+  planHistory: PlanHistoryEntry[],
+  today: string,
+): DisciplineStats {
+  const currentStreak = calculateRecentStreak(progress, today);
+  const maxStreak = calculateMaxStreak(progress);
+
+  let totalActions = 0;
+  let plannedCount = 0;
+  let plannedAndLearnedCount = 0;
+  let onTimeLearnedCount = 0;
+
+  Object.values(progress).forEach((entry) => {
+    if (entry.learned) totalActions += 1;
+    if (entry.reviewed) totalActions += 1;
+    if (entry.plannedAt) {
+      plannedCount += 1;
+      if (entry.learned && entry.learnedAt) {
+        plannedAndLearnedCount += 1;
+        if (entry.learnedAt <= entry.plannedAt) {
+          onTimeLearnedCount += 1;
+        }
+      }
+    }
+  });
+
+  const onTimeRate = plannedAndLearnedCount > 0
+    ? Math.round((onTimeLearnedCount / plannedAndLearnedCount) * 100)
+    : null;
+
+  return {
+    currentStreak,
+    maxStreak,
+    totalActions,
+    plannedCount,
+    onTimeLearnedCount,
+    onTimeRate,
+    planAdjustmentCount: planHistory.length,
+  };
+}
+
 export const defaultProjectSettings = (): ProjectSettings => ({
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },
