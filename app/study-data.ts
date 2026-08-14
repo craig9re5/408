@@ -42,15 +42,32 @@ export type ProjectSetting = {
 
 export type ProjectSettings = Record<StudyArea, ProjectSetting>;
 
-export type JournalContext = {
-  type: "section" | "subject" | "project";
+export type JournalProjectContext = {
+  type: "project";
   area: StudyArea;
-  bookId?: string;
-  sectionId?: string;
+};
+
+export type JournalSubjectContext = {
+  type: "subject";
+  area: StudyArea;
+  bookId: string;
+  bookTitle?: string;
+};
+
+export type JournalSectionContext = {
+  type: "section";
+  area: StudyArea;
+  bookId: string;
+  sectionId: string;
   bookTitle?: string;
   sectionTitle?: string;
   sectionNumber?: string;
 };
+
+export type JournalContext =
+  | JournalProjectContext
+  | JournalSubjectContext
+  | JournalSectionContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -339,6 +356,7 @@ export function calculateActivityHeatmap(
 
 export type WeeklyTrend = {
   weekLabel: string;
+  shortLabel: string;
   startDate: string;
   endDate: string;
   learnedCount: number;
@@ -391,10 +409,12 @@ export function calculateWeeklyTrends(
     const startDay = Number(startDate.slice(8, 10));
     const endMonth = Number(endDate.slice(5, 7));
     const endDay = Number(endDate.slice(8, 10));
-    const weekLabel = isCurrentWeek ? "本周" : `${startMonth}/${startDay}-${endMonth}/${endDay}`;
+    const weekLabel = isCurrentWeek ? "本周" : `${startMonth}/${startDay} - ${endMonth}/${endDay}`;
+    const shortLabel = isCurrentWeek ? "本周" : `${startMonth}.${startDay}`;
 
     trends.push({
       weekLabel,
+      shortLabel,
       startDate,
       endDate,
       learnedCount,
@@ -613,19 +633,41 @@ export function generateJournalId(journals: JournalEntry[], dateStr = dateToday(
 
 export function normalizeJournalContext(value: unknown): JournalContext | null {
   if (!isRecord(value)) return null;
-  const type = value.type;
-  if (type !== "section" && type !== "subject" && type !== "project") return null;
   const area = value.area === "math" ? "math" : value.area === "408" ? "408" : null;
   if (!area) return null;
-  return {
-    type,
-    area,
-    bookId: typeof value.bookId === "string" ? value.bookId : undefined,
-    sectionId: typeof value.sectionId === "string" ? value.sectionId : undefined,
-    bookTitle: typeof value.bookTitle === "string" ? value.bookTitle : undefined,
-    sectionTitle: typeof value.sectionTitle === "string" ? value.sectionTitle : undefined,
-    sectionNumber: typeof value.sectionNumber === "string" ? value.sectionNumber : undefined,
-  };
+
+  if (value.type === "project") {
+    return {
+      type: "project",
+      area,
+    };
+  }
+
+  if (value.type === "subject") {
+    if (typeof value.bookId !== "string" || !value.bookId.trim()) return null;
+    return {
+      type: "subject",
+      area,
+      bookId: value.bookId.trim(),
+      bookTitle: typeof value.bookTitle === "string" && value.bookTitle.trim() ? value.bookTitle.trim() : undefined,
+    };
+  }
+
+  if (value.type === "section") {
+    if (typeof value.bookId !== "string" || !value.bookId.trim()) return null;
+    if (typeof value.sectionId !== "string" || !value.sectionId.trim()) return null;
+    return {
+      type: "section",
+      area,
+      bookId: value.bookId.trim(),
+      sectionId: value.sectionId.trim(),
+      bookTitle: typeof value.bookTitle === "string" && value.bookTitle.trim() ? value.bookTitle.trim() : undefined,
+      sectionTitle: typeof value.sectionTitle === "string" && value.sectionTitle.trim() ? value.sectionTitle.trim() : undefined,
+      sectionNumber: typeof value.sectionNumber === "string" && value.sectionNumber.trim() ? value.sectionNumber.trim() : undefined,
+    };
+  }
+
+  return null;
 }
 
 export function normalizeJournalPublish(value: unknown): JournalPublish {
@@ -678,6 +720,36 @@ export function normalizeJournals(value: unknown): JournalEntry[] {
     if (entry) entries.push(entry);
   });
   return entries;
+}
+
+/**
+ * Deterministic CRDT/LWW map-merge for JournalEntry lists across devices.
+ * Prevents silent overwriting when different devices create or edit journals concurrently.
+ */
+export function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEntry[] {
+  const map = new Map<string, JournalEntry>();
+
+  remote.forEach((entry) => {
+    if (entry && entry.id) map.set(entry.id, entry);
+  });
+
+  local.forEach((entry) => {
+    if (!entry || !entry.id) return;
+    const existing = map.get(entry.id);
+    if (!existing) {
+      map.set(entry.id, entry);
+    } else {
+      const localTime = new Date(entry.updatedAt || entry.createdAt).getTime();
+      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+      if (Number.isNaN(localTime) || Number.isNaN(existingTime)) {
+        map.set(entry.id, entry);
+      } else if (localTime >= existingTime) {
+        map.set(entry.id, entry);
+      }
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap): StudyAppData | null {

@@ -3,37 +3,88 @@ import katex from "katex";
 
 /**
  * Custom Markdown + KaTeX rendering function:
- * Shields LaTeX equations ($...$ and $$...$$) from Markdown parser collisions,
- * executes marked for GFM elements (tables, checkboxes, etc.),
- * and hydrates KaTeX tokens into rendered HTML.
+ * 1. Shields code blocks and inline code from formula extraction
+ * 2. Shields escaped \$
+ * 3. Shields multiline $$...$$ and inline $...$ formulas
+ * 4. Escapes raw HTML tags to prevent XSS injection
+ * 5. Runs marked for GFM elements (tables, checkboxes, etc.)
+ * 6. Sanitizes dangerous attributes (e.g. javascript: URLs, onerror handlers)
+ * 7. Hydrates KaTeX tokens into rendered HTML.
  */
 export function renderMarkdownWithKaTeX(markdown: string): string {
-  if (!markdown) return "";
+  if (!markdown || !markdown.trim()) return "";
 
+  const codeBlocks: string[] = [];
+  const inlineCodes: string[] = [];
+  const escapedDollars: string[] = [];
   const mathBlocks: string[] = [];
   const mathInlines: string[] = [];
 
-  // Step 1: Shield Block Math $$...$$
-  let processed = markdown.replace(/\$\$([\s\S]+?)\$\$/g, (_match, math: string) => {
+  let processed = markdown;
+
+  // Step 1: Shield Fenced Code Blocks (```...``` or ~~~...~~~)
+  processed = processed.replace(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g, (match) => {
+    const placeholder = `%%CODE_BLOCK_${codeBlocks.length}%%`;
+    codeBlocks.push(match);
+    return placeholder;
+  });
+
+  // Step 2: Shield Inline Code Spans (`...` or ``...``)
+  processed = processed.replace(/(`+)([\s\S]*?)\1/g, (match) => {
+    const placeholder = `%%INLINE_CODE_${inlineCodes.length}%%`;
+    inlineCodes.push(match);
+    return placeholder;
+  });
+
+  // Step 3: Shield Escaped Dollars (\$ -> placeholder)
+  processed = processed.replace(/\\\$/g, () => {
+    const placeholder = `%%ESCAPED_DOLLAR_${escapedDollars.length}%%`;
+    escapedDollars.push("$");
+    return placeholder;
+  });
+
+  // Step 4: Shield Multiline Block Math $$...$$
+  processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_match, math: string) => {
     const placeholder = `%%KATEX_BLOCK_${mathBlocks.length}%%`;
     mathBlocks.push(math.trim());
     return placeholder;
   });
 
-  // Step 2: Shield Inline Math $...$ (ensure not preceded/followed by other $)
-  processed = processed.replace(/(^|[^\$])\$([^\$\n]+?)\$(?!\$)/g, (_match, prefix: string, math: string) => {
+  // Step 5: Shield Inline Math $...$ (must not be empty, not spanning newlines)
+  processed = processed.replace(/(^|[^\$])\$([^\$\r\n]+?)\$(?!\$)/g, (_match, prefix: string, math: string) => {
+    if (!math.trim()) return `${prefix}$${math}$`;
     const placeholder = `%%KATEX_INLINE_${mathInlines.length}%%`;
     mathInlines.push(math.trim());
     return `${prefix}${placeholder}`;
   });
 
-  // Step 3: Parse Markdown with GFM enabled
+  // Step 6: Escape raw HTML outside code & math to neutralize any injected HTML/scripts
+  processed = processed.replace(/</g, "%%HTML_LT%%").replace(/>/g, "%%HTML_GT%%");
+
+  // Step 7: Restore Escaped Dollars, Inline Code, and Code Blocks
+  escapedDollars.forEach((val, idx) => {
+    processed = processed.replace(new RegExp(`%%ESCAPED_DOLLAR_${idx}%%`, "g"), val);
+  });
+  inlineCodes.forEach((val, idx) => {
+    processed = processed.replace(new RegExp(`%%INLINE_CODE_${idx}%%`, "g"), val);
+  });
+  codeBlocks.forEach((val, idx) => {
+    processed = processed.replace(new RegExp(`%%CODE_BLOCK_${idx}%%`, "g"), val);
+  });
+
+  // Step 8: Parse Markdown with GFM enabled
   let html = marked.parse(processed, {
     gfm: true,
     breaks: true,
   }) as string;
 
-  // Step 4: Restore Block Math
+  // Restore escaped HTML entities
+  html = html.replace(/%%HTML_LT%%/g, "&lt;").replace(/%%HTML_GT%%/g, "&gt;");
+
+  // Step 9: Sanitize HTML against XSS vectors (e.g. javascript: links, onerror handlers)
+  html = sanitizeHtml(html);
+
+  // Step 10: Restore Block Math
   mathBlocks.forEach((math, index) => {
     let rendered = "";
     try {
@@ -48,7 +99,7 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
     html = html.replace(token, rendered);
   });
 
-  // Step 5: Restore Inline Math
+  // Step 11: Restore Inline Math
   mathInlines.forEach((math, index) => {
     let rendered = "";
     try {
@@ -67,14 +118,40 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
 }
 
 /**
+ * Strict sanitizer for HTML strings to guarantee XSS immunity.
+ */
+export function sanitizeHtml(html: string): string {
+  if (!html) return "";
+
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, "")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe\s*>/gi, "")
+    .replace(/<object[\s\S]*?<\/object\s*>/gi, "")
+    .replace(/<embed[\s\S]*?<\/embed\s*>/gi, "")
+    .replace(/<form[\s\S]*?<\/form\s*>/gi, "")
+    .replace(/<base[\s\S]*?>/gi, "");
+
+  // Remove event handlers like onerror=..., onclick=..., onload=...
+  clean = clean.replace(/\s+on[a-zA-Z]+\s*=\s*(['"]).*?\1/gi, "");
+  clean = clean.replace(/\s+on[a-zA-Z]+\s*=\s*[^ >]+/gi, "");
+
+  // Neutralize dangerous javascript:, vbscript:, data:text/html URIs in href and src
+  clean = clean.replace(/(href|src)\s*=\s*(['"])\s*(?:javascript|vbscript|data:\s*text\/html):.*?\2/gi, '$1="#"');
+
+  return clean;
+}
+
+/**
  * Truncates markdown content to a plain-text summary suitable for preview cards.
  */
 export function getMarkdownSummary(markdown: string, maxLength = 260): string {
   if (!markdown) return "";
   const plain = markdown
-    .replace(/\$\$[\s\S]+?\$\$/g, " [公式] ")
-    .replace(/\$[^\$\n]+?\$/g, " [公式] ")
     .replace(/```[\s\S]*?```/g, " [代码块] ")
+    .replace(/~~~[\s\S]*?~~~/g, " [代码块] ")
+    .replace(/\$\$[\s\S]+?\$\$/g, " [公式] ")
+    .replace(/\\?\$(?:[^\$\r\n]+?)\$/g, " [公式] ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/#{1,6}\s+/g, "")
     .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")

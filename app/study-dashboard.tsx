@@ -17,6 +17,7 @@ import {
   dateToday,
   defaultProjectSettings,
   generateJournalId,
+  mergeJournals,
   isOverdueTask,
   isTodayPlan,
   isUnreviewedTask,
@@ -504,6 +505,7 @@ export function StudyDashboard() {
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const repositoryRef = useRef<StorageRepository | null>(null);
+  const deletedJournalIdsRef = useRef<string[]>([]);
 
   const repository = useCallback((): StorageRepository => {
     if (!repositoryRef.current) repositoryRef.current = new StorageRepository(window.localStorage);
@@ -523,7 +525,10 @@ export function StudyDashboard() {
     setProgress(mergeRemoteProgress(remoteProgress, base));
     setProjectSettings(body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings());
     setPlanHistory(body.planHistory ?? local?.planHistory ?? []);
-    setJournals(body.journals ?? local?.journals ?? []);
+    setJournals((currentLocal) => {
+      const baseLocal = (includeLocal && currentLocal.length === 0 && local?.journals) ? local.journals : currentLocal;
+      return mergeJournals(baseLocal, body.journals ?? []);
+    });
     setBackups(repository().backups());
   }, [repository]);
 
@@ -574,7 +579,10 @@ export function StudyDashboard() {
         const response = await fetch("/api/app-data", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(appData),
+          body: JSON.stringify({
+            ...appData,
+            deletedJournalIds: deletedJournalIdsRef.current,
+          }),
         });
         if (response.status === 401) {
           setAuthState("locked");
@@ -582,6 +590,11 @@ export function StudyDashboard() {
           return;
         }
         if (!response.ok) throw new Error("progress-save-failed");
+        const resData = await response.json().catch(() => null) as { saved?: boolean; journals?: JournalEntry[] } | null;
+        if (resData?.journals) {
+          deletedJournalIdsRef.current = [];
+          setJournals(resData.journals);
+        }
         setSyncStatus("saved");
       } catch {
         setSyncStatus("offline");
@@ -1158,7 +1171,7 @@ export function StudyDashboard() {
   const journalsBySection = useMemo(() => {
     const map: Record<string, JournalEntry[]> = {};
     journals.forEach((entry) => {
-      if (entry.context?.sectionId) {
+      if (entry.context && entry.context.type === "section" && entry.context.sectionId) {
         if (!map[entry.context.sectionId]) map[entry.context.sectionId] = [];
         map[entry.context.sectionId].push(entry);
       }
@@ -1181,10 +1194,24 @@ export function StudyDashboard() {
         const q = journalSearchQuery.trim().toLowerCase();
         const titleMatch = entry.title?.toLowerCase().includes(q) ?? false;
         const contentMatch = entry.content.toLowerCase().includes(q);
-        const sectionMatch = (entry.context?.sectionTitle?.toLowerCase().includes(q)
-          || entry.context?.bookTitle?.toLowerCase().includes(q)
-          || entry.context?.sectionNumber?.toLowerCase().includes(q)) ?? false;
-        if (!titleMatch && !contentMatch && !sectionMatch) return false;
+        let contextMatch = false;
+        if (entry.context) {
+          if (entry.context.type === "section") {
+            contextMatch = Boolean(
+              entry.context.sectionTitle?.toLowerCase().includes(q)
+              || entry.context.bookTitle?.toLowerCase().includes(q)
+              || entry.context.sectionNumber?.toLowerCase().includes(q),
+            );
+          } else if (entry.context.type === "subject") {
+            contextMatch = Boolean(
+              entry.context.bookTitle?.toLowerCase().includes(q)
+              || entry.context.bookId.toLowerCase().includes(q),
+            );
+          } else if (entry.context.type === "project") {
+            contextMatch = entry.context.area.toLowerCase().includes(q);
+          }
+        }
+        if (!titleMatch && !contentMatch && !contextMatch) return false;
       }
 
       return true;
@@ -1289,6 +1316,7 @@ export function StudyDashboard() {
 
   const confirmDeleteJournal = useCallback(() => {
     if (!pendingDeleteJournal) return;
+    deletedJournalIdsRef.current.push(pendingDeleteJournal.id);
     setJournals((prev) => prev.filter((entry) => entry.id !== pendingDeleteJournal.id));
     setPendingDeleteJournal(null);
     setFeedbackMessage("日志已删除");
@@ -1300,7 +1328,7 @@ export function StudyDashboard() {
 
   const openBlogPublishModal = useCallback((journal: JournalEntry) => {
     setBlogPublishJournal(journal);
-    setPublishTitle(journal.title ?? (journal.context?.sectionTitle ? `${journal.context.sectionTitle} 学习记录` : ""));
+    setPublishTitle(journal.title ?? (journal.context?.type === "section" && journal.context.sectionTitle ? `${journal.context.sectionTitle} 学习记录` : ""));
     setPublishSlug(journal.publish?.blogPostId || journal.id);
     setPublishContent(journal.content);
     setPublishError("");
@@ -1339,7 +1367,9 @@ export function StudyDashboard() {
 
       const data = await response.json() as {
         success?: boolean;
+        simulated?: boolean;
         error?: string;
+        message?: string;
         publishedAt?: string;
         blogUrl?: string;
         blogPostId?: string;
@@ -1347,6 +1377,13 @@ export function StudyDashboard() {
 
       if (!response.ok || !data.success) {
         setPublishError(data.error || "发布失败，请稍后重试");
+        setIsPublishing(false);
+        return;
+      }
+
+      if (data.simulated) {
+        setFeedbackMessage("【模拟发布】已成功验证排版与 Slug（未配置 GITHUB_TOKEN，未推送到 GitHub 博客，未标记日志为已发布状态）。");
+        setBlogPublishJournal(null);
         setIsPublishing(false);
         return;
       }
@@ -1365,7 +1402,7 @@ export function StudyDashboard() {
       }));
 
       setBlogPublishJournal(null);
-      setFeedbackMessage("文章已成功发布至 Blog！");
+      setFeedbackMessage("文章已成功发布至 GitHub 博客！");
     } catch {
       setPublishError("无法连接发布服务，请检查网络或后端配置");
     } finally {
@@ -1945,14 +1982,24 @@ export function StudyDashboard() {
                                       <button
                                         type="button"
                                         className={`journal-context-badge area-${entry.context.area}`}
-                                        title={`${entry.context.bookTitle ?? ""} ${entry.context.sectionNumber ?? ""} ${entry.context.sectionTitle ?? ""}`}
+                                        title={
+                                          entry.context.type === "section"
+                                            ? `${entry.context.bookTitle ?? ""} ${entry.context.sectionNumber ?? ""} ${entry.context.sectionTitle ?? ""}`
+                                            : entry.context.type === "subject"
+                                              ? `${entry.context.bookTitle ?? entry.context.bookId}`
+                                              : entry.context.area === "408" ? "408" : "数学"
+                                        }
                                         onClick={() => {
-                                          if (entry.context?.sectionId) {
+                                          if (entry.context?.type === "section") {
                                             setActiveDrawerSectionId(entry.context.sectionId);
                                           }
                                         }}
                                       >
-                                        📖 {entry.context.bookTitle} · {entry.context.sectionNumber} {entry.context.sectionTitle}
+                                        {entry.context.type === "section"
+                                          ? `📖 ${entry.context.bookTitle} · ${entry.context.sectionNumber} ${entry.context.sectionTitle}`
+                                          : entry.context.type === "subject"
+                                            ? `📚 ${entry.context.bookTitle ?? entry.context.bookId}`
+                                            : `🎯 ${entry.context.area === "408" ? "408" : "数学"}`}
                                       </button>
                                     )}
                                     {entry.publish?.status === "published" && (
@@ -2259,7 +2306,7 @@ export function StudyDashboard() {
                       </div>
                     ) : (
                       <div className="hover-detail placeholder">
-                        <span>鼠标悬停方块查看当日打卡详情</span>
+                        <span>💡 鼠标悬停上方方块，查看当日学完与复习详情</span>
                       </div>
                     )}
                   </div>
@@ -2300,8 +2347,15 @@ export function StudyDashboard() {
                     </div>
                     <div className="trend-bars-container">
                       {weeklyTrends.map((week) => {
-                        const learnedHeight = Math.round((week.learnedCount / maxWeeklyAction) * 100);
-                        const reviewedHeight = Math.round((week.reviewedCount / maxWeeklyAction) * 100);
+                        const totalHeightPercent = maxWeeklyAction > 0
+                          ? Math.round((week.totalActions / maxWeeklyAction) * 100)
+                          : 0;
+                        const learnedPercent = week.totalActions > 0
+                          ? (week.learnedCount / week.totalActions) * 100
+                          : 0;
+                        const reviewedPercent = week.totalActions > 0
+                          ? (week.reviewedCount / week.totalActions) * 100
+                          : 0;
                         const isHovered = hoveredTrendWeek?.startDate === week.startDate;
                         return (
                           <div
@@ -2310,16 +2364,26 @@ export function StudyDashboard() {
                             onMouseEnter={() => setHoveredTrendWeek(week)}
                             onMouseLeave={() => setHoveredTrendWeek((curr) => curr?.startDate === week.startDate ? null : curr)}
                           >
-                            <div className="trend-col-track" title={`${week.weekLabel}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节`}>
+                            <div className="trend-col-track" title={`${week.startDate} ~ ${week.endDate}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节, 共 ${week.totalActions} 节`}>
                               <span className={`bar-total-num ${week.totalActions > 0 ? "visible" : ""}`}>
                                 {week.totalActions > 0 ? week.totalActions : ""}
                               </span>
-                              <div className="trend-bar-stack">
-                                <div className="bar-segment bar-reviewed" style={{ height: `${reviewedHeight}%` }} />
-                                <div className="bar-segment bar-learned" style={{ height: `${learnedHeight}%` }} />
+                              <div
+                                className="trend-bar-stack"
+                                style={{
+                                  height: week.totalActions > 0 ? `${Math.max(totalHeightPercent, 8)}%` : "3px",
+                                  opacity: week.totalActions > 0 ? 1 : 0.35,
+                                }}
+                              >
+                                {week.reviewedCount > 0 && (
+                                  <div className="bar-segment bar-reviewed" style={{ height: `${reviewedPercent}%` }} />
+                                )}
+                                {week.learnedCount > 0 && (
+                                  <div className="bar-segment bar-learned" style={{ height: `${learnedPercent}%` }} />
+                                )}
                               </div>
                             </div>
-                            <span className="trend-col-label">{week.isCurrentWeek ? "本周" : week.weekLabel}</span>
+                            <span className="trend-col-label">{week.shortLabel}</span>
                           </div>
                         );
                       })}
@@ -2329,7 +2393,7 @@ export function StudyDashboard() {
                   <div className="trend-hover-info">
                     {hoveredTrendWeek ? (
                       <div className="hover-detail">
-                        <strong>{hoveredTrendWeek.weekLabel} {hoveredTrendWeek.isCurrentWeek ? "(本周)" : ""}</strong>
+                        <strong>{hoveredTrendWeek.startDate} ~ {hoveredTrendWeek.endDate} {hoveredTrendWeek.isCurrentWeek ? "(本周)" : ""}</strong>
                         <span>
                           {hoveredTrendWeek.totalActions > 0
                             ? `新学 ${hoveredTrendWeek.learnedCount} 节 · 复习 ${hoveredTrendWeek.reviewedCount} 节 · 合计 ${hoveredTrendWeek.totalActions} 项动作`
@@ -2338,7 +2402,7 @@ export function StudyDashboard() {
                       </div>
                     ) : (
                       <div className="hover-detail placeholder">
-                        <span>鼠标悬停柱状图查看对应周打卡构成</span>
+                        <span>💡 鼠标悬停柱状图，查看各周新学与复习打卡构成</span>
                       </div>
                     )}
                   </div>
@@ -2640,7 +2704,7 @@ export function StudyDashboard() {
               <div className="journal-context-selector">
                 <span className="meta-label">关联小节:</span>
                 <select
-                  value={editorContext?.sectionId || ""}
+                  value={editorContext?.type === "section" ? editorContext.sectionId : ""}
                   onChange={(e) => {
                     const secId = e.target.value;
                     if (!secId) {

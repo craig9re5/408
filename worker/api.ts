@@ -37,15 +37,32 @@ type ProjectSettings = {
   math: { examDate: string };
 };
 
-export type JournalContext = {
-  type: "section" | "subject" | "project";
+export type JournalProjectContext = {
+  type: "project";
   area: "408" | "math";
-  bookId?: string;
-  sectionId?: string;
+};
+
+export type JournalSubjectContext = {
+  type: "subject";
+  area: "408" | "math";
+  bookId: string;
+  bookTitle?: string;
+};
+
+export type JournalSectionContext = {
+  type: "section";
+  area: "408" | "math";
+  bookId: string;
+  sectionId: string;
   bookTitle?: string;
   sectionTitle?: string;
   sectionNumber?: string;
 };
+
+export type JournalContext =
+  | JournalProjectContext
+  | JournalSubjectContext
+  | JournalSectionContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -292,19 +309,41 @@ function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
 function normalizeJournalContext(value: unknown): JournalContext | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
-  const type = candidate.type;
-  if (type !== "section" && type !== "subject" && type !== "project") return null;
   const area = candidate.area === "math" ? "math" : candidate.area === "408" ? "408" : null;
   if (!area) return null;
-  return {
-    type,
-    area,
-    bookId: typeof candidate.bookId === "string" ? candidate.bookId.slice(0, 80) : undefined,
-    sectionId: typeof candidate.sectionId === "string" ? candidate.sectionId.slice(0, 120) : undefined,
-    bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.slice(0, 100) : undefined,
-    sectionTitle: typeof candidate.sectionTitle === "string" ? candidate.sectionTitle.slice(0, 100) : undefined,
-    sectionNumber: typeof candidate.sectionNumber === "string" ? candidate.sectionNumber.slice(0, 30) : undefined,
-  };
+
+  if (candidate.type === "project") {
+    return {
+      type: "project",
+      area,
+    };
+  }
+
+  if (candidate.type === "subject") {
+    if (typeof candidate.bookId !== "string" || !candidate.bookId.trim()) return null;
+    return {
+      type: "subject",
+      area,
+      bookId: candidate.bookId.trim().slice(0, 80),
+      bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.trim().slice(0, 100) : undefined,
+    };
+  }
+
+  if (candidate.type === "section") {
+    if (typeof candidate.bookId !== "string" || !candidate.bookId.trim()) return null;
+    if (typeof candidate.sectionId !== "string" || !candidate.sectionId.trim()) return null;
+    return {
+      type: "section",
+      area,
+      bookId: candidate.bookId.trim().slice(0, 80),
+      sectionId: candidate.sectionId.trim().slice(0, 120),
+      bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.trim().slice(0, 100) : undefined,
+      sectionTitle: typeof candidate.sectionTitle === "string" ? candidate.sectionTitle.trim().slice(0, 100) : undefined,
+      sectionNumber: typeof candidate.sectionNumber === "string" ? candidate.sectionNumber.trim().slice(0, 30) : undefined,
+    };
+  }
+
+  return null;
 }
 
 function normalizeJournalPublish(value: unknown): JournalPublish {
@@ -353,6 +392,29 @@ function normalizeJournals(value: unknown): JournalEntry[] {
   }).slice(-2000);
 }
 
+function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEntry[] {
+  const map = new Map<string, JournalEntry>();
+  remote.forEach((entry) => {
+    if (entry && entry.id) map.set(entry.id, entry);
+  });
+  local.forEach((entry) => {
+    if (!entry || !entry.id) return;
+    const existing = map.get(entry.id);
+    if (!existing) {
+      map.set(entry.id, entry);
+    } else {
+      const localTime = new Date(entry.updatedAt || entry.createdAt).getTime();
+      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+      if (Number.isNaN(localTime) || Number.isNaN(existingTime)) {
+        map.set(entry.id, entry);
+      } else if (localTime >= existingTime) {
+        map.set(entry.id, entry);
+      }
+    }
+  });
+  return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 async function readAppData(env: Env): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
     readProgress(env),
@@ -380,7 +442,12 @@ async function readAppData(env: Env): Promise<AppData> {
   };
 }
 
-async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<void> {
+async function writeAppData(
+  env: Env,
+  data: AppData,
+  replace: boolean,
+  deletedJournalIds: string[] = [],
+): Promise<JournalEntry[]> {
   const statements: ReturnType<Env["DB"]["prepare"]>[] = [];
   if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(WORKSPACE_ID));
   Object.entries(data.progress)
@@ -399,6 +466,29 @@ async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<
            updated_at = CURRENT_TIMESTAMP`,
       ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
     });
+
+  let finalJournals = data.journals;
+  if (!replace) {
+    // Read existing journals from D1 to avoid overwriting concurrently added journals on other devices
+    try {
+      const stateRow = await env.DB.prepare(
+        "SELECT journals FROM app_state WHERE workspace_id = ?",
+      ).bind(WORKSPACE_ID).first<{ journals?: string }>();
+      if (stateRow?.journals) {
+        const existingJournals = normalizeJournals(JSON.parse(stateRow.journals));
+        finalJournals = mergeJournals(data.journals, existingJournals);
+      }
+    } catch {
+      // Fallback to data.journals
+    }
+  }
+
+  // Filter out any explicitly deleted IDs
+  if (deletedJournalIds.length > 0) {
+    const deletedSet = new Set(deletedJournalIds);
+    finalJournals = finalJournals.filter((j) => !deletedSet.has(j.id));
+  }
+
   statements.push(env.DB.prepare(
     `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, updated_at)
      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -413,9 +503,10 @@ async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<
     2,
     JSON.stringify(data.projectSettings),
     JSON.stringify(data.planHistory),
-    JSON.stringify(data.journals),
+    JSON.stringify(finalJournals),
   ));
   await env.DB.batch(statements);
+  return finalJournals;
 }
 
 function normalizeAppDataBody(body: unknown): AppData | null {
@@ -499,14 +590,16 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (url.pathname === "/api/app-data" && request.method === "PUT") {
     const unauthorized = await requireSession(request, env);
     if (unauthorized) return unauthorized;
-    const body = await request.json().catch(() => null);
+    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     const data = normalizeAppDataBody(body);
     if (!data) return json({ error: "应用数据格式不正确" }, { status: 400 });
-    const replace = Boolean(body && typeof body === "object" && !Array.isArray(body)
-      && (body as Record<string, unknown>).replace);
+    const replace = Boolean(body && typeof body === "object" && !Array.isArray(body) && body.replace);
+    const deletedJournalIds = Array.isArray(body?.deletedJournalIds)
+      ? (body.deletedJournalIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : [];
     try {
-      await writeAppData(env, data, replace);
-      return json({ saved: true });
+      const savedJournals = await writeAppData(env, data, replace, deletedJournalIds);
+      return json({ saved: true, journals: savedJournals });
     } catch {
       return json({ error: "保存应用数据失败，请稍后重试" }, { status: 503 });
     }
@@ -557,57 +650,67 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     const githubToken = (env as unknown as Record<string, string>).GITHUB_TOKEN?.trim();
     const githubRepo = (env as unknown as Record<string, string>).GITHUB_REPO?.trim() || "craig9re5/craig9re5.github.io";
 
-    if (githubToken) {
-      try {
-        const todayStr = publishedAt.slice(0, 10);
-        const filePath = `_posts/${todayStr}-${slug}.md`;
-        const frontmatter = `---\ntitle: "${title.replace(/"/g, '\\"')}"\ndate: ${publishedAt}\nslug: "${slug}"\n---\n\n`;
-        const fileContent = `${frontmatter}${content}`;
-        const encodedContent = btoa(unescape(encodeURIComponent(fileContent)));
+    if (!githubToken) {
+      return json({
+        success: true,
+        simulated: true,
+        message: "未配置 GITHUB_TOKEN，本次发布仅进行模拟校验，未推送至 GitHub 博客",
+        blogUrl,
+        blogPostId: slug,
+        mode: "simulated",
+      });
+    }
 
-        const getRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
-          headers: {
-            "Authorization": `Bearer ${githubToken}`,
-            "User-Agent": "408-Atlas-Journal-Publisher",
-            "Accept": "application/vnd.github.v3+json",
-          },
-        });
-        let sha: string | undefined;
-        if (getRes.ok) {
-          const fileData = await getRes.json() as { sha?: string };
-          sha = fileData.sha;
-        }
+    try {
+      const todayStr = publishedAt.slice(0, 10);
+      const filePath = `_posts/${todayStr}-${slug}.md`;
+      const frontmatter = `---\ntitle: "${title.replace(/"/g, '\\"')}"\ndate: ${publishedAt}\nslug: "${slug}"\n---\n\n`;
+      const fileContent = `${frontmatter}${content}`;
+      const encodedContent = btoa(unescape(encodeURIComponent(fileContent)));
 
-        const putRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${githubToken}`,
-            "User-Agent": "408-Atlas-Journal-Publisher",
-            "Accept": "application/vnd.github.v3+json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: `Publish post: ${title}`,
-            content: encodedContent,
-            sha,
-          }),
-        });
-
-        if (!putRes.ok) {
-          const errData = await putRes.text();
-          return json({ error: `GitHub 发布失败: ${errData}` }, { status: 502 });
-        }
-      } catch (err) {
-        return json({ error: `GitHub 连接异常: ${String(err)}` }, { status: 502 });
+      const getRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
+        headers: {
+          "Authorization": `Bearer ${githubToken}`,
+          "User-Agent": "408-Atlas-Journal-Publisher",
+          "Accept": "application/vnd.github.v3+json",
+        },
+      });
+      let sha: string | undefined;
+      if (getRes.ok) {
+        const fileData = await getRes.json() as { sha?: string };
+        sha = fileData.sha;
       }
+
+      const putRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${githubToken}`,
+          "User-Agent": "408-Atlas-Journal-Publisher",
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: `Publish post: ${title}`,
+          content: encodedContent,
+          sha,
+        }),
+      });
+
+      if (!putRes.ok) {
+        const errData = await putRes.text();
+        return json({ error: `GitHub 发布失败: ${errData}` }, { status: 502 });
+      }
+    } catch (err) {
+      return json({ error: `GitHub 连接异常: ${String(err)}` }, { status: 502 });
     }
 
     return json({
       success: true,
+      simulated: false,
       publishedAt,
       blogUrl,
       blogPostId: slug,
-      mode: githubToken ? "github" : "local_simulated",
+      mode: "github",
     });
   }
 

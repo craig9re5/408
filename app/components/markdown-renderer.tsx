@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { renderMarkdownWithKaTeX, getMarkdownSummary } from "../lib/markdown.ts";
+import { renderMarkdownWithKaTeX, getMarkdownSummary } from "../lib/markdown";
 
 export { renderMarkdownWithKaTeX, getMarkdownSummary };
 
