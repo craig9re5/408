@@ -5,6 +5,29 @@ import { books, type Book, type Section, type StudyArea } from "./data/books";
 import {
   APP_VERSION,
   StorageRepository,
+  addCalendarDays,
+  buildChapterPlanChanges,
+  createAppData,
+  defaultProjectSettings,
+  isOverdueTask,
+  isTodayPlan,
+  isUnreviewedTask,
+  normalizeAppData,
+  normalizeSectionProgress,
+  summarizeImport,
+  type LocalBackup,
+  type PlanChangeSource,
+  type PlanHistoryEntry,
+  type ProgressMap,
+  type ProjectSettings,
+  type SectionProgress,
+  type StorageLoadIssue,
+  type StudyAppData,
+} from "./study-data";
+
+type AuthState = "locked" | "authenticated";
+type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
+type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "today" | "analytics" | "settings";
@@ -688,8 +711,8 @@ export function StudyDashboard() {
   const examDate = activePage === "progress" ? projectSettings[activeArea].examDate : nearestExamDate;
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
   const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
-  const streakDays = calculateRecentStreak(progress, today);
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
+  const weeklyDaysCount = useMemo(() => weekDots.filter((day) => day.isDone).length, [weekDots]);
   const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
@@ -1241,9 +1264,9 @@ export function StudyDashboard() {
                 <span className="streak-flame">✹</span>
               </div>
 
-              <div className="rhythm-metrics" aria-label={`本周连续学习 ${streakDays} 天，完成 ${weeklySectionCount} 小节`}>
+              <div className="rhythm-metrics" aria-label={`本周学习 ${weeklyDaysCount} 天，完成 ${weeklySectionCount} 小节`}>
                 <div className="rhythm-metric">
-                  <strong>{streakDays}</strong><span>天连续</span>
+                  <strong>{weeklyDaysCount}</strong><span>天已学</span>
                 </div>
                 <i aria-hidden="true" />
                 <div className="rhythm-metric">
