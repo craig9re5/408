@@ -1173,23 +1173,6 @@ export function StudyDashboard() {
           <h1 className="topbar-title" id={`${activePage}-title`}>{pageTitles[activePage]}</h1>
           <div className="topbar-actions">
             {activePage === "progress" && <div className="study-switchers">
-              <div className="area-switcher" role="group" aria-label="切换学习领域">
-                {(["408", "math"] as StudyArea[]).map((area) => (
-                  <button
-                    className={activeArea === area ? "active" : ""}
-                    type="button"
-                    key={area}
-                    aria-pressed={activeArea === area}
-                    onClick={() => {
-                      setActiveArea(area);
-                      setExpandedChapters([]);
-                      setCatalogFilter("all");
-                    }}
-                  >
-                    {area === "408" ? "408" : "数学"}
-                  </button>
-                ))}
-              </div>
               <nav className="book-switcher" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
                 {areaBooks.map((book) => (
                   <button
@@ -1209,6 +1192,23 @@ export function StudyDashboard() {
                   {areaBooks.map((book) => <option value={book.id} key={book.id}>{book.shortTitle}</option>)}
                 </select>
               </label>
+              <div className="area-switcher" role="group" aria-label="切换学习领域">
+                {(["408", "math"] as StudyArea[]).map((area) => (
+                  <button
+                    className={activeArea === area ? "active" : ""}
+                    type="button"
+                    key={area}
+                    aria-pressed={activeArea === area}
+                    onClick={() => {
+                      setActiveArea(area);
+                      setExpandedChapters([]);
+                      setCatalogFilter("all");
+                    }}
+                  >
+                    {area === "408" ? "408" : "数学"}
+                  </button>
+                ))}
+              </div>
             </div>}
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
