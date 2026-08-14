@@ -41,13 +41,6 @@ const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] =
   { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
-const pageTitles: Record<AppPage, string> = {
-  progress: "学习进度",
-  today: "今日安排",
-  analytics: "数据分析",
-  settings: "设置",
-};
-
 const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
   { page: "progress", mark: "进", label: "进度" },
   { page: "today", mark: "今", label: "今日" },
@@ -1163,11 +1156,7 @@ export function StudyDashboard() {
       </aside>
 
       <main className="workspace">
-        <header className="topbar">
-          <div className="topbar-context">
-            <span>WORKSPACE</span>
-            <strong>{pageTitles[activePage]}</strong>
-          </div>
+        <header className="topbar" aria-label="全局操作">
           <div className="topbar-actions">
             {activePage === "progress" && <div className="study-switchers">
               <div className="area-switcher" role="group" aria-label="切换学习领域">
@@ -1207,7 +1196,6 @@ export function StudyDashboard() {
                 </select>
               </label>
             </div>}
-            <span className={`sync-label ${syncStatus}`}>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中" : syncStatus === "offline" ? "待重试" : ""}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
         </header>
@@ -1440,8 +1428,11 @@ export function StudyDashboard() {
           </> : activePage === "today" ? (
             <section className="page-view today-page" aria-labelledby="today-title">
               <header className="page-heading">
-                <div><span className="page-kicker">TODAY</span><h1 id="today-title">今日</h1></div>
-                <p>{formatDateChinese(today)}</p>
+                <div>
+                  <h1 id="today-title">今日安排</h1>
+                  <p className="page-description">集中处理今天该学的内容，并按原计划日期清理逾期任务。</p>
+                </div>
+                <time dateTime={today}>{formatDateChinese(today)}</time>
               </header>
 
               <div className="summary-strip" aria-label="今日任务概览">
@@ -1466,7 +1457,13 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view placeholder-page" aria-labelledby="analytics-title">
-              <header className="page-heading"><div><h1 id="analytics-title">数据分析</h1></div></header>
+              <header className="page-heading">
+                <div>
+                  <span className="page-kicker">全局视图</span>
+                  <h1 id="analytics-title">数据分析</h1>
+                  <p className="page-description">汇总全部学习项目的长期趋势，为阶段复盘保留一处清晰入口。</p>
+                </div>
+              </header>
               <article className="placeholder-card">
                 <span aria-hidden="true">↗</span>
                 <div><h2>分析视图正在整理</h2><p>这里会汇总全部学习项目的长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
@@ -1475,7 +1472,11 @@ export function StudyDashboard() {
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
               <header className="page-heading">
-                <div><h1 id="settings-title">设置</h1></div>
+                <div>
+                  <span className="page-kicker">全局偏好</span>
+                  <h1 id="settings-title">设置</h1>
+                  <p className="page-description">统一管理考试日期、数据迁移与本地备份。</p>
+                </div>
               </header>
 
               <div className="settings-grid">

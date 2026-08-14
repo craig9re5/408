@@ -137,6 +137,11 @@ test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () =
   for (const icon of ["progress", "today", "analytics"]) assert.match(dashboard, new RegExp(`icon: "${icon}"`));
   for (const icon of ["progress", "today", "analytics", "settings"]) assert.match(styles, new RegExp(`\\.navigation-symbol--${icon}`));
   assert.doesNotMatch(dashboard, /brand-mark|科目与目录|计划与积压|趋势与复盘|偏好与备份/);
+  assert.doesNotMatch(dashboard, /topbar-context|pageTitles/);
+  assert.doesNotMatch(styles, /\.topbar-context/);
+  assert.match(dashboard, /<header className="topbar" aria-label="全局操作">/);
+  assert.match(dashboard, /<h1 id="today-title">今日安排<\/h1>[\s\S]*<time dateTime=\{today\}>/);
+  for (const description of ["集中处理今天该学的内容", "汇总全部学习项目的长期趋势", "统一管理考试日期"]) assert.match(dashboard, new RegExp(description));
   assert.match(styles, /\.study-switchers\s*\{[^}]*width:\s*420px;[^}]*flex:\s*0 0 420px;/);
   assert.match(dashboard, /allFirstRoundComplete && <section className="task-panel task-panel--review"/);
   assert.match(dashboard, /\["408", "math"\][\s\S]*settings-project-row/);
