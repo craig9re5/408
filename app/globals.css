@@ -145,7 +145,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .error-icon { width: 15px; height: 15px; flex-shrink: 0; }
 .topbar-title { margin: 0; color: var(--ink); font: 600 16px var(--serif); letter-spacing: -.015em; white-space: nowrap; }
 .topbar-actions { position: relative; left: 20px; display: flex; min-width: 0; margin-left: auto; align-items: center; gap: 14px; }
-.study-switchers { position: relative; left: clamp(44px, 4.2vw, 86px); display: grid; width: 420px; min-width: 0; flex: 0 0 420px; grid-template-columns: 116px minmax(0, 1fr); align-items: center; gap: 10px; }
+.study-switchers { position: relative; left: clamp(40px, 3.1vw, 64px); display: grid; width: 420px; min-width: 0; flex: 0 0 420px; grid-template-columns: 116px minmax(0, 1fr); align-items: center; gap: 10px; }
 .area-switcher { display: grid; width: 116px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; padding: 3px; border: 1px solid #d7d4cc; border-radius: 9px; background: rgba(251, 250, 246, 0.78); box-shadow: 0 4px 14px rgba(35, 42, 44, 0.035); }
 .area-switcher button { width: 100%; min-width: 0; padding: 6px 8px; border-radius: 6px; color: #7c8483; background: transparent; font-size: 10px; cursor: pointer; transition: color 0.16s, background 0.16s, box-shadow 0.16s; }
 .area-switcher button:hover { color: var(--ink); }
