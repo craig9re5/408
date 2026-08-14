@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
 import {
   APP_VERSION,
-  SCHEMA_VERSION,
   StorageRepository,
   addCalendarDays,
   buildChapterPlanChanges,
@@ -40,6 +39,13 @@ const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] =
   { page: "today", icon: "today", label: "今日" },
   { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
+
+const pageTitles: Record<AppPage, string> = {
+  progress: "学习进度",
+  today: "今日",
+  analytics: "数据分析",
+  settings: "设置",
+};
 
 const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
   { page: "progress", mark: "进", label: "进度" },
@@ -1012,8 +1018,10 @@ export function StudyDashboard() {
           const checked = kind === "unreviewed" ? state?.reviewed : state?.learned;
           return (
             <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${section.id}`}>
-              <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
-              <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
+              <div className="task-main">
+                <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
+                <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
+              </div>
               <span className={`task-date ${kind}`}>
                 {kind === "today"
                   ? state?.learned ? `完成 ${formatDateShort(state.learnedAt)}` : "计划今天"
@@ -1110,7 +1118,13 @@ export function StudyDashboard() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-copy"><strong>408 Atlas</strong><small>STUDY CONTROL</small></span>
+          <svg className="atlas-logo" viewBox="0 0 28 28" aria-hidden="true">
+            <path d="M3 10.5 14 5l11 5.5L14 16 3 10.5Z" />
+            <path d="M7.2 13v5.1c0 2.2 3.1 4 6.8 4s6.8-1.8 6.8-4V13" />
+            <path d="M25 10.5v7" />
+            <circle cx="25" cy="19" r="1.25" />
+          </svg>
+          <strong>Atlas</strong>
         </div>
 
         <div className="semester-card">
@@ -1157,6 +1171,7 @@ export function StudyDashboard() {
 
       <main className="workspace">
         <header className="topbar" aria-label="全局操作">
+          <h1 className="topbar-title" id={`${activePage}-title`}>{pageTitles[activePage]}</h1>
           <div className="topbar-actions">
             {activePage === "progress" && <div className="study-switchers">
               <div className="area-switcher" role="group" aria-label="切换学习领域">
@@ -1427,14 +1442,6 @@ export function StudyDashboard() {
           </section>
           </> : activePage === "today" ? (
             <section className="page-view today-page" aria-labelledby="today-title">
-              <header className="page-heading">
-                <div>
-                  <h1 id="today-title">今日安排</h1>
-                  <p className="page-description">集中处理今天该学的内容，并按原计划日期清理逾期任务。</p>
-                </div>
-                <time dateTime={today}>{formatDateChinese(today)}</time>
-              </header>
-
               <div className="summary-strip" aria-label="今日任务概览">
                 <article><span>今日计划</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
                 <article><span>逾期未学</span><strong>{overdueTasks.length}</strong><small>按原计划日期排序</small></article>
@@ -1457,13 +1464,6 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view placeholder-page" aria-labelledby="analytics-title">
-              <header className="page-heading">
-                <div>
-                  <span className="page-kicker">全局视图</span>
-                  <h1 id="analytics-title">数据分析</h1>
-                  <p className="page-description">汇总全部学习项目的长期趋势，为阶段复盘保留一处清晰入口。</p>
-                </div>
-              </header>
               <article className="placeholder-card">
                 <span aria-hidden="true">↗</span>
                 <div><h2>分析视图正在整理</h2><p>这里会汇总全部学习项目的长期趋势与阶段复盘。本版本先保留入口，不用不可靠的预测填满页面。</p></div>
@@ -1471,14 +1471,6 @@ export function StudyDashboard() {
             </section>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
-              <header className="page-heading">
-                <div>
-                  <span className="page-kicker">全局偏好</span>
-                  <h1 id="settings-title">设置</h1>
-                  <p className="page-description">统一管理考试日期、数据迁移与本地备份。</p>
-                </div>
-              </header>
-
               <div className="settings-grid">
                 <section className="settings-card settings-card--project">
                   <header><h2>考试日期</h2></header>
@@ -1493,29 +1485,30 @@ export function StudyDashboard() {
                   </div>
                 </section>
 
-                <section className="settings-card">
-                  <header><h2>导出与导入</h2></header>
-                  <p>JSON 包含两个项目的学习记录、计划、设置与操作历史。</p>
-                  <div className="settings-actions"><button type="button" onClick={downloadExport}>导出全部数据</button><button type="button" onClick={() => importInputRef.current?.click()}>导入 JSON</button></div>
-                  {storageLoadIssue && <button className="recovery-export" type="button" onClick={downloadRecoveryData}>导出无法迁移的原始数据</button>}
-                  <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readImportFile} />
-                </section>
+                <section className="settings-card settings-card--data">
+                  <header><h2>数据管理</h2></header>
+                  <p>统一管理学习数据的迁移、导出和本地恢复。</p>
+                  <div className="data-management-grid">
+                    <div className="data-management-panel">
+                      <h3>导出与导入</h3>
+                      <p>JSON 包含两个项目的学习记录、计划、设置与操作历史。</p>
+                      <div className="settings-actions"><button type="button" onClick={downloadExport}>导出全部数据</button><button type="button" onClick={() => importInputRef.current?.click()}>导入 JSON</button></div>
+                      {storageLoadIssue && <button className="recovery-export" type="button" onClick={downloadRecoveryData}>导出无法迁移的原始数据</button>}
+                      <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readImportFile} />
+                    </div>
 
-                <section className="settings-card settings-card--backups">
-                  <header><h2>本地备份</h2></header>
-                  <p>最多保留 15 份；导入、恢复和旧数据迁移前会自动创建。本地备份用于防误操作，清除浏览器站点数据时也会丢失；请用 JSON 导出做外部备份。</p>
-                  <button className="backup-create" type="button" onClick={createManualBackup}>立即创建备份</button>
-                  <div className="backup-list">
-                    {backups.length ? backups.map((backup) => (
-                      <article key={backup.id}><div><strong>{backupKindLabel(backup.kind)}</strong><span>{formatLocalDateTime(backup.createdAt)}</span></div><button type="button" onClick={() => setPendingRestore(backup)}>恢复</button></article>
-                    )) : <p>还没有本地备份。</p>}
+                    <div className="data-management-panel">
+                      <div className="data-management-heading"><h3>本地备份</h3><button className="backup-create" type="button" onClick={createManualBackup}>立即创建备份</button></div>
+                      <p>导入、恢复和旧数据迁移前会自动创建，最多保留 15 份。</p>
+                      <div className="backup-list">
+                        {backups.length ? backups.map((backup) => (
+                          <article key={backup.id}><div><strong>{backupKindLabel(backup.kind)}</strong><span>{formatLocalDateTime(backup.createdAt)}</span></div><button type="button" onClick={() => setPendingRestore(backup)}>恢复</button></article>
+                        )) : <p>还没有本地备份。</p>}
+                      </div>
+                    </div>
                   </div>
                 </section>
 
-                <section className="settings-card settings-card--about">
-                  <header><h2>版本信息</h2></header>
-                  <dl><div><dt>应用版本</dt><dd>{APP_VERSION}</dd></div><div><dt>数据结构</dt><dd>Schema v{SCHEMA_VERSION}</dd></div><div><dt>计划历史</dt><dd>{planHistory.length} 条</dd></div></dl>
-                </section>
               </div>
             </section>
           )}
