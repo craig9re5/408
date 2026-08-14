@@ -752,9 +752,6 @@ export function StudyDashboard() {
   const weeklyTrends = useMemo(() => {
     return calculateWeeklyTrends(progress, dateToday(), 8);
   }, [progress]);
-  const disciplineStats = useMemo(() => {
-    return calculateDisciplineStats(progress, planHistory, dateToday());
-  }, [progress, planHistory]);
   const maxWeeklyAction = useMemo(() => {
     const max = Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
     return Math.max(max, 6);
@@ -1837,39 +1834,6 @@ export function StudyDashboard() {
                 </article>
               </div>
 
-              <div className="analytics-discipline-grid">
-                <article className="analytics-card discipline-card">
-                  <div className="discipline-icon">🔥</div>
-                  <div className="discipline-info">
-                    <span>当前连续学习</span>
-                    <strong>{disciplineStats.currentStreak} <em>天</em></strong>
-                  </div>
-                </article>
-
-                <article className="analytics-card discipline-card">
-                  <div className="discipline-icon">🏆</div>
-                  <div className="discipline-info">
-                    <span>历史最高连续</span>
-                    <strong>{disciplineStats.maxStreak} <em>天</em></strong>
-                  </div>
-                </article>
-
-                <article className="analytics-card discipline-card">
-                  <div className="discipline-icon">📚</div>
-                  <div className="discipline-info">
-                    <span>累计学习动作</span>
-                    <strong>{disciplineStats.totalActions} <em>项</em></strong>
-                  </div>
-                </article>
-
-                <article className="analytics-card discipline-card">
-                  <div className="discipline-icon">🎯</div>
-                  <div className="discipline-info">
-                    <span>计划按期履约率</span>
-                    <strong>{disciplineStats.onTimeRate !== null ? `${disciplineStats.onTimeRate}%` : "—"}</strong>
-                  </div>
-                </article>
-              </div>
             </section>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
