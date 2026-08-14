@@ -5,30 +5,6 @@ import { books, type Book, type Section, type StudyArea } from "./data/books";
 import {
   APP_VERSION,
   StorageRepository,
-  addCalendarDays,
-  buildChapterPlanChanges,
-  calculateRecentStreak,
-  createAppData,
-  defaultProjectSettings,
-  isOverdueTask,
-  isTodayPlan,
-  isUnreviewedTask,
-  normalizeAppData,
-  normalizeSectionProgress,
-  summarizeImport,
-  type LocalBackup,
-  type PlanChangeSource,
-  type PlanHistoryEntry,
-  type ProgressMap,
-  type ProjectSettings,
-  type SectionProgress,
-  type StorageLoadIssue,
-  type StudyAppData,
-} from "./study-data";
-
-type AuthState = "locked" | "authenticated";
-type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
-type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "today" | "analytics" | "settings";
@@ -1471,39 +1447,107 @@ export function StudyDashboard() {
             </section>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
-              <div className="settings-grid">
+              <div className="settings-stack">
                 <section className="settings-card settings-card--project">
-                  <header><h2>考试日期</h2></header>
-                  <p>所有学习项目统一在这里管理。全局页面的左侧倒计时显示最近一场考试。</p>
-                  <div className="settings-project-list">
-                    {(["408", "math"] as StudyArea[]).map((area) => (
-                      <label className="settings-project-row" key={area}>
-                        <span><strong>{area === "408" ? "408" : "数学"}</strong><small>{books.filter((book) => book.area === area).length} 门科目</small></span>
-                        <input type="date" aria-label={`${area === "408" ? "408" : "数学"}考试日期`} value={projectSettings[area].examDate} onChange={(event) => updateExamDate(area, event.target.value)} />
-                      </label>
-                    ))}
+                  <header className="settings-card__header">
+                    <div>
+                      <h2>考试日程与目标</h2>
+                      <p>统一管理各科目考研日期，全局页面的左侧边栏将同步显示最近一场考试倒计时。</p>
+                    </div>
+                  </header>
+                  <div className="settings-project-grid">
+                    {(["408", "math"] as StudyArea[]).map((area) => {
+                      const days = calculateDaysUntilExam(projectSettings[area].examDate);
+                      const subjectCount = books.filter((book) => book.area === area).length;
+                      return (
+                        <div className="settings-project-row settings-project-card" key={area}>
+                          <div className="settings-project-card__top">
+                            <div className="settings-project-card__info">
+                              <strong className="settings-project-card__title">
+                                {area === "408" ? "408 计算机统考" : "考研数学"}
+                              </strong>
+                              <small className="settings-project-card__meta">{subjectCount} 门科目</small>
+                            </div>
+                            <span className={`settings-countdown-badge ${days <= 30 && days > 0 ? "urgent" : ""}`}>
+                              {days > 0 ? `还有 ${days} 天` : days === 0 ? "今天考试" : "已结束"}
+                            </span>
+                          </div>
+                          <div className="settings-project-card__date-row">
+                            <span className="settings-date-label">考试日期</span>
+                            <input
+                              className="settings-date-input"
+                              type="date"
+                              aria-label={`${area === "408" ? "408" : "数学"}考试日期`}
+                              value={projectSettings[area].examDate}
+                              onChange={(event) => updateExamDate(area, event.target.value)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
 
                 <section className="settings-card settings-card--data">
-                  <header><h2>数据管理</h2></header>
-                  <p>统一管理学习数据的迁移、导出和本地恢复。</p>
+                  <header className="settings-card__header">
+                    <div>
+                      <h2>数据管理与本地备份</h2>
+                      <p>统一管理学习数据的导出、导入迁移以及多版本本地快照恢复。</p>
+                    </div>
+                  </header>
                   <div className="data-management-grid">
                     <div className="data-management-panel">
-                      <h3>导出与导入</h3>
-                      <p>JSON 包含两个项目的学习记录、计划、设置与操作历史。</p>
-                      <div className="settings-actions"><button type="button" onClick={downloadExport}>导出全部数据</button><button type="button" onClick={() => importInputRef.current?.click()}>导入 JSON</button></div>
-                      {storageLoadIssue && <button className="recovery-export" type="button" onClick={downloadRecoveryData}>导出无法迁移的原始数据</button>}
+                      <div className="data-management-heading">
+                        <h3>数据迁移</h3>
+                      </div>
+                      <p>包含两个项目的全部学习记录、计划安排、设置与操作历史。</p>
+                      <div className="settings-actions">
+                        <button type="button" className="settings-btn settings-btn--primary" onClick={downloadExport}>
+                          导出全部数据
+                        </button>
+                        <button type="button" className="settings-btn settings-btn--secondary" onClick={() => importInputRef.current?.click()}>
+                          导入 JSON
+                        </button>
+                      </div>
+                      {storageLoadIssue && (
+                        <button className="recovery-export" type="button" onClick={downloadRecoveryData}>
+                          导出无法迁移的原始数据
+                        </button>
+                      )}
                       <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readImportFile} />
                     </div>
 
-                    <div className="data-management-panel">
-                      <div className="data-management-heading"><h3>本地备份</h3><button className="backup-create" type="button" onClick={createManualBackup}>立即创建备份</button></div>
-                      <p>导入、恢复和旧数据迁移前会自动创建，最多保留 15 份。</p>
+                    <div className="data-management-panel data-management-panel--backups">
+                      <div className="data-management-heading">
+                        <div className="backup-title-wrap">
+                          <h3>本地快照</h3>
+                          <span className="backup-count-badge">{backups.length} / 15</span>
+                        </div>
+                        <button className="backup-create" type="button" onClick={createManualBackup}>
+                          立即创建备份
+                        </button>
+                      </div>
+                      <p>导入、恢复和旧数据迁移前会自动生成快照，最多保留 15 份。</p>
                       <div className="backup-list">
-                        {backups.length ? backups.map((backup) => (
-                          <article key={backup.id}><div><strong>{backupKindLabel(backup.kind)}</strong><span>{formatLocalDateTime(backup.createdAt)}</span></div><button type="button" onClick={() => setPendingRestore(backup)}>恢复</button></article>
-                        )) : <p>还没有本地备份。</p>}
+                        {backups.length ? (
+                          backups.map((backup) => (
+                            <article className="backup-item" key={backup.id}>
+                              <div className="backup-item__info">
+                                <span className={`backup-tag backup-tag--${backup.kind}`}>
+                                  {backupKindLabel(backup.kind)}
+                                </span>
+                                <span className="backup-item__time">{formatLocalDateTime(backup.createdAt)}</span>
+                              </div>
+                              <button className="backup-item__restore" type="button" onClick={() => setPendingRestore(backup)}>
+                                恢复
+                              </button>
+                            </article>
+                          ))
+                        ) : (
+                          <div className="backup-empty">
+                            <p>还没有本地备份快照，可点击右上角随时手动创建。</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
