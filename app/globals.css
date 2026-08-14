@@ -462,16 +462,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .book-select select { width: 100%; max-width: none; }
   .hero-grid { grid-template-columns: 1fr; }
   .task-row { grid-template-columns: minmax(220px, 1fr) 124px 88px; gap: 16px; }
-  .settings-grid { grid-template-columns: 1fr; }
-  .settings-card--data { grid-column: auto; }
+  .settings-page { max-width: 100%; }
   .data-management-grid { grid-template-columns: 1fr; gap: 20px; }
   .data-management-panel + .data-management-panel { padding-top: 20px; padding-left: 0; border-top: 1px solid var(--line-soft); border-left: 0; }
-  .summary { grid-template-columns: 1fr; }
-  .catalog-heading { align-items: flex-start; flex-direction: column; }
-  .catalog-tools { width: 100%; flex-wrap: wrap; }
-  .section-head, .section-row { grid-template-columns: minmax(170px, 1fr) repeat(3, 130px); column-gap: 12px; }
-  .section-table { overflow-x: auto; }
-  .section-head, .section-row { min-width: 620px; }
 }
 @media (max-width: 720px) {
   .auth-shell { align-items: end; padding: 18px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
@@ -504,8 +497,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .task-date { grid-column: 2; grid-row: 1; justify-self: end; }
   .task-check { grid-column: 2; grid-row: 2; }
   .placeholder-card { min-height: 300px; grid-template-columns: 1fr; padding: 30px; }
-  .settings-card { padding: 19px; }
-  .backup-list { grid-template-columns: 1fr; }
+  .settings-card { padding: 20px 16px; }
+  .settings-project-grid { grid-template-columns: 1fr; gap: 12px; }
+  .settings-project-card { padding: 14px 15px; }
+  .backup-list { grid-template-columns: 1fr; max-height: none; }
   .confirm-dialog { padding: 20px; }
   .plan-preview-list article { gap: 10px; }
   .hero-grid { gap: 10px; margin-bottom: 20px; }
