@@ -1698,8 +1698,7 @@ export function StudyDashboard() {
                 <article className="analytics-card heatmap-card">
                   <div className="card-header-row">
                     <div>
-                      <h3>91 天打卡轨迹</h3>
-                      <p>近 13 周打卡沉淀（学完 + 复习动作）</p>
+                      <h3>打卡轨迹</h3>
                     </div>
                     <div className="heatmap-legend">
                       <span>少</span>
@@ -1712,10 +1711,13 @@ export function StudyDashboard() {
                   </div>
 
                   <div className="heatmap-viewport">
-                    <div className="heatmap-labels-col">
+                    <div className="heatmap-labels-col" aria-hidden="true">
                       <span>一</span>
+                      <span>二</span>
                       <span>三</span>
+                      <span>四</span>
                       <span>五</span>
+                      <span>六</span>
                       <span>日</span>
                     </div>
                     <div className="heatmap-matrix">
