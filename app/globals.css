@@ -235,16 +235,21 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .settings-card__header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
 .settings-card__header h2 { margin: 0; font: 600 18px var(--serif); color: var(--ink); letter-spacing: -.01em; }
 .settings-card__header p { margin: 6px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
-.settings-project-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-.settings-project-card { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid var(--line-soft); border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgba(35,42,44,.02); transition: border-color .18s, box-shadow .18s; }
-.settings-project-card:hover { border-color: #ccd2cd; box-shadow: 0 4px 16px rgba(35,42,44,.04); }
-.settings-project-card__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.settings-project-card__info { display: flex; flex-direction: column; gap: 3px; }
-.settings-project-card__title { color: var(--ink); font-size: 14px; font-weight: 600; }
-.settings-project-card__meta { color: var(--muted); font-size: 11px; }
+.settings-schedule-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.settings-exam-picker { display: inline-flex; align-items: center; gap: 8px; }
+.schedule-board-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.schedule-day-card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--line-soft); border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgba(35,42,44,.02); transition: border-color .18s, box-shadow .18s; }
+.schedule-day-card:hover { border-color: #ccd2cd; box-shadow: 0 4px 16px rgba(35,42,44,.04); }
+.schedule-day-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.schedule-day-badge { display: inline-flex; align-items: center; padding: 2.5px 8px; border-radius: 6px; background: rgba(35,42,44,.06); color: var(--ink); font-size: 11px; font-weight: 600; }
+.schedule-day-date { color: var(--ink); font-size: 13.5px; font-weight: 600; font-family: var(--serif); }
+.schedule-session-list { display: flex; flex-direction: column; gap: 8px; }
+.schedule-session-item { display: grid; grid-template-columns: 100px 1fr auto; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(251,250,246,.75); }
+.schedule-time { color: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+.schedule-subject { color: var(--ink); font-size: 13.5px; font-weight: 600; }
+.schedule-score { color: var(--meta-strong); font-size: 11.5px; font-weight: 500; }
 .settings-countdown-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; background: rgba(116,164,181,.14); color: #3b6c7c; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .settings-countdown-badge.urgent { background: rgba(239,132,109,.14); color: #c9563e; }
-.settings-project-card__date-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px dashed var(--line-soft); }
 .settings-date-label { color: var(--ink-soft); font-size: 11.5px; font-weight: 500; }
 .settings-date-input { padding: 6px 10px; border: 1px solid #d5d9d5; border-radius: 8px; background: #faf9f6; color: var(--ink); font-size: 12px; font-weight: 500; outline: none; cursor: pointer; transition: all .16s ease; }
 .settings-date-input:hover { border-color: #b5bcb6; background: #fff; }
@@ -498,8 +503,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .task-check { grid-column: 2; grid-row: 2; }
   .placeholder-card { min-height: 300px; grid-template-columns: 1fr; padding: 30px; }
   .settings-card { padding: 20px 16px; }
-  .settings-project-grid { grid-template-columns: 1fr; gap: 12px; }
-  .settings-project-card { padding: 14px 15px; }
+  .settings-card__header { flex-direction: column; gap: 14px; align-items: stretch; }
+  .settings-schedule-actions { justify-content: space-between; }
+  .schedule-board-grid { grid-template-columns: 1fr; gap: 12px; }
+  .schedule-day-card { padding: 14px 15px; }
   .backup-list { grid-template-columns: 1fr; max-height: none; }
   .confirm-dialog { padding: 20px; }
   .plan-preview-list article { gap: 10px; }

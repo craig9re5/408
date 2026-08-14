@@ -999,9 +999,12 @@ export function StudyDashboard() {
     setFeedbackMessage("备份恢复完成，已保留恢复前备份");
   }
 
-  function updateExamDate(area: StudyArea, value: string) {
+  function updateExamStartDate(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    setProjectSettings((current) => ({ ...current, [area]: { examDate: value } }));
+    setProjectSettings({
+      "408": { examDate: value },
+      math: { examDate: value },
+    });
   }
 
   function renderTaskList(
@@ -1471,43 +1474,67 @@ export function StudyDashboard() {
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
               <div className="settings-stack">
-                <section className="settings-card settings-card--project">
+                <section className="settings-card settings-card--schedule">
                   <header className="settings-card__header">
                     <div>
-                      <h2>考试日程与目标</h2>
-                      <p>统一管理各科目考研日期，全局页面的左侧边栏将同步显示最近一场考试倒计时。</p>
+                      <h2>日程看板</h2>
+                      <p>全国硕士研究生统一考试初试日程安排，初试首日自动联动各科具体场次与全局倒计时。</p>
+                    </div>
+                    <div className="settings-schedule-actions">
+                      <span className={`settings-countdown-badge ${daysUntilExam <= 30 && daysUntilExam > 0 ? "urgent" : ""}`}>
+                        {daysUntilExam > 0 ? `距初试还有 ${daysUntilExam} 天` : daysUntilExam === 0 ? "初试今日进行" : "初试已结束"}
+                      </span>
+                      <label className="settings-exam-picker">
+                        <span className="settings-date-label">初试首日</span>
+                        <input
+                          className="settings-date-input"
+                          type="date"
+                          aria-label="考研初试首日日期"
+                          value={projectSettings["408"].examDate}
+                          onChange={(event) => updateExamStartDate(event.target.value)}
+                        />
+                      </label>
                     </div>
                   </header>
-                  <div className="settings-project-grid">
-                    {(["408", "math"] as StudyArea[]).map((area) => {
-                      const days = calculateDaysUntilExam(projectSettings[area].examDate);
-                      const subjectCount = books.filter((book) => book.area === area).length;
-                      return (
-                        <div className="settings-project-row settings-project-card" key={area}>
-                          <div className="settings-project-card__top">
-                            <div className="settings-project-card__info">
-                              <strong className="settings-project-card__title">
-                                {area === "408" ? "408 计算机统考" : "考研数学"}
-                              </strong>
-                              <small className="settings-project-card__meta">{subjectCount} 门科目</small>
-                            </div>
-                            <span className={`settings-countdown-badge ${days <= 30 && days > 0 ? "urgent" : ""}`}>
-                              {days > 0 ? `还有 ${days} 天` : days === 0 ? "今天考试" : "已结束"}
-                            </span>
-                          </div>
-                          <div className="settings-project-card__date-row">
-                            <span className="settings-date-label">考试日期</span>
-                            <input
-                              className="settings-date-input"
-                              type="date"
-                              aria-label={`${area === "408" ? "408" : "数学"}考试日期`}
-                              value={projectSettings[area].examDate}
-                              onChange={(event) => updateExamDate(area, event.target.value)}
-                            />
-                          </div>
+
+                  <div className="schedule-board-grid">
+                    <div className="schedule-day-card">
+                      <div className="schedule-day-top">
+                        <span className="schedule-day-badge">第一天</span>
+                        <strong className="schedule-day-date">{formatDateChinese(projectSettings["408"].examDate)}</strong>
+                      </div>
+                      <div className="schedule-session-list">
+                        <div className="schedule-session-item">
+                          <span className="schedule-time">08:30 – 11:30</span>
+                          <strong className="schedule-subject">政治</strong>
+                          <span className="schedule-score">100 分</span>
                         </div>
-                      );
-                    })}
+                        <div className="schedule-session-item">
+                          <span className="schedule-time">14:00 – 17:00</span>
+                          <strong className="schedule-subject">英语</strong>
+                          <span className="schedule-score">100 分</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="schedule-day-card">
+                      <div className="schedule-day-top">
+                        <span className="schedule-day-badge">第二天</span>
+                        <strong className="schedule-day-date">{formatDateChinese(addCalendarDays(projectSettings["408"].examDate, 1))}</strong>
+                      </div>
+                      <div className="schedule-session-list">
+                        <div className="schedule-session-item">
+                          <span className="schedule-time">08:30 – 11:30</span>
+                          <strong className="schedule-subject">数学</strong>
+                          <span className="schedule-score">150 分</span>
+                        </div>
+                        <div className="schedule-session-item">
+                          <span className="schedule-time">14:00 – 17:00</span>
+                          <strong className="schedule-subject">408</strong>
+                          <span className="schedule-score">150 分</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </section>
 
