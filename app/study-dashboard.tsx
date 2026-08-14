@@ -1824,12 +1824,9 @@ export function StudyDashboard() {
                   <header className="settings-card__header">
                     <div>
                       <h2>日程看板</h2>
-                      <p>全国硕士研究生统一考试初试日程安排，初试首日自动联动各科具体场次与全局倒计时。</p>
+                      <p>全国硕士研究生统一考试初试日程安排。</p>
                     </div>
                     <div className="settings-schedule-actions">
-                      <span className={`settings-countdown-badge ${daysUntilExam <= 30 && daysUntilExam > 0 ? "urgent" : ""}`}>
-                        {daysUntilExam > 0 ? `距初试还有 ${daysUntilExam} 天` : daysUntilExam === 0 ? "初试今日进行" : "初试已结束"}
-                      </span>
                       <label className="settings-exam-picker">
                         <span className="settings-date-label">初试首日</span>
                         <input
