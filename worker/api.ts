@@ -37,10 +37,38 @@ type ProjectSettings = {
   math: { examDate: string };
 };
 
+export type JournalContext = {
+  type: "section" | "subject" | "project";
+  area: "408" | "math";
+  bookId?: string;
+  sectionId?: string;
+  bookTitle?: string;
+  sectionTitle?: string;
+  sectionNumber?: string;
+};
+
+export type JournalPublish = {
+  status: "local" | "published";
+  publishedAt: string | null;
+  blogUrl: string | null;
+  blogPostId: string | null;
+};
+
+export type JournalEntry = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string | null;
+  content: string;
+  context: JournalContext | null;
+  publish: JournalPublish;
+};
+
 type AppStateRow = {
   schema_version: number;
   project_settings: string;
   plan_history: string;
+  journals?: string;
 };
 
 type AppData = {
@@ -48,6 +76,7 @@ type AppData = {
   progress: Record<string, ProgressValue>;
   projectSettings: ProjectSettings;
   planHistory: PlanHistoryEntry[];
+  journals: JournalEntry[];
 };
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
@@ -260,23 +289,94 @@ function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
   }).slice(-1000);
 }
 
+function normalizeJournalContext(value: unknown): JournalContext | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  const type = candidate.type;
+  if (type !== "section" && type !== "subject" && type !== "project") return null;
+  const area = candidate.area === "math" ? "math" : candidate.area === "408" ? "408" : null;
+  if (!area) return null;
+  return {
+    type,
+    area,
+    bookId: typeof candidate.bookId === "string" ? candidate.bookId.slice(0, 80) : undefined,
+    sectionId: typeof candidate.sectionId === "string" ? candidate.sectionId.slice(0, 120) : undefined,
+    bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.slice(0, 100) : undefined,
+    sectionTitle: typeof candidate.sectionTitle === "string" ? candidate.sectionTitle.slice(0, 100) : undefined,
+    sectionNumber: typeof candidate.sectionNumber === "string" ? candidate.sectionNumber.slice(0, 30) : undefined,
+  };
+}
+
+function normalizeJournalPublish(value: unknown): JournalPublish {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { status: "local", publishedAt: null, blogUrl: null, blogPostId: null };
+  }
+  const candidate = value as Record<string, unknown>;
+  return {
+    status: candidate.status === "published" ? "published" : "local",
+    publishedAt: typeof candidate.publishedAt === "string" ? candidate.publishedAt.slice(0, 64) : null,
+    blogUrl: typeof candidate.blogUrl === "string" ? candidate.blogUrl.slice(0, 300) : null,
+    blogPostId: typeof candidate.blogPostId === "string" ? candidate.blogPostId.slice(0, 100) : null,
+  };
+}
+
+function normalizeJournalEntry(value: unknown): JournalEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string"
+    || !/^\d{8}\d{3}$/.test(candidate.id)
+    || typeof candidate.createdAt !== "string"
+    || typeof candidate.content !== "string") {
+    return null;
+  }
+  const updatedAt = typeof candidate.updatedAt === "string" ? candidate.updatedAt.slice(0, 64) : candidate.createdAt.slice(0, 64);
+  const title = typeof candidate.title === "string" && candidate.title.trim() ? candidate.title.trim().slice(0, 200) : null;
+  const context = normalizeJournalContext(candidate.context);
+  const publish = normalizeJournalPublish(candidate.publish);
+
+  return {
+    id: candidate.id,
+    createdAt: candidate.createdAt.slice(0, 64),
+    updatedAt,
+    title,
+    content: candidate.content.slice(0, 200000),
+    context,
+    publish,
+  };
+}
+
+function normalizeJournals(value: unknown): JournalEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate): JournalEntry[] => {
+    const entry = normalizeJournalEntry(candidate);
+    return entry ? [entry] : [];
+  }).slice(-2000);
+}
+
 async function readAppData(env: Env): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
     readProgress(env),
     env.DB.prepare(
-      "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
-    ).bind(WORKSPACE_ID).all<AppStateRow>(),
+      "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
+    ).bind(WORKSPACE_ID).all<AppStateRow>().catch(() => {
+      return env.DB.prepare(
+        "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
+      ).bind(WORKSPACE_ID).all<AppStateRow>();
+    }),
   ]);
   const state = stateResult.results[0];
   let parsedSettings: unknown = null;
   let parsedHistory: unknown = null;
+  let parsedJournals: unknown = null;
   try { parsedSettings = state ? JSON.parse(state.project_settings) : null; } catch { parsedSettings = null; }
   try { parsedHistory = state ? JSON.parse(state.plan_history) : null; } catch { parsedHistory = null; }
+  try { parsedJournals = state?.journals ? JSON.parse(state.journals) : null; } catch { parsedJournals = null; }
   return {
-    schemaVersion: state?.schema_version ?? 1,
+    schemaVersion: 2,
     progress,
     projectSettings: normalizeProjectSettings(parsedSettings),
     planHistory: normalizePlanHistory(parsedHistory),
+    journals: normalizeJournals(parsedJournals),
   };
 }
 
@@ -300,18 +400,20 @@ async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<
       ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
     });
   statements.push(env.DB.prepare(
-    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, updated_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, updated_at)
+     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
      ON CONFLICT(workspace_id) DO UPDATE SET
        schema_version = excluded.schema_version,
        project_settings = excluded.project_settings,
        plan_history = excluded.plan_history,
+       journals = excluded.journals,
        updated_at = CURRENT_TIMESTAMP`,
   ).bind(
     WORKSPACE_ID,
-    1,
+    2,
     JSON.stringify(data.projectSettings),
     JSON.stringify(data.planHistory),
+    JSON.stringify(data.journals),
   ));
   await env.DB.batch(statements);
 }
@@ -319,7 +421,7 @@ async function writeAppData(env: Env, data: AppData, replace: boolean): Promise<
 function normalizeAppDataBody(body: unknown): AppData | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const candidate = body as Record<string, unknown>;
-  if (candidate.schemaVersion !== 1) return null;
+  if (candidate.schemaVersion !== 1 && candidate.schemaVersion !== 2) return null;
   if (!candidate.progress || typeof candidate.progress !== "object" || Array.isArray(candidate.progress)) return null;
   const entries = Object.entries(candidate.progress as Record<string, unknown>);
   if (entries.length > 1000) return null;
@@ -330,10 +432,11 @@ function normalizeAppDataBody(body: unknown): AppData | null {
     progress[sectionId] = normalized;
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     progress,
     projectSettings: normalizeProjectSettings(candidate.projectSettings),
     planHistory: normalizePlanHistory(candidate.planHistory),
+    journals: normalizeJournals(candidate.journals),
   };
 }
 
@@ -427,6 +530,85 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     } catch {
       return json({ error: "保存学习进度失败，请稍后重试" }, { status: 503 });
     }
+  }
+
+  if (url.pathname === "/api/blog/publish" && request.method === "POST") {
+    const unauthorized = await requireSession(request, env);
+    if (unauthorized) return unauthorized;
+    const body = await request.json().catch(() => null) as {
+      title?: unknown;
+      slug?: unknown;
+      content?: unknown;
+      journalId?: unknown;
+    } | null;
+
+    if (!body || typeof body.title !== "string" || !body.title.trim() || typeof body.slug !== "string" || !body.slug.trim() || typeof body.content !== "string") {
+      return json({ error: "发布参数不完整，标题、Slug 与正文必填" }, { status: 400 });
+    }
+
+    const title = body.title.trim();
+    const rawSlug = body.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+    const slug = rawSlug || `post-${Date.now()}`;
+    const content = body.content;
+    const publishedAt = new Date().toISOString();
+    const blogBaseUrl = (env as unknown as Record<string, string>).BLOG_BASE_URL?.trim() || "https://craig9re5.github.io";
+    const blogUrl = `${blogBaseUrl.replace(/\/+$/, "")}/posts/${slug}`;
+
+    const githubToken = (env as unknown as Record<string, string>).GITHUB_TOKEN?.trim();
+    const githubRepo = (env as unknown as Record<string, string>).GITHUB_REPO?.trim() || "craig9re5/craig9re5.github.io";
+
+    if (githubToken) {
+      try {
+        const todayStr = publishedAt.slice(0, 10);
+        const filePath = `_posts/${todayStr}-${slug}.md`;
+        const frontmatter = `---\ntitle: "${title.replace(/"/g, '\\"')}"\ndate: ${publishedAt}\nslug: "${slug}"\n---\n\n`;
+        const fileContent = `${frontmatter}${content}`;
+        const encodedContent = btoa(unescape(encodeURIComponent(fileContent)));
+
+        const getRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
+          headers: {
+            "Authorization": `Bearer ${githubToken}`,
+            "User-Agent": "408-Atlas-Journal-Publisher",
+            "Accept": "application/vnd.github.v3+json",
+          },
+        });
+        let sha: string | undefined;
+        if (getRes.ok) {
+          const fileData = await getRes.json() as { sha?: string };
+          sha = fileData.sha;
+        }
+
+        const putRes = await fetch(`https://api.github.com/repos/${githubRepo}/contents/${filePath}`, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${githubToken}`,
+            "User-Agent": "408-Atlas-Journal-Publisher",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: `Publish post: ${title}`,
+            content: encodedContent,
+            sha,
+          }),
+        });
+
+        if (!putRes.ok) {
+          const errData = await putRes.text();
+          return json({ error: `GitHub 发布失败: ${errData}` }, { status: 502 });
+        }
+      } catch (err) {
+        return json({ error: `GitHub 连接异常: ${String(err)}` }, { status: 502 });
+      }
+    }
+
+    return json({
+      success: true,
+      publishedAt,
+      blogUrl,
+      blogPostId: slug,
+      mode: githubToken ? "github" : "local_simulated",
+    });
   }
 
   return json({ error: "接口不存在" }, { status: 404 });

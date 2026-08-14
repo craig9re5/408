@@ -1,7 +1,7 @@
 import type { StudyArea } from "./data/books";
 
-export const SCHEMA_VERSION = 1;
-export const APP_VERSION = "1.5-beta";
+export const SCHEMA_VERSION = 2;
+export const APP_VERSION = "1.8.0";
 export const MAX_BACKUPS = 15;
 
 const APP_DATA_KEY = "study-app-data-v1";
@@ -42,12 +42,40 @@ export type ProjectSetting = {
 
 export type ProjectSettings = Record<StudyArea, ProjectSetting>;
 
+export type JournalContext = {
+  type: "section" | "subject" | "project";
+  area: StudyArea;
+  bookId?: string;
+  sectionId?: string;
+  bookTitle?: string;
+  sectionTitle?: string;
+  sectionNumber?: string;
+};
+
+export type JournalPublish = {
+  status: "local" | "published";
+  publishedAt: string | null;
+  blogUrl: string | null;
+  blogPostId: string | null;
+};
+
+export type JournalEntry = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string | null;
+  content: string;
+  context: JournalContext | null;
+  publish: JournalPublish;
+};
+
 export type StudyAppData = {
   schemaVersion: number;
   appVersion: string;
   progress: ProgressMap;
   projectSettings: ProjectSettings;
   planHistory: PlanHistoryEntry[];
+  journals: JournalEntry[];
 };
 
 export type BackupKind = "manual" | "before-import" | "before-restore" | "before-migration";
@@ -561,18 +589,113 @@ function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
   }).slice(-1000);
 }
 
+export function dateToday(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+export function generateJournalId(journals: JournalEntry[], dateStr = dateToday()): string {
+  const cleanDate = dateStr.replace(/-/g, "");
+  const prefix = cleanDate;
+  let maxSeq = 0;
+  journals.forEach((entry) => {
+    if (typeof entry.id === "string" && entry.id.startsWith(prefix) && entry.id.length === prefix.length + 3) {
+      const seq = parseInt(entry.id.slice(prefix.length), 10);
+      if (!Number.isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  });
+  const nextSeq = String(maxSeq + 1).padStart(3, "0");
+  return `${prefix}${nextSeq}`;
+}
+
+export function normalizeJournalContext(value: unknown): JournalContext | null {
+  if (!isRecord(value)) return null;
+  const type = value.type;
+  if (type !== "section" && type !== "subject" && type !== "project") return null;
+  const area = value.area === "math" ? "math" : value.area === "408" ? "408" : null;
+  if (!area) return null;
+  return {
+    type,
+    area,
+    bookId: typeof value.bookId === "string" ? value.bookId : undefined,
+    sectionId: typeof value.sectionId === "string" ? value.sectionId : undefined,
+    bookTitle: typeof value.bookTitle === "string" ? value.bookTitle : undefined,
+    sectionTitle: typeof value.sectionTitle === "string" ? value.sectionTitle : undefined,
+    sectionNumber: typeof value.sectionNumber === "string" ? value.sectionNumber : undefined,
+  };
+}
+
+export function normalizeJournalPublish(value: unknown): JournalPublish {
+  if (!isRecord(value)) {
+    return {
+      status: "local",
+      publishedAt: null,
+      blogUrl: null,
+      blogPostId: null,
+    };
+  }
+  const status = value.status === "published" ? "published" : "local";
+  return {
+    status,
+    publishedAt: typeof value.publishedAt === "string" ? value.publishedAt : null,
+    blogUrl: typeof value.blogUrl === "string" ? value.blogUrl : null,
+    blogPostId: typeof value.blogPostId === "string" ? value.blogPostId : null,
+  };
+}
+
+export function normalizeJournalEntry(value: unknown): JournalEntry | null {
+  if (!isRecord(value)
+    || typeof value.id !== "string"
+    || !/^\d{8}\d{3}$/.test(value.id)
+    || typeof value.createdAt !== "string"
+    || typeof value.content !== "string") {
+    return null;
+  }
+  const updatedAt = typeof value.updatedAt === "string" ? value.updatedAt : value.createdAt;
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : null;
+  const context = normalizeJournalContext(value.context);
+  const publish = normalizeJournalPublish(value.publish);
+
+  return {
+    id: value.id,
+    createdAt: value.createdAt,
+    updatedAt,
+    title,
+    content: value.content,
+    context,
+    publish,
+  };
+}
+
+export function normalizeJournals(value: unknown): JournalEntry[] {
+  if (!Array.isArray(value)) return [];
+  const entries: JournalEntry[] = [];
+  value.forEach((candidate) => {
+    const entry = normalizeJournalEntry(candidate);
+    if (entry) entries.push(entry);
+  });
+  return entries;
+}
+
 export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap): StudyAppData | null {
   if (!isRecord(value)
-    || value.schemaVersion !== SCHEMA_VERSION
+    || (value.schemaVersion !== 1 && value.schemaVersion !== SCHEMA_VERSION)
     || !isRecord(value.progress)
     || !isRecord(value.projectSettings)
     || !Array.isArray(value.planHistory)) return null;
+
+  const journals = Array.isArray(value.journals) ? normalizeJournals(value.journals) : [];
+
   return {
     schemaVersion: SCHEMA_VERSION,
     appVersion: typeof value.appVersion === "string" ? value.appVersion : APP_VERSION,
     progress: normalizeProgressMap(value.progress, fallbackProgress),
     projectSettings: normalizeProjectSettings(value.projectSettings),
     planHistory: normalizePlanHistory(value.planHistory),
+    journals,
   };
 }
 
@@ -580,8 +703,16 @@ export function createAppData(
   progress: ProgressMap,
   projectSettings = defaultProjectSettings(),
   planHistory: PlanHistoryEntry[] = [],
+  journals: JournalEntry[] = [],
 ): StudyAppData {
-  return { schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, progress, projectSettings, planHistory };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    appVersion: APP_VERSION,
+    progress,
+    projectSettings,
+    planHistory,
+    journals,
+  };
 }
 
 export function summarizeImport(data: StudyAppData, projectCount: number, subjectCount: number) {
@@ -590,6 +721,7 @@ export function summarizeImport(data: StudyAppData, projectCount: number, subjec
     subjects: subjectCount,
     sections: Object.keys(data.progress).length,
     planHistory: data.planHistory.length,
+    journals: data.journals.length,
   };
 }
 
@@ -606,8 +738,16 @@ export class StorageRepository {
     const currentRaw = this.storage.getItem(APP_DATA_KEY);
     if (currentRaw) {
       try {
-        const normalized = normalizeAppData(JSON.parse(currentRaw), fallbackProgress);
-        if (normalized) return normalized;
+        const parsed = JSON.parse(currentRaw);
+        const isV1 = isRecord(parsed) && parsed.schemaVersion === 1;
+        const normalized = normalizeAppData(parsed, fallbackProgress);
+        if (normalized) {
+          if (isV1) {
+            this.createBackup(normalized, "before-migration");
+            this.save(normalized);
+          }
+          return normalized;
+        }
         this.loadIssue = { message: "本地数据版本无法识别，原始数据未被覆盖，可在设置中导出排查", raw: currentRaw };
       } catch {
         this.loadIssue = { message: "本地数据无法解析，原始数据未被覆盖，可在设置中导出排查", raw: currentRaw };

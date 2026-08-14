@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
+import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
 import {
   APP_VERSION,
   StorageRepository,
@@ -13,7 +14,9 @@ import {
   calculateVelocityAndForecast,
   calculateWeeklyTrends,
   createAppData,
+  dateToday,
   defaultProjectSettings,
+  generateJournalId,
   isOverdueTask,
   isTodayPlan,
   isUnreviewedTask,
@@ -23,6 +26,9 @@ import {
   type DisciplineStats,
   type ForecastHealth,
   type HeatmapDay,
+  type JournalContext,
+  type JournalEntry,
+  type JournalPublish,
   type LocalBackup,
   type PlanChangeSource,
   type PlanHistoryEntry,
@@ -42,6 +48,8 @@ type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "today" | "analytics" | "settings";
 type NavigationIcon = "progress" | "today" | "analytics" | "settings";
+type JournalFilter = "all" | "unlinked" | "linked" | "408" | "math" | "published";
+type EditorMode = "edit" | "split" | "preview";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
@@ -113,12 +121,6 @@ function progressStage(sections: Section[], progress: ProgressMap) {
   } as const;
 }
 
-function dateToday(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
 function formatDateShort(value: string): string {
   if (!value) return "";
   const [, month, day] = value.split("-");
@@ -128,6 +130,24 @@ function formatDateShort(value: string): string {
 function formatDateChinese(value: string): string {
   const [, month, day] = value.split("-");
   return `${Number(month)}月${Number(day)}日`;
+}
+
+function formatDateChineseWithWeekday(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  const [, month, day] = dateStr.split("-");
+  return `${Number(month)}月${Number(day)}日 · ${weekdays[date.getDay()]}`;
+}
+
+function formatTimeShort(isoStr: string): string {
+  const date = new Date(isoStr);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function formatPlanRange(plannedDates: string[]): string {
@@ -205,6 +225,20 @@ function projectTaskEntries(area: StudyArea): TaskEntry[] {
       chapterTitle: chapter.title,
       section,
     }))));
+}
+
+function findSectionById(sectionId: string | null): { book: Book; chapter: (typeof books)[number]["chapters"][number]; section: Section } | null {
+  if (!sectionId) return null;
+  for (const book of books) {
+    for (const chapter of book.chapters) {
+      for (const section of chapter.sections) {
+        if (section.id === sectionId) {
+          return { book, chapter, section };
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function formatLocalDateTime(value: string): string {
@@ -421,6 +455,25 @@ export function StudyDashboard() {
   const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
   const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
+  const [journals, setJournals] = useState<JournalEntry[]>([]);
+  const [journalFilter, setJournalFilter] = useState<JournalFilter>("all");
+  const [journalSearchQuery, setJournalSearchQuery] = useState("");
+  const [expandedJournalIds, setExpandedJournalIds] = useState<string[]>([]);
+  const [activeDrawerSectionId, setActiveDrawerSectionId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+  const [editorTitle, setEditorTitle] = useState("");
+  const [editorContent, setEditorContent] = useState("");
+  const [editorContext, setEditorContext] = useState<JournalContext | null>(null);
+  const [editorMode, setEditorMode] = useState<EditorMode>("split");
+  const [showTitleInput, setShowTitleInput] = useState(false);
+  const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
+  const [blogPublishJournal, setBlogPublishJournal] = useState<JournalEntry | null>(null);
+  const [publishTitle, setPublishTitle] = useState("");
+  const [publishSlug, setPublishSlug] = useState("");
+  const [publishContent, setPublishContent] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
   const [backups, setBackups] = useState<LocalBackup[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
@@ -470,6 +523,7 @@ export function StudyDashboard() {
     setProgress(mergeRemoteProgress(remoteProgress, base));
     setProjectSettings(body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings());
     setPlanHistory(body.planHistory ?? local?.planHistory ?? []);
+    setJournals(body.journals ?? local?.journals ?? []);
     setBackups(repository().backups());
   }, [repository]);
 
@@ -511,7 +565,7 @@ export function StudyDashboard() {
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
-    const appData = createAppData(progress, projectSettings, planHistory);
+    const appData = createAppData(progress, projectSettings, planHistory, journals);
     repository().save(appData);
 
     const timer = window.setTimeout(async () => {
@@ -535,7 +589,7 @@ export function StudyDashboard() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [authState, loaded, planHistory, progress, projectSettings, repository]);
+  }, [authState, loaded, planHistory, progress, projectSettings, journals, repository]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -946,7 +1000,7 @@ export function StudyDashboard() {
   }
 
   function currentAppData(): StudyAppData {
-    return createAppData(progress, projectSettings, planHistory);
+    return createAppData(progress, projectSettings, planHistory, journals);
   }
 
   async function replaceCloudData(data: StudyAppData): Promise<boolean> {
@@ -985,7 +1039,7 @@ export function StudyDashboard() {
     link.download = `study-progress-backup-${dateToday()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    setFeedbackMessage("已导出全部学习数据");
+    setFeedbackMessage("已导出全部学习数据（包含学习日志与小节进度）");
   }
 
   function downloadRecoveryData() {
@@ -1025,6 +1079,7 @@ export function StudyDashboard() {
     setProgress(mergeRemoteProgress(pendingImport.progress));
     setProjectSettings(pendingImport.projectSettings);
     setPlanHistory(pendingImport.planHistory);
+    setJournals(pendingImport.journals);
     repository().save(pendingImport);
     setPendingImport(null);
     setFeedbackMessage("数据导入完成，已自动保留导入前备份");
@@ -1043,6 +1098,7 @@ export function StudyDashboard() {
     setProgress(mergeRemoteProgress(restored.progress));
     setProjectSettings(restored.projectSettings);
     setPlanHistory(restored.planHistory);
+    setJournals(restored.journals);
     repository().save(restored);
     setBackups(repository().backups());
     setPendingRestore(null);
@@ -1098,6 +1154,224 @@ export function StudyDashboard() {
       </div>
     );
   }
+
+  const journalsBySection = useMemo(() => {
+    const map: Record<string, JournalEntry[]> = {};
+    journals.forEach((entry) => {
+      if (entry.context?.sectionId) {
+        if (!map[entry.context.sectionId]) map[entry.context.sectionId] = [];
+        map[entry.context.sectionId].push(entry);
+      }
+    });
+    Object.values(map).forEach((list) => {
+      list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    });
+    return map;
+  }, [journals]);
+
+  const filteredJournals = useMemo(() => {
+    return journals.filter((entry) => {
+      if (journalFilter === "unlinked" && entry.context !== null) return false;
+      if (journalFilter === "linked" && entry.context === null) return false;
+      if (journalFilter === "408" && entry.context?.area !== "408") return false;
+      if (journalFilter === "math" && entry.context?.area !== "math") return false;
+      if (journalFilter === "published" && entry.publish?.status !== "published") return false;
+
+      if (journalSearchQuery.trim()) {
+        const q = journalSearchQuery.trim().toLowerCase();
+        const titleMatch = entry.title?.toLowerCase().includes(q) ?? false;
+        const contentMatch = entry.content.toLowerCase().includes(q);
+        const sectionMatch = (entry.context?.sectionTitle?.toLowerCase().includes(q)
+          || entry.context?.bookTitle?.toLowerCase().includes(q)
+          || entry.context?.sectionNumber?.toLowerCase().includes(q)) ?? false;
+        if (!titleMatch && !contentMatch && !sectionMatch) return false;
+      }
+
+      return true;
+    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [journals, journalFilter, journalSearchQuery]);
+
+  const groupedJournals = useMemo(() => {
+    const groups: { dateKey: string; label: string; entries: JournalEntry[] }[] = [];
+    const dateMap = new Map<string, JournalEntry[]>();
+
+    filteredJournals.forEach((entry) => {
+      const dateKey = entry.createdAt.slice(0, 10);
+      if (!dateMap.has(dateKey)) {
+        const list: JournalEntry[] = [];
+        dateMap.set(dateKey, list);
+        groups.push({
+          dateKey,
+          label: formatDateChineseWithWeekday(dateKey),
+          entries: list,
+        });
+      }
+      dateMap.get(dateKey)!.push(entry);
+    });
+
+    return groups;
+  }, [filteredJournals]);
+
+  const activeDrawerSection = findSectionById(activeDrawerSectionId);
+
+  const openCreateJournal = useCallback((context?: JournalContext | null) => {
+    setEditingJournalId(null);
+    setEditorTitle("");
+    setEditorContent("");
+    setEditorContext(context ?? null);
+    setShowTitleInput(false);
+    setEditorMode("split");
+    setIsEditorOpen(true);
+  }, []);
+
+  const openEditJournal = useCallback((journal: JournalEntry) => {
+    setEditingJournalId(journal.id);
+    setEditorTitle(journal.title ?? "");
+    setEditorContent(journal.content);
+    setEditorContext(journal.context);
+    setShowTitleInput(Boolean(journal.title));
+    setEditorMode("split");
+    setIsEditorOpen(true);
+  }, []);
+
+  const handleSaveJournal = useCallback(() => {
+    const trimmedContent = editorContent.trim();
+    if (!trimmedContent) {
+      setFeedbackMessage("日志内容不能为空");
+      return;
+    }
+
+    const trimmedTitle = editorTitle.trim() ? editorTitle.trim() : null;
+    const now = new Date().toISOString();
+
+    if (editingJournalId) {
+      setJournals((prev) => prev.map((entry) => {
+        if (entry.id !== editingJournalId) return entry;
+        return {
+          ...entry,
+          title: trimmedTitle,
+          content: editorContent,
+          context: editorContext,
+          updatedAt: now,
+        };
+      }));
+      setFeedbackMessage("日志已更新");
+    } else {
+      const newId = generateJournalId(journals, dateToday());
+      const newEntry: JournalEntry = {
+        id: newId,
+        createdAt: now,
+        updatedAt: now,
+        title: trimmedTitle,
+        content: editorContent,
+        context: editorContext,
+        publish: {
+          status: "local",
+          publishedAt: null,
+          blogUrl: null,
+          blogPostId: null,
+        },
+      };
+      setJournals((prev) => [newEntry, ...prev]);
+      setFeedbackMessage("日志已保存");
+    }
+
+    setIsEditorOpen(false);
+    setEditingJournalId(null);
+    setEditorTitle("");
+    setEditorContent("");
+    setEditorContext(null);
+  }, [editorContent, editorTitle, editingJournalId, editorContext, journals]);
+
+  const handleDeleteJournal = useCallback((journal: JournalEntry) => {
+    setPendingDeleteJournal(journal);
+  }, []);
+
+  const confirmDeleteJournal = useCallback(() => {
+    if (!pendingDeleteJournal) return;
+    setJournals((prev) => prev.filter((entry) => entry.id !== pendingDeleteJournal.id));
+    setPendingDeleteJournal(null);
+    setFeedbackMessage("日志已删除");
+  }, [pendingDeleteJournal]);
+
+  const toggleExpandJournal = useCallback((id: string) => {
+    setExpandedJournalIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
+  }, []);
+
+  const openBlogPublishModal = useCallback((journal: JournalEntry) => {
+    setBlogPublishJournal(journal);
+    setPublishTitle(journal.title ?? (journal.context?.sectionTitle ? `${journal.context.sectionTitle} 学习记录` : ""));
+    setPublishSlug(journal.publish?.blogPostId || journal.id);
+    setPublishContent(journal.content);
+    setPublishError("");
+    setIsPublishing(false);
+  }, []);
+
+  const handleBlogPublish = useCallback(async () => {
+    if (!blogPublishJournal) return;
+    if (!publishTitle.trim()) {
+      setPublishError("发布到 Blog 时标题必填");
+      return;
+    }
+    if (!publishSlug.trim()) {
+      setPublishError("发布 Slug 必填");
+      return;
+    }
+    if (!publishContent.trim()) {
+      setPublishError("发布正文不能为空");
+      return;
+    }
+
+    setIsPublishing(true);
+    setPublishError("");
+
+    try {
+      const response = await fetch("/api/blog/publish", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: publishTitle.trim(),
+          slug: publishSlug.trim(),
+          content: publishContent,
+          journalId: blogPublishJournal.id,
+        }),
+      });
+
+      const data = await response.json() as {
+        success?: boolean;
+        error?: string;
+        publishedAt?: string;
+        blogUrl?: string;
+        blogPostId?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        setPublishError(data.error || "发布失败，请稍后重试");
+        setIsPublishing(false);
+        return;
+      }
+
+      setJournals((prev) => prev.map((entry) => {
+        if (entry.id !== blogPublishJournal.id) return entry;
+        return {
+          ...entry,
+          publish: {
+            status: "published",
+            publishedAt: data.publishedAt ?? new Date().toISOString(),
+            blogUrl: data.blogUrl ?? null,
+            blogPostId: data.blogPostId ?? publishSlug.trim(),
+          },
+        };
+      }));
+
+      setBlogPublishJournal(null);
+      setFeedbackMessage("文章已成功发布至 Blog！");
+    } catch {
+      setPublishError("无法连接发布服务，请检查网络或后端配置");
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [blogPublishJournal, publishTitle, publishSlug, publishContent]);
 
   const pendingImportSummary = pendingImport
     ? summarizeImport(pendingImport, 2, books.length)
@@ -1437,18 +1711,45 @@ export function StudyDashboard() {
                           const state = progress[section.id];
                           const status = studyPlanStatus(state);
                           const isCurrent = currentSection?.id === section.id;
+                          const sectionJournals = journalsBySection[section.id] ?? [];
                           return (
-                            <div
-                              className={`section-row ${status}${isCurrent ? " is-current" : ""}`}
-                              id={`section-${section.id}`}
-                              aria-current={isCurrent ? "step" : undefined}
-                              key={section.id}
-                            >
-                              <div className="section-name">
-                                <span>{section.number}</span><strong>{section.title}</strong>
-                                {isCurrent && <i title="当前学习" />}
-                                {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
-                              </div>
+                                <div
+                                  className={`section-row ${status}${isCurrent ? " is-current" : ""}`}
+                                  id={`section-${section.id}`}
+                                  aria-current={isCurrent ? "step" : undefined}
+                                  key={section.id}
+                                >
+                                  <div className="section-name">
+                                    <span>{section.number}</span><strong>{section.title}</strong>
+                                    {isCurrent && <i title="当前学习" />}
+                                    {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
+                                    {sectionJournals.length > 0 && (
+                                      <button
+                                        type="button"
+                                        className="section-journal-badge"
+                                        title={`查看此小节的 ${sectionJournals.length} 条学习日志`}
+                                        onClick={() => setActiveDrawerSectionId(section.id)}
+                                      >
+                                        📝 {sectionJournals.length} 条记录
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="section-record-btn"
+                                      title="写一条关于该小节的学习日志"
+                                      onClick={() => openCreateJournal({
+                                        type: "section",
+                                        area: activeArea,
+                                        bookId: selectedBook.id,
+                                        sectionId: section.id,
+                                        bookTitle: selectedBook.shortTitle,
+                                        sectionTitle: section.title,
+                                        sectionNumber: section.number,
+                                      })}
+                                    >
+                                      记录 +
+                                    </button>
+                                  </div>
                               {planEditMode ? (
                                 <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 计划日期`} onChange={(event) => updatePlannedAt(section.id, event.target.value)} />
                               ) : (
@@ -1494,6 +1795,32 @@ export function StudyDashboard() {
           </section>
           </> : activePage === "today" ? (
             <section className="page-view today-page" aria-labelledby="today-title">
+              <div className="today-header-banner">
+                <div className="today-header-intro">
+                  <span className="today-date-badge">{formatDateChineseWithWeekday(dateToday())}</span>
+                  <h2>今日执行与日志</h2>
+                </div>
+                <div className="today-header-actions">
+                  <button
+                    type="button"
+                    className="journal-action-btn journal-action-btn--primary"
+                    onClick={() => openCreateJournal(null)}
+                  >
+                    ✍ 写今日记录
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-action-btn journal-action-btn--ghost"
+                    onClick={() => {
+                      const el = document.getElementById("journal-timeline-section");
+                      el?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    ↓ 学习日志 ({journals.length})
+                  </button>
+                </div>
+              </div>
+
               <div className="summary-strip" aria-label="今日任务概览">
                 <article><span>今日计划</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
                 <article><span>逾期未学</span><strong>{overdueTasks.length}</strong><small>按原计划日期排序</small></article>
@@ -1512,6 +1839,190 @@ export function StudyDashboard() {
                   <header><div><span>03</span><h2 id="unreviewed-title">未复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
                   {renderTaskList(unreviewedTasks, "unreviewed", "没有积压的复习任务。")}
                 </section>}
+              </div>
+
+              <div id="journal-timeline-section" className="journal-stream-container">
+                <header className="journal-stream-header">
+                  <div className="journal-stream-title">
+                    <div className="journal-title-row">
+                      <h2>学习日志</h2>
+                      <span className="journal-count-pill">{filteredJournals.length} / {journals.length} 篇</span>
+                    </div>
+                    <p>连续的时间流记录 · 沉淀对概念的理解与复盘反思</p>
+                  </div>
+                  <div className="journal-stream-actions">
+                    <button
+                      type="button"
+                      className="journal-action-btn journal-action-btn--primary"
+                      onClick={() => openCreateJournal(null)}
+                    >
+                      + 写一条
+                    </button>
+                  </div>
+                </header>
+
+                <div className="journal-controls-bar">
+                  <div className="journal-search-wrap">
+                    <input
+                      type="text"
+                      className="journal-search-input"
+                      placeholder="搜索日志正文、标题或小节..."
+                      value={journalSearchQuery}
+                      onChange={(e) => setJournalSearchQuery(e.target.value)}
+                    />
+                    {journalSearchQuery && (
+                      <button
+                        type="button"
+                        className="journal-search-clear"
+                        onClick={() => setJournalSearchQuery("")}
+                        aria-label="清空搜索"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="journal-filter-pills" role="tablist" aria-label="日志筛选">
+                    {([
+                      ["all", "全部"],
+                      ["unlinked", "无关联"],
+                      ["linked", "有关联"],
+                      ["408", "408"],
+                      ["math", "数学"],
+                      ["published", "已发布"],
+                    ] as [JournalFilter, string][]).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`filter-pill ${journalFilter === key ? "active" : ""}`}
+                        onClick={() => setJournalFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="journal-timeline-content">
+                  {groupedJournals.length === 0 ? (
+                    <div className="journal-empty-card">
+                      <p>
+                        {journalSearchQuery || journalFilter !== "all"
+                          ? "没有找到符合条件的学习日志。"
+                          : "暂无学习日志，随时随地写下您的第一条学习心得吧。"}
+                      </p>
+                      <button
+                        type="button"
+                        className="journal-action-btn journal-action-btn--secondary"
+                        onClick={() => openCreateJournal(null)}
+                      >
+                        ✍ 立即记录第一条
+                      </button>
+                    </div>
+                  ) : (
+                    groupedJournals.map(({ dateKey, label, entries }) => (
+                      <div className="journal-date-group" key={dateKey}>
+                        <div className="journal-date-header">
+                          <span className="journal-date-dot" />
+                          <h3 className="journal-date-text">{label}</h3>
+                          <span className="journal-date-count">{entries.length} 条</span>
+                        </div>
+
+                        <div className="journal-cards-stack">
+                          {entries.map((entry) => {
+                            const isExpanded = expandedJournalIds.includes(entry.id);
+                            const isLong = entry.content.length > 280;
+                            const displayContent = isLong && !isExpanded
+                              ? getMarkdownSummary(entry.content, 240)
+                              : entry.content;
+
+                            return (
+                              <article className="journal-card" key={entry.id}>
+                                <div className="journal-card-meta">
+                                  <div className="journal-card-badges">
+                                    <span className="journal-time-tag">{formatTimeShort(entry.createdAt)}</span>
+                                    {entry.context && (
+                                      <button
+                                        type="button"
+                                        className={`journal-context-badge area-${entry.context.area}`}
+                                        title={`${entry.context.bookTitle ?? ""} ${entry.context.sectionNumber ?? ""} ${entry.context.sectionTitle ?? ""}`}
+                                        onClick={() => {
+                                          if (entry.context?.sectionId) {
+                                            setActiveDrawerSectionId(entry.context.sectionId);
+                                          }
+                                        }}
+                                      >
+                                        📖 {entry.context.bookTitle} · {entry.context.sectionNumber} {entry.context.sectionTitle}
+                                      </button>
+                                    )}
+                                    {entry.publish?.status === "published" && (
+                                      <a
+                                        href={entry.publish.blogUrl || "#"}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="journal-publish-badge"
+                                        title="在 GitHub Blog 查看文章"
+                                      >
+                                        🌐 已发布 ↗
+                                      </a>
+                                    )}
+                                  </div>
+
+                                  <div className="journal-card-actions">
+                                    <button
+                                      type="button"
+                                      className="journal-btn-tool"
+                                      onClick={() => openEditJournal(entry)}
+                                      title="编辑此日志"
+                                    >
+                                      编辑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="journal-btn-tool journal-btn-tool--publish"
+                                      onClick={() => openBlogPublishModal(entry)}
+                                      title="发布到 GitHub Blog"
+                                    >
+                                      {entry.publish?.status === "published" ? "重新发布" : "发布到 Blog"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="journal-btn-tool journal-btn-tool--delete"
+                                      onClick={() => handleDeleteJournal(entry)}
+                                      title="删除此日志"
+                                    >
+                                      删除
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {entry.title && (
+                                  <h4 className="journal-card-title">{entry.title}</h4>
+                                )}
+
+                                <div className="journal-card-content">
+                                  <MarkdownRenderer content={displayContent} />
+                                </div>
+
+                                {isLong && (
+                                  <div className="journal-card-footer">
+                                    <button
+                                      type="button"
+                                      className="journal-expand-toggle"
+                                      onClick={() => toggleExpandJournal(entry.id)}
+                                    >
+                                      {isExpanded ? "收起全文 ↑" : "展开阅读全文 ↓"}
+                                    </button>
+                                  </div>
+                                )}
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </section>
           ) : activePage === "analytics" ? (
@@ -1964,6 +2475,32 @@ export function StudyDashboard() {
                   </div>
                 </section>
 
+                <section className="settings-card settings-card--blog">
+                  <header className="settings-card__header">
+                    <div>
+                      <h2>Blog 发布设置 (V1.9)</h2>
+                      <p>将优质学习日志一键发布至个人公开技术博客。</p>
+                    </div>
+                    <span className="blog-status-badge">就绪</span>
+                  </header>
+                  <div className="blog-settings-content">
+                    <div className="blog-info-item">
+                      <span>个人博客站点</span>
+                      <a href="https://craig9re5.github.io/" target="_blank" rel="noreferrer">
+                        https://craig9re5.github.io/ ↗
+                      </a>
+                    </div>
+                    <div className="blog-info-item">
+                      <span>发布架构</span>
+                      <strong>Cloudflare Worker Serverless 安全网关（保护 GitHub 凭据）</strong>
+                    </div>
+                    <div className="blog-info-item">
+                      <span>已发布文章统计</span>
+                      <strong>{journals.filter((j) => j.publish?.status === "published").length} 篇已同步公开</strong>
+                    </div>
+                  </div>
+                </section>
+
               </div>
             </section>
           )}
@@ -2006,7 +2543,13 @@ export function StudyDashboard() {
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
             <span className="dialog-kicker">导入检查通过</span><h2 id="import-title">用文件数据替换当前数据？</h2>
             <p>导入前会自动保留一份本地备份。云端与本机数据都会更新。</p>
-            <dl className="import-summary"><div><dt>项目</dt><dd>{pendingImportSummary.projects}</dd></div><div><dt>科目</dt><dd>{pendingImportSummary.subjects}</dd></div><div><dt>小节</dt><dd>{pendingImportSummary.sections}</dd></div><div><dt>计划历史</dt><dd>{pendingImportSummary.planHistory}</dd></div></dl>
+            <dl className="import-summary">
+              <div><dt>项目</dt><dd>{pendingImportSummary.projects}</dd></div>
+              <div><dt>科目</dt><dd>{pendingImportSummary.subjects}</dd></div>
+              <div><dt>小节</dt><dd>{pendingImportSummary.sections}</dd></div>
+              <div><dt>计划历史</dt><dd>{pendingImportSummary.planHistory}</dd></div>
+              <div><dt>学习日志</dt><dd>{pendingImportSummary.journals}</dd></div>
+            </dl>
             <div><button type="button" onClick={() => setPendingImport(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmImport()}>确认导入</button></div>
           </div>
         </div>
@@ -2027,6 +2570,390 @@ export function StudyDashboard() {
             <p>该小节已经记录过复习。取消“学完”会同时清除复习记录。</p>
             <div><button type="button" onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
           </div>
+        </div>
+      )}
+
+      {/* Journal Editor Modal */}
+      {isEditorOpen && (
+        <div className="confirm-overlay journal-editor-overlay" role="presentation">
+          <div className="journal-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-editor-title">
+            <header className="journal-editor-header">
+              <div className="journal-editor-title-wrap">
+                <span className="dialog-kicker">{editingJournalId ? "编辑记录" : "新建记录"}</span>
+                <h2 id="journal-editor-title">{editingJournalId ? "编辑学习日志" : "写一条学习日志"}</h2>
+              </div>
+              <div className="journal-editor-view-modes">
+                <div className="desktop-view-modes" role="group" aria-label="视图模式">
+                  <button
+                    type="button"
+                    className={editorMode === "edit" ? "active" : ""}
+                    onClick={() => setEditorMode("edit")}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className={editorMode === "split" ? "active" : ""}
+                    onClick={() => setEditorMode("split")}
+                  >
+                    分栏
+                  </button>
+                  <button
+                    type="button"
+                    className={editorMode === "preview" ? "active" : ""}
+                    onClick={() => setEditorMode("preview")}
+                  >
+                    预览
+                  </button>
+                </div>
+                <div className="mobile-view-modes" role="group" aria-label="移动端视图">
+                  <button
+                    type="button"
+                    className={editorMode !== "preview" ? "active" : ""}
+                    onClick={() => setEditorMode("edit")}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className={editorMode === "preview" ? "active" : ""}
+                    onClick={() => setEditorMode("preview")}
+                  >
+                    预览
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="journal-modal-close"
+                onClick={() => {
+                  setIsEditorOpen(false);
+                  setEditingJournalId(null);
+                }}
+                aria-label="关闭编辑器"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="journal-editor-meta-bar">
+              <div className="journal-context-selector">
+                <span className="meta-label">关联小节:</span>
+                <select
+                  value={editorContext?.sectionId || ""}
+                  onChange={(e) => {
+                    const secId = e.target.value;
+                    if (!secId) {
+                      setEditorContext(null);
+                    } else {
+                      const found = books
+                        .flatMap((b) => b.chapters.flatMap((c) => c.sections.map((s) => ({ book: b, chapter: c, section: s }))))
+                        .find((item) => item.section.id === secId);
+                      if (found) {
+                        setEditorContext({
+                          type: "section",
+                          area: found.book.area,
+                          bookId: found.book.id,
+                          sectionId: found.section.id,
+                          bookTitle: found.book.shortTitle,
+                          sectionTitle: found.section.title,
+                          sectionNumber: found.section.number,
+                        });
+                      }
+                    }
+                  }}
+                  aria-label="选择关联小节"
+                >
+                  <option value="">○ 不关联小节 (纯时间流随笔)</option>
+                  <optgroup label="408 考研科目">
+                    {books.filter((b) => b.area === "408").flatMap((b) =>
+                      b.chapters.flatMap((c) =>
+                        c.sections.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {b.shortTitle} · {s.number} {s.title}
+                          </option>
+                        ))
+                      )
+                    )}
+                  </optgroup>
+                  <optgroup label="数学科目">
+                    {books.filter((b) => b.area === "math").flatMap((b) =>
+                      b.chapters.flatMap((c) =>
+                        c.sections.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {b.shortTitle} · {s.number} {s.title}
+                          </option>
+                        ))
+                      )
+                    )}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="journal-title-field">
+                {showTitleInput || editorTitle ? (
+                  <div className="journal-title-input-wrap">
+                    <input
+                      type="text"
+                      className="journal-title-input"
+                      placeholder="输入日志标题 (可选)..."
+                      value={editorTitle}
+                      onChange={(e) => setEditorTitle(e.target.value)}
+                    />
+                    {!editorTitle && (
+                      <button
+                        type="button"
+                        className="title-remove-btn"
+                        onClick={() => setShowTitleInput(false)}
+                      >
+                        隐藏标题
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="journal-add-title-btn"
+                    onClick={() => setShowTitleInput(true)}
+                  >
+                    + 添加标题 (可选)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={`journal-editor-body mode-${editorMode}`}>
+              {(editorMode === "edit" || editorMode === "split") && (
+                <div className="journal-editor-pane pane-input">
+                  <textarea
+                    className="journal-textarea"
+                    placeholder="写下今天的学习心得、对定理/算法的理解或复盘体会...&#10;&#10;支持 Markdown 语法与 LaTeX 数学公式：&#10;- 行内公式：$O(n \log n)$ 或 $e^{i\pi} + 1 = 0$&#10;- 块级公式：$$\int_0^1 f(x)dx$$&#10;- 代码块：```cpp ... ```&#10;- 任务列表：- [ ] 待复习"
+                    value={editorContent}
+                    onChange={(e) => setEditorContent(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="journal-editor-statusbar">
+                    <span>{editorContent.length} 字</span>
+                    <span className="math-hint">公式：`$行内$` 与 `$$块级$$`</span>
+                  </div>
+                </div>
+              )}
+
+              {(editorMode === "preview" || editorMode === "split") && (
+                <div className="journal-editor-pane pane-preview">
+                  <div className="preview-header">
+                    <span className="preview-label">实时渲染预览</span>
+                  </div>
+                  <div className="preview-content-scroll">
+                    {editorTitle && <h3 className="preview-journal-title">{editorTitle}</h3>}
+                    {editorContent.trim() ? (
+                      <MarkdownRenderer content={editorContent} />
+                    ) : (
+                      <p className="preview-empty-hint">在左侧输入 Markdown 内容即可在此实时预览。</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <footer className="journal-editor-footer">
+              <div className="editor-footer-left">
+                <span className="editor-shortcut-hint">支持 GFM 表格、Task List 与 KaTeX 公式</span>
+              </div>
+              <div className="editor-footer-actions">
+                <button
+                  type="button"
+                  className="journal-btn journal-btn--ghost"
+                  onClick={() => {
+                    setIsEditorOpen(false);
+                    setEditingJournalId(null);
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="journal-btn journal-btn--primary"
+                  onClick={handleSaveJournal}
+                >
+                  {editingJournalId ? "保存修改" : "保存日志"}
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {/* Blog Publish Modal */}
+      {blogPublishJournal && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog confirm-dialog--wide blog-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="blog-publish-title">
+            <span className="dialog-kicker">GitHub Blog 一键发布 (V1.9)</span>
+            <h2 id="blog-publish-title">发布到个人博客</h2>
+            <p className="blog-publish-subtitle">
+              发布稿与原日志独立解耦，发布前的润色或标题调整不会自动改写原学习日志。
+            </p>
+
+            {publishError && (
+              <div className="publish-error-banner" role="alert">
+                <span>⚠ {publishError}</span>
+              </div>
+            )}
+
+            <div className="blog-publish-form">
+              <label className="publish-form-field">
+                <span className="field-label">文章标题 <strong>*</strong></span>
+                <input
+                  type="text"
+                  className="publish-input"
+                  placeholder="请输入面向公开发布的文章标题"
+                  value={publishTitle}
+                  onChange={(e) => setPublishTitle(e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="publish-form-field">
+                <span className="field-label">文章 Slug (URL 路径标识) <strong>*</strong></span>
+                <input
+                  type="text"
+                  className="publish-input font-mono"
+                  placeholder="例如: 20260814001 或 cpu-scheduling-summary"
+                  value={publishSlug}
+                  onChange={(e) => setPublishSlug(e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="publish-form-field">
+                <span className="field-label">文章正文 (Markdown 格式) <strong>*</strong></span>
+                <textarea
+                  className="publish-textarea"
+                  rows={8}
+                  value={publishContent}
+                  onChange={(e) => setPublishContent(e.target.value)}
+                  placeholder="输入发布稿正文..."
+                />
+              </label>
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="journal-btn journal-btn--ghost"
+                onClick={() => setBlogPublishJournal(null)}
+                disabled={isPublishing}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="journal-btn journal-btn--primary"
+                onClick={handleBlogPublish}
+                disabled={isPublishing}
+              >
+                {isPublishing ? "正在发布至 GitHub..." : "确认发布到 Blog"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {pendingDeleteJournal && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-journal-title">
+            <span className="dialog-kicker">删除日志</span>
+            <h2 id="delete-journal-title">确定删除这条学习日志？</h2>
+            <p>
+              删除后该日志将从时间流和小节关联记录中移除。
+              {pendingDeleteJournal.publish?.status === "published" && (
+                <strong className="delete-publish-warning">
+                  <br />注意：此日志已发布到 Blog，删除本地日志不会自动删除 GitHub 上的已发布文章。
+                </strong>
+              )}
+            </p>
+            <div className="confirm-actions">
+              <button type="button" onClick={() => setPendingDeleteJournal(null)}>取消</button>
+              <button className="danger" type="button" onClick={confirmDeleteJournal}>确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Section Journal Drawer */}
+      {activeDrawerSection && (
+        <div className="drawer-overlay" role="presentation" onClick={() => setActiveDrawerSectionId(null)}>
+          <aside
+            className="section-journal-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="drawer-section-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="drawer-header">
+              <div className="drawer-title-wrap">
+                <span className="drawer-kicker">{activeDrawerSection.book.shortTitle} · 第 {activeDrawerSection.chapter.number} 章</span>
+                <h3 id="drawer-section-title">{activeDrawerSection.section.number} {activeDrawerSection.section.title}</h3>
+              </div>
+              <button
+                type="button"
+                className="drawer-close-btn"
+                onClick={() => setActiveDrawerSectionId(null)}
+                aria-label="关闭抽屉"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="drawer-action-row">
+              <button
+                type="button"
+                className="journal-action-btn journal-action-btn--primary drawer-write-btn"
+                onClick={() => {
+                  openCreateJournal({
+                    type: "section",
+                    area: activeDrawerSection.book.area,
+                    bookId: activeDrawerSection.book.id,
+                    sectionId: activeDrawerSection.section.id,
+                    bookTitle: activeDrawerSection.book.shortTitle,
+                    sectionTitle: activeDrawerSection.section.title,
+                    sectionNumber: activeDrawerSection.section.number,
+                  });
+                }}
+              >
+                + 为本小节写记录
+              </button>
+            </div>
+
+            <div className="drawer-body">
+              {journalsBySection[activeDrawerSection.section.id]?.length ? (
+                <div className="drawer-journals-list">
+                  {journalsBySection[activeDrawerSection.section.id].map((entry) => (
+                    <article className="drawer-journal-card" key={entry.id}>
+                      <div className="drawer-card-meta">
+                        <span className="drawer-date-tag">{formatDateChinese(entry.createdAt.slice(0, 10))} {formatTimeShort(entry.createdAt)}</span>
+                        <div className="drawer-card-tools">
+                          <button type="button" onClick={() => openEditJournal(entry)}>编辑</button>
+                          <button type="button" onClick={() => openBlogPublishModal(entry)}>发布</button>
+                          <button type="button" className="text-danger" onClick={() => handleDeleteJournal(entry)}>删除</button>
+                        </div>
+                      </div>
+                      {entry.title && <h4 className="drawer-card-title">{entry.title}</h4>}
+                      <div className="drawer-card-content">
+                        <MarkdownRenderer content={entry.content} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="drawer-empty-state">
+                  <p>本小节暂无关联学习日志。</p>
+                  <p className="drawer-empty-sub">在学习本节时记录下的思路、错题原因或关键结论将归档于此。</p>
+                </div>
+              )}
+            </div>
+          </aside>
         </div>
       )}
     </div>
