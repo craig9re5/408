@@ -446,6 +446,7 @@ export function StudyDashboard() {
   const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
   const [analyticsScope, setAnalyticsScope] = useState<"all" | StudyArea>("all");
   const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
+  const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -757,6 +758,14 @@ export function StudyDashboard() {
   const maxWeeklyAction = useMemo(() => {
     const max = Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
     return Math.max(max, 6);
+  }, [weeklyTrends]);
+  const currentWeekTrend = useMemo(() => weeklyTrends[weeklyTrends.length - 1], [weeklyTrends]);
+  const weeklyAverage = useMemo(() => {
+    const sum = weeklyTrends.reduce((acc, w) => acc + w.totalActions, 0);
+    return (sum / (weeklyTrends.length || 1)).toFixed(1);
+  }, [weeklyTrends]);
+  const peakWeekActions = useMemo(() => {
+    return Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
   }, [weeklyTrends]);
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
@@ -1519,7 +1528,7 @@ export function StudyDashboard() {
                     className={analyticsScope === "all" ? "active" : ""}
                     onClick={() => setAnalyticsScope("all")}
                   >
-                    全部大盘 (408 + 数学)
+                    总览
                   </button>
                   <button
                     type="button"
@@ -1528,7 +1537,7 @@ export function StudyDashboard() {
                     className={analyticsScope === "408" ? "active" : ""}
                     onClick={() => setAnalyticsScope("408")}
                   >
-                    408 统考
+                    408
                   </button>
                   <button
                     type="button"
@@ -1537,7 +1546,7 @@ export function StudyDashboard() {
                     className={analyticsScope === "math" ? "active" : ""}
                     onClick={() => setAnalyticsScope("math")}
                   >
-                    考研数学
+                    数学
                   </button>
                 </div>
 
@@ -1551,7 +1560,6 @@ export function StudyDashboard() {
               <div className="analytics-section-title">
                 <div className="section-dot" />
                 <h2>备考宏观罗盘与工期预测</h2>
-                <span className="section-sub">基于真实学力速率推算备考裕量与冲刺窗口</span>
               </div>
 
               <div className="analytics-overview-grid">
@@ -1684,7 +1692,6 @@ export function StudyDashboard() {
               <div className="analytics-section-title">
                 <div className="section-dot" />
                 <h2>学习动量与沉淀热力</h2>
-                <span className="section-sub">记录 91 天打卡轨迹与每周产出动量演进</span>
               </div>
 
               <div className="analytics-activity-grid">
@@ -1760,25 +1767,70 @@ export function StudyDashboard() {
                     </div>
                   </div>
 
+                  <div className="trend-summary-strip">
+                    <div className="trend-summary-item">
+                      <small>本周已学</small>
+                      <strong>{currentWeekTrend?.totalActions ?? 0} <small>节</small></strong>
+                    </div>
+                    <div className="trend-summary-item">
+                      <small>8周周均</small>
+                      <strong>{weeklyAverage} <small>节/周</small></strong>
+                    </div>
+                    <div className="trend-summary-item">
+                      <small>最高周产出</small>
+                      <strong>{peakWeekActions} <small>节</small></strong>
+                    </div>
+                  </div>
+
                   <div className="trend-chart-wrap">
+                    <div className="trend-grid-lines" aria-hidden="true">
+                      <div className="trend-grid-line"><span className="trend-grid-val">{maxWeeklyAction}</span></div>
+                      <div className="trend-grid-line"><span className="trend-grid-val">{Math.round(maxWeeklyAction / 2)}</span></div>
+                      <div className="trend-grid-line"><span className="trend-grid-val">0</span></div>
+                    </div>
                     <div className="trend-bars-container">
                       {weeklyTrends.map((week) => {
                         const learnedHeight = Math.round((week.learnedCount / maxWeeklyAction) * 100);
                         const reviewedHeight = Math.round((week.reviewedCount / maxWeeklyAction) * 100);
+                        const isHovered = hoveredTrendWeek?.startDate === week.startDate;
                         return (
-                          <div className={`trend-col ${week.isCurrentWeek ? "current-week" : ""}`} key={week.startDate}>
+                          <div
+                            className={`trend-col ${week.isCurrentWeek ? "current-week" : ""} ${isHovered ? "is-hovered" : ""}`}
+                            key={week.startDate}
+                            onMouseEnter={() => setHoveredTrendWeek(week)}
+                            onMouseLeave={() => setHoveredTrendWeek((curr) => curr?.startDate === week.startDate ? null : curr)}
+                          >
                             <div className="trend-col-track" title={`${week.weekLabel}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节`}>
+                              <span className={`bar-total-num ${week.totalActions > 0 ? "visible" : ""}`}>
+                                {week.totalActions > 0 ? week.totalActions : ""}
+                              </span>
                               <div className="trend-bar-stack">
                                 <div className="bar-segment bar-reviewed" style={{ height: `${reviewedHeight}%` }} />
                                 <div className="bar-segment bar-learned" style={{ height: `${learnedHeight}%` }} />
                               </div>
-                              <span className="bar-total-num">{week.totalActions > 0 ? week.totalActions : ""}</span>
                             </div>
-                            <span className="trend-col-label">{week.weekLabel}</span>
+                            <span className="trend-col-label">{week.isCurrentWeek ? "本周" : week.weekLabel}</span>
                           </div>
                         );
                       })}
                     </div>
+                  </div>
+
+                  <div className="trend-hover-info">
+                    {hoveredTrendWeek ? (
+                      <div className="hover-detail">
+                        <strong>{hoveredTrendWeek.weekLabel} {hoveredTrendWeek.isCurrentWeek ? "(本周)" : ""}</strong>
+                        <span>
+                          {hoveredTrendWeek.totalActions > 0
+                            ? `新学 ${hoveredTrendWeek.learnedCount} 节 · 复习 ${hoveredTrendWeek.reviewedCount} 节 · 合计 ${hoveredTrendWeek.totalActions} 项动作`
+                            : "本周暂无打卡记录"}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="hover-detail placeholder">
+                        <span>鼠标悬停柱状图查看对应周打卡构成</span>
+                      </div>
+                    )}
                   </div>
                 </article>
               </div>

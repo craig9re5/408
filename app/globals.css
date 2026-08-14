@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&display=swap');
+
 :root {
   --ink: #172129;
   --ink-soft: #536067;
@@ -14,7 +16,7 @@
   --green: #7cac85;
   --meta: #68716e;
   --meta-strong: #4f5a56;
-  --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, serif;
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, serif;
   --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --shadow: 0 18px 52px rgba(35, 42, 44, 0.07);
 }
@@ -1083,16 +1085,55 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   font-size: 11px;
 }
 
-/* Trend Chart */
+/* Trend Chart & Summary */
+.trend-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--canvas);
+  border: 1px solid rgba(210, 207, 198, 0.5);
+  margin-bottom: 14px;
+}
+
+.trend-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trend-summary-item small {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.trend-summary-item strong {
+  font: 700 16px/1.2 var(--serif);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-summary-item strong small {
+  font-size: 11px;
+  font-family: var(--sans);
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin-left: 2px;
+}
+
 .trend-legend .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .trend-legend .legend-item i {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 2px;
 }
 
@@ -1100,16 +1141,48 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .trend-legend .legend-item.reviewed i { background: var(--blue); }
 
 .trend-chart-wrap {
-  margin-top: 10px;
+  position: relative;
+  margin-top: 6px;
+  padding-left: 24px;
+}
+
+.trend-grid-lines {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 24px;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.trend-grid-line {
+  position: relative;
+  width: 100%;
+  border-bottom: 1px dashed rgba(210, 207, 198, 0.6);
+}
+
+.trend-grid-val {
+  position: absolute;
+  left: 0;
+  top: -7px;
+  font-size: 9.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, monospace;
 }
 
 .trend-bars-container {
   display: flex;
   gap: 8px;
-  height: 126px;
+  height: 140px;
   align-items: flex-end;
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
+  position: relative;
+  z-index: 1;
 }
 
 .trend-col {
@@ -1120,12 +1193,20 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   height: 100%;
   justify-content: flex-end;
   gap: 6px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  padding: 0 2px;
+  transition: background 0.16s ease;
+}
+
+.trend-col:hover, .trend-col.is-hovered {
+  background: rgba(116, 164, 181, 0.08);
 }
 
 .trend-col-track {
   width: 100%;
-  max-width: 24px;
-  height: 100px;
+  max-width: 32px;
+  height: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1135,12 +1216,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .trend-bar-stack {
   width: 100%;
-  border-radius: 4px;
+  border-radius: 6px 6px 0 0;
   overflow: hidden;
   display: flex;
   flex-direction: column-reverse;
-  background: var(--canvas);
+  background: rgba(220, 217, 208, 0.35);
   min-height: 4px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.trend-col:hover .trend-bar-stack, .trend-col.is-hovered .trend-bar-stack {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(35, 42, 44, 0.12);
 }
 
 .bar-segment {
@@ -1157,23 +1244,40 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .bar-total-num {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--ink-soft);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.trend-col:hover .bar-total-num, .trend-col.is-hovered .bar-total-num {
+  color: var(--ink);
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .trend-col-label {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
   white-space: nowrap;
-  transform: scale(0.95);
+  font-weight: 500;
 }
 
 .trend-col.current-week .trend-col-label {
   font-weight: 700;
   color: var(--coral);
+}
+
+.trend-hover-info {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--canvas);
+  min-height: 38px;
+  display: flex;
+  align-items: center;
 }
 
 /* Discipline Grid */
