@@ -33,11 +33,12 @@ type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "uns
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "today" | "analytics" | "settings";
+type NavigationIcon = "progress" | "today" | "analytics" | "settings";
 
-const pageNavigation: { page: AppPage; index: string; label: string; detail: string }[] = [
-  { page: "progress", index: "01", label: "学习进度", detail: "科目与目录" },
-  { page: "today", index: "02", label: "今日", detail: "计划与积压" },
-  { page: "analytics", index: "03", label: "数据分析", detail: "趋势与复盘" },
+const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
+  { page: "progress", icon: "progress", label: "学习进度" },
+  { page: "today", icon: "today", label: "今日" },
+  { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
 const pageTitles: Record<AppPage, string> = {
@@ -1116,7 +1117,6 @@ export function StudyDashboard() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">4</span>
           <span className="brand-copy"><strong>408 Atlas</strong><small>STUDY CONTROL</small></span>
         </div>
 
@@ -1139,7 +1139,7 @@ export function StudyDashboard() {
 
         <nav className="page-navigation" aria-label="页面导航">
           <span className="navigation-kicker">工作台</span>
-          {pageNavigation.map(({ page, index, label, detail }) => (
+          {pageNavigation.map(({ page, icon, label }) => (
             <button
               className={activePage === page ? "active" : ""}
               type="button"
@@ -1147,16 +1147,16 @@ export function StudyDashboard() {
               aria-current={activePage === page ? "page" : undefined}
               onClick={() => setActivePage(page)}
             >
-              <span className="navigation-index" aria-hidden="true">{index}</span>
-              <span className="navigation-copy"><strong>{label}</strong><small>{detail}</small></span>
+              <span className={`navigation-symbol navigation-symbol--${icon}`} aria-hidden="true" />
+              <span className="navigation-copy"><strong>{label}</strong></span>
             </button>
           ))}
         </nav>
 
         <div className="sidebar-footer">
           <button className={`settings-navigation${activePage === "settings" ? " active" : ""}`} type="button" onClick={() => setActivePage("settings")}>
-            <span className="navigation-index" aria-hidden="true">04</span>
-            <span className="navigation-copy"><strong>设置</strong><small>偏好与备份</small></span>
+            <span className="navigation-symbol navigation-symbol--settings" aria-hidden="true" />
+            <span className="navigation-copy"><strong>设置</strong></span>
           </button>
           <p className="storage-note"><i className={syncStatus === "saved" ? "synced" : ""} />{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</p>
         </div>

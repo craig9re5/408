@@ -121,8 +121,9 @@ test("本地备份按上限自动清理", () => {
 });
 
 test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () => {
-  const [dashboard, worker, migration] = await Promise.all([
+  const [dashboard, styles, worker, migration] = await Promise.all([
     readFile(new URL("../app/study-dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../worker/api.ts", import.meta.url), "utf8"),
     readFile(new URL("../migrations/0004_create_app_state.sql", import.meta.url), "utf8"),
   ]);
@@ -133,6 +134,10 @@ test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () =
   assert.match(dashboard, /activePage === "progress" && <div className="study-switchers"/);
   assert.match(dashboard, /className="area-switcher"/);
   assert.match(dashboard, /className="book-switcher"/);
+  for (const icon of ["progress", "today", "analytics"]) assert.match(dashboard, new RegExp(`icon: "${icon}"`));
+  for (const icon of ["progress", "today", "analytics", "settings"]) assert.match(styles, new RegExp(`\\.navigation-symbol--${icon}`));
+  assert.doesNotMatch(dashboard, /brand-mark|科目与目录|计划与积压|趋势与复盘|偏好与备份/);
+  assert.match(styles, /\.study-switchers\s*\{[^}]*width:\s*420px;[^}]*flex:\s*0 0 420px;/);
   assert.match(dashboard, /allFirstRoundComplete && <section className="task-panel task-panel--review"/);
   assert.match(dashboard, /\["408", "math"\][\s\S]*settings-project-row/);
   assert.doesNotMatch(dashboard, /<article><span>待复习<\/span>/);
