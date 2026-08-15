@@ -506,6 +506,7 @@ export function StudyDashboard() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const repositoryRef = useRef<StorageRepository | null>(null);
   const deletedJournalIdsRef = useRef<string[]>([]);
+  const lastSavedPayloadRef = useRef<string>("");
 
   const repository = useCallback((): StorageRepository => {
     if (!repositoryRef.current) repositoryRef.current = new StorageRepository(window.localStorage);
@@ -522,14 +523,26 @@ export function StudyDashboard() {
     }
     const remoteProgress = body.progress ?? {};
     const base = Object.keys(remoteProgress).length === 0 && local ? local.progress : fallback;
-    setProgress(mergeRemoteProgress(remoteProgress, base));
-    setProjectSettings(body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings());
-    setPlanHistory(body.planHistory ?? local?.planHistory ?? []);
+    const mergedProgress = mergeRemoteProgress(remoteProgress, base);
+    const mergedSettings = body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings();
+    const mergedHistory = body.planHistory ?? local?.planHistory ?? [];
+    let mergedJournalsList: JournalEntry[] = [];
+
+    setProgress(mergedProgress);
+    setProjectSettings(mergedSettings);
+    setPlanHistory(mergedHistory);
     setJournals((currentLocal) => {
       const baseLocal = (includeLocal && currentLocal.length === 0 && local?.journals) ? local.journals : currentLocal;
-      return mergeJournals(baseLocal, body.journals ?? []);
+      mergedJournalsList = mergeJournals(baseLocal, body.journals ?? []);
+      return mergedJournalsList;
     });
     setBackups(repository().backups());
+
+    // Record the current state payload so auto-save doesn't fire for unchanged data
+    lastSavedPayloadRef.current = JSON.stringify({
+      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList),
+      deletedJournalIds: [],
+    });
   }, [repository]);
 
   const loadRemoteData = useCallback(async (includeLocal: boolean) => {
@@ -573,16 +586,23 @@ export function StudyDashboard() {
     const appData = createAppData(progress, projectSettings, planHistory, journals);
     repository().save(appData);
 
+    const payloadString = JSON.stringify({
+      ...appData,
+      deletedJournalIds: deletedJournalIdsRef.current,
+    });
+
+    // If nothing changed from last saved payload, do not trigger a network PUT
+    if (payloadString === lastSavedPayloadRef.current) {
+      return;
+    }
+
     const timer = window.setTimeout(async () => {
       setSyncStatus("saving");
       try {
         const response = await fetch("/api/app-data", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            ...appData,
-            deletedJournalIds: deletedJournalIdsRef.current,
-          }),
+          body: payloadString,
         });
         if (response.status === 401) {
           setAuthState("locked");
@@ -590,10 +610,21 @@ export function StudyDashboard() {
           return;
         }
         if (!response.ok) throw new Error("progress-save-failed");
+        lastSavedPayloadRef.current = payloadString;
+        deletedJournalIdsRef.current = [];
+
         const resData = await response.json().catch(() => null) as { saved?: boolean; journals?: JournalEntry[] } | null;
         if (resData?.journals) {
-          deletedJournalIdsRef.current = [];
-          setJournals(resData.journals);
+          const currentJournals = appData.journals;
+          const isDifferent = resData.journals.length !== currentJournals.length ||
+            resData.journals.some((rj, i) => rj.id !== currentJournals[i]?.id || rj.updatedAt !== currentJournals[i]?.updatedAt);
+          if (isDifferent) {
+            setJournals(resData.journals);
+            lastSavedPayloadRef.current = JSON.stringify({
+              ...createAppData(progress, projectSettings, planHistory, resData.journals),
+              deletedJournalIds: [],
+            });
+          }
         }
         setSyncStatus("saved");
       } catch {
@@ -1025,6 +1056,8 @@ export function StudyDashboard() {
         body: JSON.stringify({ ...data, replace: true }),
       });
       if (!response.ok) throw new Error("app-data-replace-failed");
+      lastSavedPayloadRef.current = JSON.stringify({ ...data, deletedJournalIds: [] });
+      deletedJournalIdsRef.current = [];
       setSyncStatus("saved");
       return true;
     } catch {
