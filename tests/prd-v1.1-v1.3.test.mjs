@@ -15,6 +15,7 @@ const progress = (overrides = {}) => ({
   reviewed: false,
   reviewedAt: "",
   plannedAt: "",
+  reviewedPlannedAt: "",
   isCurrent: false,
   ...overrides,
 });

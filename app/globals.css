@@ -402,11 +402,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .chapter-plan-editor label { display: flex; align-items: center; gap: 5px; margin-left: auto; white-space: nowrap; }
 .chapter-plan-editor button { padding: 6px 11px; border: 1px solid #ccd4cf; border-radius: 6px; color: #43504c; background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .16s ease; }
 .chapter-plan-editor button:hover { border-color: #a4aea7; background: #fdfdfc; transform: translateY(-1px); }
+.chapter-plan-phase-toggle { display: flex; gap: 3px; background: rgba(0, 0, 0, 0.05); padding: 2px; border-radius: 6px; }
+.chapter-plan-phase-toggle button { padding: 3px 8px; border: none; background: transparent; font-size: 10px; font-weight: 500; color: #64748b; border-radius: 4px; cursor: pointer; transition: all 0.15s ease; }
+.chapter-plan-phase-toggle button.active { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .section-table { margin: 0 20px 14px 69px; border-top: 1px solid var(--line-soft); animation: reveal 0.2s ease-out; }
 .section-table.editing .check-with-date { opacity: .55; }
-.section-head, .section-row { display: grid; grid-template-columns: minmax(260px, 1fr) repeat(3, 160px); align-items: center; column-gap: 22px; }
+.section-head, .section-row { display: grid; grid-template-columns: minmax(200px, 1fr) 110px 120px 110px 120px; align-items: center; column-gap: 16px; }
 .section-head { min-height: 32px; color: #54605c; font-size: 10.5px; font-weight: 600; }
 .section-head span:not(:first-child) { padding-left: 1px; }
+.section-plan { display: flex; align-items: center; min-width: 0; }
+.section-plan .inline-plan-input { width: 104px; }
 .section-row { position: relative; min-height: 46px; scroll-margin-top: 90px; border-top: 1px solid var(--line-soft); }
 .section-row.overdue::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--coral); content: ""; }
 .section-row.due_today::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--blue); content: ""; }
@@ -568,15 +573,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .chapter-button { min-height: 66px; grid-template-columns: 32px minmax(0, 1fr) 46px 13px; gap: 9px; padding: 10px 13px 10px 18px; }
   .section-table { margin: 0 14px 14px 18px; overflow: visible; }
   .section-head { display: none; }
-  .section-row { min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(72px, auto); grid-template-areas: "name plan" "learned reviewed"; gap: 11px 10px; padding: 14px 0; }
+  .section-row { min-width: 0; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-areas: "name name" "base-plan review-plan" "learned reviewed"; gap: 8px 10px; padding: 14px 0; }
   .section-name { grid-area: name; align-items: flex-start; gap: 8px; }
   .section-name > span { flex-basis: 24px; padding-top: 1px; }
   .section-name strong { overflow: visible; font-size: 13px; line-height: 1.5; text-overflow: clip; white-space: normal; }
   .section-name i { margin-top: 5px; }
   .section-name button { display: none; }
-  .section-row > .date-text, .section-row > .date-editor, .section-row > .inline-plan-input { grid-area: plan; align-self: start; justify-self: end; }
-  .section-row > .date-text::before { color: #a2a49f; content: "计划 "; font-size: 10px; }
-  .section-row > .inline-plan-input { width: 104px; }
+  .section-plan--base { grid-area: base-plan; }
+  .section-plan--review { grid-area: review-plan; }
+  .section-plan .date-text, .section-plan .date-editor, .section-plan .inline-plan-input { width: 100%; text-align: center; }
+  .section-plan--base .date-text::before { color: #a2a49f; content: "新学计划 "; font-size: 10px; }
+  .section-plan--review .date-text::before { color: #a2a49f; content: "复习计划 "; font-size: 10px; }
   .check-with-date { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px; }
   .check-with-date--learned { grid-area: learned; }
   .check-with-date--reviewed { grid-area: reviewed; }
@@ -587,7 +594,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .check-with-date > .date-text, .check-with-date > .date-editor { width: 100%; text-align: center; }
   .check-with-date > .date-text { font-size: 10px; }
   .section-table.editing .check-with-date { display: none; }
-  .section-table.editing .section-row { grid-template-areas: "name plan"; }
+  .section-table.editing .section-row { grid-template-areas: "name name" "base-plan review-plan"; }
   .shift-anchor { position: relative; top: auto; right: auto; grid-column: 1 / -1; justify-self: end; transform: none; }
   .shift-anchor > button { min-height: 32px; opacity: 1; }
   .shift-popover { top: 36px; max-width: calc(100vw - 48px); flex-wrap: wrap; }

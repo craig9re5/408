@@ -74,11 +74,13 @@ const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
 
 type PlanUndo = {
   message: string;
+  field: "plannedAt" | "reviewedPlannedAt";
   values: Record<string, string>;
 };
 
 type PlanPreview = {
   message: string;
+  field: "plannedAt" | "reviewedPlannedAt";
   source: Exclude<PlanChangeSource, "manual" | "undo">;
   values: Record<string, string>;
 };
@@ -95,6 +97,7 @@ function defaultProgress(): ProgressMap {
           reviewed: false,
           reviewedAt: "",
           plannedAt: section.plannedAt ?? "",
+          reviewedPlannedAt: "",
           isCurrent: false,
         };
       });
@@ -151,15 +154,15 @@ function formatTimeShort(isoStr: string): string {
   }).format(date);
 }
 
-function formatPlanRange(plannedDates: string[]): string {
+function formatPlanRange(plannedDates: string[], label = "计划"): string {
   const dates = plannedDates
     .filter((date): date is string => Boolean(date))
     .sort();
-  if (!dates.length) return "计划未设置";
+  if (!dates.length) return `${label}未设置`;
   const first = dates[0];
   const last = dates[dates.length - 1];
-  if (first === last) return `计划：${formatDateChinese(first)}`;
-  return `计划：${formatDateChinese(first)}—${formatDateChinese(last)}`;
+  if (first === last) return `${label}：${formatDateChinese(first)}`;
+  return `${label}：${formatDateChinese(first)}—${formatDateChinese(last)}`;
 }
 
 function chapterCompletionDate(
@@ -179,13 +182,31 @@ function chapterCompletionDate(
   return dates.sort().at(-1) ?? "";
 }
 
-function studyPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
+function basePlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
   if (state?.learned) return "completed";
   if (!state?.plannedAt) return "unscheduled";
   const today = dateToday();
   if (state.plannedAt < today) return "overdue";
   if (state.plannedAt === today) return "due_today";
   return "upcoming";
+}
+
+function reviewPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
+  if (state?.reviewed) return "completed";
+  if (!state?.reviewedPlannedAt) return "unscheduled";
+  const today = dateToday();
+  if (state.reviewedPlannedAt < today) return "overdue";
+  if (state.reviewedPlannedAt === today) return "due_today";
+  return "upcoming";
+}
+
+function studyPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
+  if (state?.learned) {
+    if (state.reviewed) return "completed";
+    if (state.reviewedPlannedAt) return reviewPlanStatus(state);
+    return "completed";
+  }
+  return basePlanStatus(state);
 }
 
 function planTone(status: StudyPlanStatus): "late" | "soon" | "normal" | "empty" {
@@ -486,9 +507,11 @@ export function StudyDashboard() {
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
   const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(false);
   const [planEditMode, setPlanEditMode] = useState(false);
+  const [chapterPlanTarget, setChapterPlanTarget] = useState<"base" | "review">("base");
   const [chapterRanges, setChapterRanges] = useState<Record<string, { start: string; end: string; includeCompleted: boolean }>>({});
   const [shiftSectionId, setShiftSectionId] = useState<string | null>(null);
   const [shiftScope, setShiftScope] = useState<ShiftScope>("chapter");
+  const [shiftPlanTarget, setShiftPlanTarget] = useState<"base" | "review">("base");
   const [shiftDays, setShiftDays] = useState(1);
   const [planUndo, setPlanUndo] = useState<PlanUndo | null>(null);
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
@@ -755,13 +778,13 @@ export function StudyDashboard() {
   const selectedProgressStage = progressStage(selectedSections, progress);
   const isReviewPhase = selectedProgressStage.phase === "reviewed";
   const activeProgressPercent = selectedProgressStage.percentage;
-  const activeProgressLabel = isReviewPhase ? "复习" : "第一轮";
+  const activeProgressLabel = isReviewPhase ? "强化阶段" : "基础阶段";
   const manualCurrentSection = selectedSections.find((section) => progress[section.id]?.isCurrent && !progress[section.id]?.learned);
   const currentSection = isReviewPhase
     ? selectedSections.find((section) => !progress[section.id]?.reviewed)
     : manualCurrentSection ?? selectedSections.find((section) => !progress[section.id]?.learned);
-  const currentSectionLabel = isReviewPhase ? "当前复习" : "当前学习";
-  const phaseCompleteLabel = isReviewPhase ? "复习已完成" : "第一轮已完成";
+  const currentSectionLabel = isReviewPhase ? "当前复习" : "当前新学";
+  const phaseCompleteLabel = isReviewPhase ? "强化阶段已完成" : "基础阶段已完成";
   const currentChapterId = currentSection
     ? selectedBook.chapters.find((chapter) => chapter.sections.some((section) => section.id === currentSection.id))?.id
     : undefined;
@@ -808,15 +831,21 @@ export function StudyDashboard() {
     ...projectTaskEntries("math"),
   ], []);
   const today = dateToday();
-  const todayPlan = todayTasks.filter(({ section }) => isTodayPlan(progress[section.id], today));
-  const overdueTasks = todayTasks
-    .filter(({ section }) => isOverdueTask(progress[section.id], today))
+  const todayBasePlan = todayTasks.filter(({ section }) => isTodayBasePlan(progress[section.id], today));
+  const todayReviewPlan = todayTasks.filter(({ section }) => isTodayReviewPlan(progress[section.id], today));
+  const todayPlan = [...todayBasePlan, ...todayReviewPlan];
+  const overdueBaseTasks = todayTasks
+    .filter(({ section }) => isOverdueBaseTask(progress[section.id], today))
     .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
+  const overdueReviewTasks = todayTasks
+    .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
+    .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
+  const overdueTasks = [...overdueBaseTasks, ...overdueReviewTasks];
   const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
   const unreviewedTasks = todayTasks
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
-  const todayCompleted = todayPlan.filter(({ section }) => progress[section.id]?.learned).length;
+  const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
 
   const nearestExamDate = [projectSettings["408"].examDate, projectSettings.math.examDate].sort()[0];
   const examDate = activePage === "progress" ? projectSettings[activeArea].examDate : nearestExamDate;
@@ -887,6 +916,20 @@ export function StudyDashboard() {
     }].slice(-1000));
   }
 
+  function updateReviewedPlannedAt(sectionId: string, reviewedPlannedAt: string) {
+    const previous = progress[sectionId]?.reviewedPlannedAt ?? "";
+    if (previous === reviewedPlannedAt) return;
+    updateProgress(sectionId, { reviewedPlannedAt });
+    setPlanHistory((current) => [...current, {
+      id: crypto.randomUUID(),
+      sectionId,
+      from: previous,
+      to: reviewedPlannedAt,
+      changedAt: new Date().toISOString(),
+      source: "manual" as const,
+    }].slice(-1000));
+  }
+
   function setCurrentSection(sectionId: string) {
     setProgress((current) => {
       const next = { ...current };
@@ -895,7 +938,7 @@ export function StudyDashboard() {
       });
       return next;
     });
-    setFeedbackMessage("已设为当前学习");
+    setFeedbackMessage("已设为当前新学");
   }
 
   function selectBook(bookId: string) {
@@ -928,7 +971,7 @@ export function StudyDashboard() {
 
   function toggleReviewed(sectionId: string, checked: boolean) {
     if (checked && (!progress[sectionId]?.learned || !progress[sectionId]?.learnedAt)) {
-      setFeedbackMessage("请先记录学完日期，再标记复习");
+      setFeedbackMessage("请先完成新学并记录日期，再标记复习");
       return;
     }
     updateProgress(sectionId, {
@@ -937,18 +980,18 @@ export function StudyDashboard() {
     });
   }
 
-  function applyPlanChanges(values: Record<string, string>, message: string, source: PlanChangeSource) {
+  function applyPlanChanges(values: Record<string, string>, message: string, source: PlanChangeSource, field: "plannedAt" | "reviewedPlannedAt" = "plannedAt") {
     const ids = Object.keys(values);
     if (!ids.length) {
       setFeedbackMessage("没有符合条件的计划日期可调整");
       return;
     }
-    const previous = Object.fromEntries(ids.map((sectionId) => [sectionId, progress[sectionId]?.plannedAt ?? ""]));
+    const previous = Object.fromEntries(ids.map((sectionId) => [sectionId, progress[sectionId]?.[field] ?? ""]));
     const changedAt = new Date().toISOString();
     setProgress((current) => {
       const next = { ...current };
       ids.forEach((sectionId) => {
-        next[sectionId] = { ...next[sectionId], plannedAt: values[sectionId] };
+        next[sectionId] = { ...next[sectionId], [field]: values[sectionId] };
       });
       return next;
     });
@@ -960,36 +1003,37 @@ export function StudyDashboard() {
       changedAt,
       source,
     }))].slice(-1000));
-    setPlanUndo({ message, values: previous });
+    setPlanUndo({ message, values: previous, field });
     setFeedbackMessage("");
   }
 
-  function previewPlanChanges(values: Record<string, string>, message: string, source: PlanPreview["source"]) {
-    const changedValues = Object.fromEntries(Object.entries(values).filter(([sectionId, plannedAt]) => (
-      (progress[sectionId]?.plannedAt ?? "") !== plannedAt
+  function previewPlanChanges(values: Record<string, string>, message: string, source: PlanPreview["source"], field: "plannedAt" | "reviewedPlannedAt" = "plannedAt") {
+    const changedValues = Object.fromEntries(Object.entries(values).filter(([sectionId, dateVal]) => (
+      (progress[sectionId]?.[field] ?? "") !== dateVal
     )));
     if (!Object.keys(changedValues).length) {
       setFeedbackMessage("没有符合条件的计划日期可调整");
       return;
     }
-    setPlanPreview({ values: changedValues, message, source });
+    setPlanPreview({ values: changedValues, message, source, field });
   }
 
   function undoPlanChange() {
     if (!planUndo) return;
     const changedAt = new Date().toISOString();
+    const field = planUndo.field || "plannedAt";
     setProgress((current) => {
       const next = { ...current };
-      Object.entries(planUndo.values).forEach(([sectionId, plannedAt]) => {
-        next[sectionId] = { ...next[sectionId], plannedAt };
+      Object.entries(planUndo.values).forEach(([sectionId, dateVal]) => {
+        next[sectionId] = { ...next[sectionId], [field]: dateVal };
       });
       return next;
     });
-    setPlanHistory((current) => [...current, ...Object.entries(planUndo.values).map(([sectionId, plannedAt]) => ({
+    setPlanHistory((current) => [...current, ...Object.entries(planUndo.values).map(([sectionId, dateVal]) => ({
       id: crypto.randomUUID(),
       sectionId,
-      from: progress[sectionId]?.plannedAt ?? "",
-      to: plannedAt,
+      from: progress[sectionId]?.[field] ?? "",
+      to: dateVal,
       changedAt,
       source: "undo" as const,
     }))].slice(-1000));
@@ -1001,6 +1045,7 @@ export function StudyDashboard() {
     sections: Section[],
     range: { start: string; end: string; includeCompleted: boolean },
     mode: "uniform" | "spread",
+    targetPhase: "base" | "review" = "base",
   ) {
     if (!range.start || (mode === "spread" && !range.end)) {
       setFeedbackMessage("请先设置完整的计划日期或区间");
@@ -1010,23 +1055,29 @@ export function StudyDashboard() {
       setFeedbackMessage("计划结束日期不能早于开始日期");
       return;
     }
+    const field = targetPhase === "review" ? "reviewedPlannedAt" : "plannedAt";
     const values = buildChapterPlanChanges(
       sections.map((section) => ({
         id: section.id,
         learned: Boolean(progress[section.id]?.learned),
+        reviewed: Boolean(progress[section.id]?.reviewed),
         plannedAt: progress[section.id]?.plannedAt ?? "",
+        reviewedPlannedAt: progress[section.id]?.reviewedPlannedAt ?? "",
       })),
       range,
       mode,
+      targetPhase,
     );
+    const phaseLabel = targetPhase === "review" ? "强化阶段（复习）" : "基础阶段（新学）";
     previewPlanChanges(
       values,
-      mode === "uniform" ? "已统一设置章节计划" : "已按天均分章节计划",
+      mode === "uniform" ? `已统一设置${phaseLabel}章节计划` : `已按天均分${phaseLabel}章节计划`,
       "batchSchedule",
+      field,
     );
   }
 
-  function shiftPlans(startSectionId: string, scope: ShiftScope, days: number) {
+  function shiftPlans(startSectionId: string, scope: ShiftScope, days: number, targetPhase: "base" | "review" = "base") {
     if (!Number.isInteger(days) || days === 0) {
       setFeedbackMessage("移动天数必须是非零整数");
       return;
@@ -1034,12 +1085,16 @@ export function StudyDashboard() {
     const chapter = selectedBook.chapters.find((item) => item.sections.some((section) => section.id === startSectionId));
     const source = scope === "chapter" ? chapter?.sections ?? [] : selectedSections;
     const startIndex = source.findIndex((section) => section.id === startSectionId);
+    const field = targetPhase === "review" ? "reviewedPlannedAt" : "plannedAt";
     const values: Record<string, string> = {};
     source.slice(Math.max(startIndex, 0)).forEach((section) => {
       const state = progress[section.id];
-      if (state?.plannedAt && !state.learned) values[section.id] = addCalendarDays(state.plannedAt, days);
+      const dateVal = state?.[field];
+      const isDone = targetPhase === "review" ? state?.reviewed : state?.learned;
+      if (dateVal && !isDone) values[section.id] = addCalendarDays(dateVal, days);
     });
-    previewPlanChanges(values, `已将后续计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift");
+    const phaseLabel = targetPhase === "review" ? "强化复习" : "基础新学";
+    previewPlanChanges(values, `已将后续${phaseLabel}计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift", field);
     setShiftSectionId(null);
   }
 
@@ -1161,7 +1216,7 @@ export function StudyDashboard() {
 
   function renderTaskList(
     tasks: TaskEntry[],
-    kind: "today" | "overdue" | "unreviewed",
+    kind: "today" | "today-base" | "today-review" | "overdue" | "unreviewed",
     emptyMessage: string,
   ) {
     if (!tasks.length) return <p className="task-empty">{emptyMessage}</p>;
@@ -1169,30 +1224,33 @@ export function StudyDashboard() {
       <div className="task-list">
         {tasks.map(({ book, chapterTitle, section }) => {
           const state = progress[section.id];
-          const checked = kind === "unreviewed" ? state?.reviewed : state?.learned;
+          const isReviewAction = kind === "today-review" || kind === "unreviewed" || (kind === "overdue" && Boolean(state?.learned) && !state?.reviewed);
+          const checked = isReviewAction ? state?.reviewed : state?.learned;
           return (
             <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${section.id}`}>
               <div className="task-main">
                 <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
                 <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
               </div>
-              <span className={`task-date ${kind}`}>
-                {kind === "today"
-                  ? state?.learned ? `完成 ${formatDateShort(state.learnedAt)}` : "计划今天"
-                  : kind === "overdue"
-                    ? `原计划 ${formatDateShort(state?.plannedAt ?? "")}`
-                    : `学完 ${formatDateShort(state?.learnedAt ?? "")}`}
+              <span className={`task-date ${isReviewAction ? "unreviewed" : kind.startsWith("today") ? "today" : "overdue"}`}>
+                {kind === "today-base" || (kind === "today" && !isReviewAction)
+                  ? state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今天新学"
+                  : kind === "today-review"
+                    ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今天复习"
+                    : kind === "overdue"
+                      ? isReviewAction ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}` : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`
+                      : state?.reviewedPlannedAt ? `计划 ${formatDateShort(state.reviewedPlannedAt)}` : `新学 ${formatDateShort(state?.learnedAt ?? "")}`}
               </span>
               <label className="task-check">
                 <input
                   type="checkbox"
                   checked={Boolean(checked)}
-                  onChange={(event) => kind === "unreviewed"
+                  onChange={(event) => isReviewAction
                     ? toggleReviewed(section.id, event.target.checked)
                     : toggleLearned(section.id, event.target.checked)}
                 />
                 <span />
-                <em>{kind === "unreviewed" ? "复习" : "学完"}</em>
+                <em>{isReviewAction ? "复习" : "新学"}</em>
               </label>
             </article>
           );
@@ -1621,7 +1679,7 @@ export function StudyDashboard() {
                   <h2>{selectedBook.title}</h2>
                 </div>
                 <span className="status-pill status-pill--calm">
-                  {isReviewPhase ? (reviewedCount === selectedSections.length ? "全部完成" : "复习中") : "进行中"}
+                  {isReviewPhase ? (reviewedCount === selectedSections.length ? "全部完成" : "强化阶段") : "基础阶段"}
                 </span>
               </div>
 
@@ -1636,7 +1694,7 @@ export function StudyDashboard() {
 
               <div className="progress-note">
                 <p>
-                  学完 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
+                  新学 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
                 </p>
                 {currentSection ? (
                   <button
@@ -1692,7 +1750,7 @@ export function StudyDashboard() {
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
                     ["all", "全部"],
-                    ["unlearned", "未学完"],
+                    ["unlearned", "未新学"],
                     ["unreviewed", "未复习"],
                     ["overdue", "逾期"],
                   ] as [CatalogFilter, string][]).map(([value, label]) => (
@@ -1721,12 +1779,14 @@ export function StudyDashboard() {
                 const chapterComplete = chapterCompleted === chapter.sections.length;
                 const chapterOverdue = chapter.sections.some((section) => studyPlanStatus(progress[section.id]) === "overdue");
                 const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
-                const plannedDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
+                const baseDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
+                const reviewDates = chapter.sections.map((section) => progress[section.id]?.reviewedPlannedAt ?? "").filter(Boolean).sort();
+                const activeDates = chapterPlanTarget === "review" ? reviewDates : baseDates;
                 const learnedCompletedAt = chapterCompletionDate(chapter.sections, progress, "learned");
                 const reviewedCompletedAt = chapterCompletionDate(chapter.sections, progress, "reviewed");
                 const range = chapterRanges[chapter.id] ?? {
-                  start: plannedDates[0] ?? "",
-                  end: plannedDates[plannedDates.length - 1] ?? plannedDates[0] ?? "",
+                  start: activeDates[0] ?? "",
+                  end: activeDates[activeDates.length - 1] ?? activeDates[0] ?? "",
                   includeCompleted: false,
                 };
 
@@ -1742,11 +1802,12 @@ export function StudyDashboard() {
                         <small>第{chapter.number}章</small>
                         <strong>{chapter.title}</strong>
                         <span className="chapter-meta">
-                          <em>{formatPlanRange(chapter.sections.map((section) => progress[section.id]?.plannedAt ?? ""))}</em>
+                          <em>{formatPlanRange(baseDates, "基础")}</em>
+                          {reviewDates.length > 0 && <em>{formatPlanRange(reviewDates, "强化")}</em>}
                           {(learnedCompletedAt || reviewedCompletedAt) && (
                             <span className="chapter-completion-dates">
-                              {learnedCompletedAt && <span className="chapter-completion-date learned">第一轮 {formatDateChinese(learnedCompletedAt)}</span>}
-                              {reviewedCompletedAt && <span className="chapter-completion-date reviewed">复习 {formatDateChinese(reviewedCompletedAt)}</span>}
+                              {learnedCompletedAt && <span className="chapter-completion-date learned">基础 {formatDateChinese(learnedCompletedAt)}</span>}
+                              {reviewedCompletedAt && <span className="chapter-completion-date reviewed">强化 {formatDateChinese(reviewedCompletedAt)}</span>}
                             </span>
                           )}
                         </span>
@@ -1764,90 +1825,117 @@ export function StudyDashboard() {
                       <>
                       {planEditMode && (
                         <div className="chapter-plan-editor">
+                          <div className="chapter-plan-phase-toggle" role="group" aria-label="排期阶段">
+                            <button type="button" className={chapterPlanTarget === "base" ? "active" : ""} onClick={() => setChapterPlanTarget("base")}>基础新学</button>
+                            <button type="button" className={chapterPlanTarget === "review" ? "active" : ""} onClick={() => setChapterPlanTarget("review")}>强化复习</button>
+                          </div>
                           <span>计划区间</span>
-                          <input type="date" value={range.start} aria-label={`${chapter.title}计划开始日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, start: event.target.value } }))} />
+                          <input type="date" value={range.start} aria-label={`${chapter.title}${chapterPlanTarget === "review" ? "强化复习" : "基础新学"}计划开始日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, start: event.target.value } }))} />
                           <b>—</b>
-                          <input type="date" value={range.end} aria-label={`${chapter.title}计划结束日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, end: event.target.value } }))} />
+                          <input type="date" value={range.end} aria-label={`${chapter.title}${chapterPlanTarget === "review" ? "强化复习" : "基础新学"}计划结束日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, end: event.target.value } }))} />
                           <label><input type="checkbox" checked={range.includeCompleted} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, includeCompleted: event.target.checked } }))} />包含已完成项</label>
-                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "uniform")}>统一日期</button>
-                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "spread")}>按天均分</button>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "uniform", chapterPlanTarget)}>统一日期</button>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "spread", chapterPlanTarget)}>按天均分</button>
                         </div>
                       )}
                       <div className={`section-table${planEditMode ? " editing" : ""}`}>
                         <div className="section-head" aria-hidden="true">
-                          <span>小节</span><span>计划</span><span>学完</span><span>复习</span>
+                          <span>小节</span><span>新学计划</span><span>新学</span><span>复习计划</span><span>复习</span>
                         </div>
                         {visibleSections.map((section) => {
                           const state = progress[section.id];
-                          const status = studyPlanStatus(state);
+                          const baseStatus = basePlanStatus(state);
+                          const reviewStatus = reviewPlanStatus(state);
+                          const rowStatus = studyPlanStatus(state);
                           const isCurrent = currentSection?.id === section.id;
                           const sectionJournals = journalsBySection[section.id] ?? [];
                           return (
-                                <div
-                                  className={`section-row ${status}${isCurrent ? " is-current" : ""}`}
-                                  id={`section-${section.id}`}
-                                  aria-current={isCurrent ? "step" : undefined}
-                                  key={section.id}
+                            <div
+                              className={`section-row ${rowStatus}${isCurrent ? " is-current" : ""}`}
+                              id={`section-${section.id}`}
+                              aria-current={isCurrent ? "step" : undefined}
+                              key={section.id}
+                            >
+                              <div className="section-name">
+                                <span>{section.number}</span><strong>{section.title}</strong>
+                                {isCurrent && <i title="当前新学" />}
+                                {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
+                                {sectionJournals.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="section-journal-badge"
+                                    title={`查看此小节的 ${sectionJournals.length} 条学习日志`}
+                                    onClick={() => setActiveDrawerSectionId(section.id)}
+                                  >
+                                    📝 {sectionJournals.length} 条记录
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="section-record-btn"
+                                  title="写一条关于该小节的学习日志"
+                                  onClick={() => openCreateJournal({
+                                    type: "section",
+                                    area: activeArea,
+                                    bookId: selectedBook.id,
+                                    sectionId: section.id,
+                                    bookTitle: selectedBook.shortTitle,
+                                    sectionTitle: section.title,
+                                    sectionNumber: section.number,
+                                  })}
                                 >
-                                  <div className="section-name">
-                                    <span>{section.number}</span><strong>{section.title}</strong>
-                                    {isCurrent && <i title="当前学习" />}
-                                    {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
-                                    {sectionJournals.length > 0 && (
-                                      <button
-                                        type="button"
-                                        className="section-journal-badge"
-                                        title={`查看此小节的 ${sectionJournals.length} 条学习日志`}
-                                        onClick={() => setActiveDrawerSectionId(section.id)}
-                                      >
-                                        📝 {sectionJournals.length} 条记录
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="section-record-btn"
-                                      title="写一条关于该小节的学习日志"
-                                      onClick={() => openCreateJournal({
-                                        type: "section",
-                                        area: activeArea,
-                                        bookId: selectedBook.id,
-                                        sectionId: section.id,
-                                        bookTitle: selectedBook.shortTitle,
-                                        sectionTitle: section.title,
-                                        sectionNumber: section.number,
-                                      })}
-                                    >
-                                      记录 +
-                                    </button>
-                                  </div>
-                              {planEditMode ? (
-                                <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 计划日期`} onChange={(event) => updatePlannedAt(section.id, event.target.value)} />
-                              ) : (
-                                <EditableDate
-                                  value={state?.plannedAt ?? ""}
-                                  emptyLabel="未设置"
-                                  tone={planTone(status)}
-                                  ariaLabel={`${section.number} 计划日期`}
-                                  onChange={(value) => updatePlannedAt(section.id, value)}
-                                />
-                              )}
+                                  记录 +
+                                </button>
+                              </div>
+
+                              <div className="section-plan section-plan--base">
+                                {planEditMode ? (
+                                  <input className="inline-plan-input" type="date" value={state?.plannedAt ?? ""} aria-label={`${section.number} 新学计划日期`} onChange={(event) => updatePlannedAt(section.id, event.target.value)} />
+                                ) : (
+                                  <EditableDate
+                                    value={state?.plannedAt ?? ""}
+                                    emptyLabel="未设置"
+                                    tone={planTone(baseStatus)}
+                                    ariaLabel={`${section.number} 新学计划日期`}
+                                    onChange={(value) => updatePlannedAt(section.id, value)}
+                                  />
+                                )}
+                              </div>
+
                               <div className="check-with-date check-with-date--learned">
-                                <label aria-label={`${section.number} 学完`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><b className="mobile-check-label">学完</b></label>
-                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 学完日期`} validate={(value) => !value ? "学完日期不能为空；如需取消，请取消勾选" : state.reviewedAt && value > state.reviewedAt ? "学完日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
+                                <label aria-label={`${section.number} 新学`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><b className="mobile-check-label">新学</b></label>
+                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 新学完成日期`} validate={(value) => !value ? "新学日期不能为空；如需取消，请取消勾选" : state.reviewedAt && value > state.reviewedAt ? "新学日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
+
+                              <div className="section-plan section-plan--review">
+                                {planEditMode ? (
+                                  <input className="inline-plan-input" type="date" value={state?.reviewedPlannedAt ?? ""} aria-label={`${section.number} 复习计划日期`} onChange={(event) => updateReviewedPlannedAt(section.id, event.target.value)} />
+                                ) : (
+                                  <EditableDate
+                                    value={state?.reviewedPlannedAt ?? ""}
+                                    emptyLabel="未设置"
+                                    tone={planTone(reviewStatus)}
+                                    ariaLabel={`${section.number} 复习计划日期`}
+                                    onChange={(value) => updateReviewedPlannedAt(section.id, value)}
+                                  />
+                                )}
+                              </div>
+
                               <div className="check-with-date check-with-date--reviewed">
-                                <label aria-label={`${section.number} 复习`} title={!state?.learnedAt ? "记录学完日期后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learnedAt} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
-                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习日期`} validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : state.learnedAt && value < state.learnedAt ? "复习日期不能早于学完日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
+                                <label aria-label={`${section.number} 复习`} title={!state?.learnedAt ? "完成新学后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learnedAt} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
+                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习完成日期`} validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : state.learnedAt && value < state.learnedAt ? "复习日期不能早于新学日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
                               </div>
+
                               {planEditMode && (
                                 <div className="shift-anchor">
                                   <button type="button" onClick={() => setShiftSectionId(shiftSectionId === section.id ? null : section.id)}>移动</button>
                                   {shiftSectionId === section.id && (
                                     <div className="shift-popover">
+                                      <select value={shiftPlanTarget} onChange={(event) => setShiftPlanTarget(event.target.value as "base" | "review")} aria-label="移动目标阶段"><option value="base">基础新学计划</option><option value="review">强化复习计划</option></select>
                                       <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="移动范围"><option value="chapter">本章后续</option><option value="subject">本科目后续</option></select>
-                                      {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days)}>{days > 0 ? "+" : ""}{days}天</button>)}
+                                      {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days, shiftPlanTarget)}>{days > 0 ? "+" : ""}{days}天</button>)}
                                       <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
-                                      <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(section.id, shiftScope, shiftDays)}>确定</button>
+                                      <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(section.id, shiftScope, shiftDays, shiftPlanTarget)}>确定</button>
                                     </div>
                                   )}
                                 </div>
@@ -1892,22 +1980,26 @@ export function StudyDashboard() {
               </div>
 
               <div className="summary-strip" aria-label="今日任务概览">
-                <article><span>今日计划</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
-                <article><span>逾期未学</span><strong>{overdueTasks.length}</strong><small>按原计划日期排序</small></article>
+                <article><span>今日任务</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
+                <article><span>逾期任务</span><strong>{overdueTasks.length}</strong><small>新学逾期 {overdueBaseTasks.length} · 复习逾期 {overdueReviewTasks.length}</small></article>
               </div>
 
               <div className="today-sections">
-                <section className="task-panel task-panel--today" aria-labelledby="today-plan-title">
-                  <header><div><span>01</span><h2 id="today-plan-title">今日计划</h2></div><strong>{todayCompleted}/{todayPlan.length}</strong></header>
-                  {renderTaskList(todayPlan, "today", "今天没有安排小节，完成的今日任务也会保留在这里。")}
+                <section className="task-panel task-panel--today" aria-labelledby="today-base-plan-title">
+                  <header><div><span>01</span><h2 id="today-base-plan-title">今日新学</h2></div><strong>{todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length}/{todayBasePlan.length}</strong></header>
+                  {renderTaskList(todayBasePlan, "today-base", "今天没有安排新学小节，完成的今日新学会保留在这里。")}
+                </section>
+                <section className="task-panel task-panel--review-today" aria-labelledby="today-review-plan-title">
+                  <header><div><span>02</span><h2 id="today-review-plan-title">今日复习</h2></div><strong>{todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length}/{todayReviewPlan.length}</strong></header>
+                  {renderTaskList(todayReviewPlan, "today-review", "今天没有安排复习小节。")}
                 </section>
                 <section className="task-panel task-panel--overdue" aria-labelledby="overdue-title">
-                  <header><div><span>02</span><h2 id="overdue-title">逾期</h2></div><strong>{overdueTasks.length}</strong></header>
+                  <header><div><span>03</span><h2 id="overdue-title">逾期任务</h2></div><strong>{overdueTasks.length}</strong></header>
                   {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
                 </section>
-                {allFirstRoundComplete && <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
-                  <header><div><span>03</span><h2 id="unreviewed-title">未复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
-                  {renderTaskList(unreviewedTasks, "unreviewed", "没有积压的复习任务。")}
+                {unreviewedTasks.length > 0 && <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
+                  <header><div><span>04</span><h2 id="unreviewed-title">待规划复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
+                  {renderTaskList(unreviewedTasks, "unreviewed", "没有待安排的复习任务。")}
                 </section>}
               </div>
 
@@ -2182,12 +2274,12 @@ export function StudyDashboard() {
                   </div>
                   <div className="macro-card__dual-val">
                     <div>
-                      <small>第一轮</small>
+                      <small>基础阶段</small>
                       <strong className="coral-text">{analyticsLearnedPercent}%</strong>
                     </div>
                     <div className="divider" />
                     <div>
-                      <small>深度复习</small>
+                      <small>强化阶段</small>
                       <strong className="blue-text">{analyticsReviewedPercent}%</strong>
                     </div>
                   </div>
@@ -2199,7 +2291,7 @@ export function StudyDashboard() {
                       <span className="dual-bar-reviewed" style={{ width: `${analyticsReviewedPercent}%` }} />
                     </div>
                     <div className="macro-card__meta">
-                      <span>已学 {forecast.learnedTotal}/{forecast.totalSections} 节</span>
+                      <span>已新学 {forecast.learnedTotal}/{forecast.totalSections} 节</span>
                       <span>已复习 {forecast.reviewedTotal} 节</span>
                     </div>
                   </div>
@@ -2217,7 +2309,7 @@ export function StudyDashboard() {
                     <span className="macro-card__unit">节 / 天</span>
                   </div>
                   <div className="macro-card__meta-box">
-                    <div>近 14 天学完 <strong>{forecast.learnedLast14d}</strong> 节</div>
+                    <div>近 14 天新学 <strong>{forecast.learnedLast14d}</strong> 节</div>
                     <div>近 14 天复习 <strong>{forecast.reviewedLast14d}</strong> 节</div>
                     {forecast.dailyVelocityAllTime > 0 && (
                       <div className="meta-sub">历史全周期均速 {forecast.dailyVelocityAllTime} 节/天</div>
@@ -2229,12 +2321,12 @@ export function StudyDashboard() {
                   <div className="macro-card__top">
                     <span className="macro-card__label">工期预测与冲刺</span>
                     <span className={`macro-badge health-${forecast.health}`}>
-                      {forecast.health === "completed" ? "一轮结项" : forecast.health === "healthy" ? "冲刺充裕" : forecast.health === "steady" ? "节奏稳健" : forecast.health === "tight" ? "工期紧凑" : forecast.health === "behind" ? "需加速" : "数据积累中"}
+                      {forecast.health === "completed" ? "基础完成" : forecast.health === "healthy" ? "冲刺充裕" : forecast.health === "steady" ? "节奏稳健" : forecast.health === "tight" ? "工期紧凑" : forecast.health === "behind" ? "需加速" : "数据积累中"}
                     </span>
                   </div>
                   <div className="macro-card__val">
                     {forecast.health === "completed" ? (
-                      <strong className="finish-text">全部学完</strong>
+                      <strong className="finish-text">基础全部完成</strong>
                     ) : forecast.estimatedCompletionDate ? (
                       <>
                         <strong className="date-text">{formatDateShort(forecast.estimatedCompletionDate)}</strong>
@@ -2246,7 +2338,7 @@ export function StudyDashboard() {
                   </div>
                   <div className="macro-card__meta-box">
                     {forecast.health === "completed" ? (
-                      <div>剩余 <strong>{forecast.daysUntilExam}</strong> 天全量用于真题与二轮</div>
+                      <div>剩余 <strong>{forecast.daysUntilExam}</strong> 天全量用于强化冲刺与真题模拟</div>
                     ) : forecast.sprintDays !== null ? (
                       <div>
                         预计留出 <strong className={forecast.sprintDays >= 30 ? "green-text" : "coral-text"}>{Math.max(0, forecast.sprintDays)}</strong> 天真题冲刺
@@ -2254,7 +2346,7 @@ export function StudyDashboard() {
                     ) : (
                       <div>持续打卡后自动测算</div>
                     )}
-                    <div className="meta-sub">剩余 <strong>{forecast.remainingSections}</strong> 节未学完</div>
+                    <div className="meta-sub">剩余 <strong>{forecast.remainingSections}</strong> 节未新学</div>
                   </div>
                 </article>
               </div>
@@ -2264,14 +2356,14 @@ export function StudyDashboard() {
                 <div className="insight-content">
                   <strong>备考节奏诊断：</strong>
                   {forecast.health === "completed" ? (
-                    <span>恭喜！所选范围的小节已全部学完第一轮。建议把备考重心全面切换至历年真题模拟、错题重做和弱项深度复习。</span>
+                    <span>恭喜！所选范围的小节已全部完成基础阶段新学。建议把备考重心全面切换至历年真题模拟、错题重做和强化阶段复习。</span>
                   ) : forecast.dailyVelocity14d > 0 && forecast.estimatedCompletionDate && forecast.sprintDays !== null ? (
                     <span>
-                      按近 14 天日均 <strong>{forecast.dailyVelocity14d} 节</strong> 的推进节奏，剩余 <strong>{forecast.remainingSections} 节</strong> 预计将于 <strong>{formatDateChinese(forecast.estimatedCompletionDate)}</strong> 完成第一轮。届时距离 <strong>{analyticsExamDate}</strong> 考试仍有 <strong>{forecast.sprintDays} 天</strong> 充裕期，非常有利于展开真题模考与知识回炉。
+                      按近 14 天日均 <strong>{forecast.dailyVelocity14d} 节</strong> 的推进节奏，剩余 <strong>{forecast.remainingSections} 节</strong> 预计将于 <strong>{formatDateChinese(forecast.estimatedCompletionDate)}</strong> 完成基础阶段新学。届时距离 <strong>{analyticsExamDate}</strong> 考试仍有 <strong>{forecast.sprintDays} 天</strong> 充裕期，非常有利于展开真题模考与强化复习。
                     </span>
                   ) : (
                     <span>
-                      目前所选范围仍有 <strong>{forecast.remainingSections} 节</strong> 待完成第一轮。保持规律学习并在今日或进度页面勾选学完/复习，系统将自动根据真实速率推算结课节点与冲刺窗口。
+                      目前所选范围仍有 <strong>{forecast.remainingSections} 节</strong> 待完成基础阶段新学。保持规律学习并在今日或进度页面勾选新学/复习，系统将自动根据真实速率推算结课节点与冲刺窗口。
                     </span>
                   )}
                 </div>
@@ -2628,10 +2720,11 @@ export function StudyDashboard() {
             <div className="plan-preview-list">
               {Object.entries(planPreview.values).map(([sectionId, nextDate]) => {
                 const task = projectTasks.find(({ section }) => section.id === sectionId) ?? projectTaskEntries(activeArea === "408" ? "math" : "408").find(({ section }) => section.id === sectionId);
-                return <article key={sectionId}><div><strong>{task ? `${task.book.shortTitle} · ${task.section.number} ${task.section.title}` : sectionId}</strong><span>{task?.chapterTitle ?? ""}</span></div><p><del>{progress[sectionId]?.plannedAt ? formatDateShort(progress[sectionId].plannedAt) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
+                const currentVal = progress[sectionId]?.[planPreview.field || "plannedAt"];
+                return <article key={sectionId}><div><strong>{task ? `${task.book.shortTitle} · ${task.section.number} ${task.section.title}` : sectionId}</strong><span>{task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
               })}
             </div>
-            <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
+            <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source, planPreview.field); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
           </div>
         </div>
       )}
@@ -2664,7 +2757,7 @@ export function StudyDashboard() {
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-progress-title">
             <h2 id="clear-progress-title">清除学习与复习记录？</h2>
-            <p>该小节已经记录过复习。取消“学完”会同时清除复习记录。</p>
+            <p>该小节已经记录过复习。取消“新学”会同时清除复习记录。</p>
             <div><button type="button" onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
           </div>
         </div>

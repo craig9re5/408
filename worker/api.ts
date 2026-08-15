@@ -8,6 +8,7 @@ type ProgressValue = {
   reviewed: boolean;
   reviewedAt: string;
   plannedAt: string;
+  reviewedPlannedAt: string;
   isCurrent: boolean;
 };
 
@@ -18,6 +19,7 @@ type ProgressRow = {
   reviewed: number;
   reviewed_at: string;
   planned_at: string;
+  reviewed_planned_at?: string;
   is_current: number;
 };
 
@@ -217,6 +219,7 @@ function normalizeProgress(value: unknown): ProgressValue | null {
     reviewed,
     reviewedAt: reviewed ? candidateReviewedAt : "",
     plannedAt: date(entry.plannedAt),
+    reviewedPlannedAt: date(entry.reviewedPlannedAt),
     isCurrent: !learned && Boolean(entry.isCurrent),
   };
 }
@@ -227,7 +230,7 @@ function isSafeSectionId(sectionId: string): boolean {
 
 async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
   const result = await env.DB.prepare(
-    "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current FROM progress WHERE workspace_id = ?",
+    "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, COALESCE(reviewed_planned_at, '') as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
   ).bind(WORKSPACE_ID).all<ProgressRow>();
 
   return Object.fromEntries(result.results.flatMap((row: ProgressRow) => {
@@ -237,6 +240,7 @@ async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
       reviewed: Boolean(row.reviewed),
       reviewedAt: row.reviewed_at,
       plannedAt: row.planned_at,
+      reviewedPlannedAt: row.reviewed_planned_at || "",
       isCurrent: Boolean(row.is_current),
     });
     return normalized ? [[row.section_id, normalized]] : [];
@@ -247,17 +251,18 @@ async function writeProgress(env: Env, values: Record<string, ProgressValue>): P
   const statements = Object.entries(values)
     .filter(([sectionId]) => isSafeSectionId(sectionId))
     .map(([sectionId, value]) => env.DB.prepare(
-      `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, reviewed_planned_at, is_current, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(workspace_id, section_id) DO UPDATE SET
          learned = excluded.learned,
          learned_at = excluded.learned_at,
          reviewed = excluded.reviewed,
          reviewed_at = excluded.reviewed_at,
          planned_at = excluded.planned_at,
+         reviewed_planned_at = excluded.reviewed_planned_at,
          is_current = excluded.is_current,
          updated_at = CURRENT_TIMESTAMP`,
-    ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
+    ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
 
   if (statements.length > 0) await env.DB.batch(statements);
 }

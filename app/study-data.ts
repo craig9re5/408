@@ -14,6 +14,7 @@ export type SectionProgress = {
   reviewed: boolean;
   reviewedAt: string;
   plannedAt: string;
+  reviewedPlannedAt: string;
   isCurrent: boolean;
 };
 
@@ -24,7 +25,9 @@ export type ChapterPlanMode = "uniform" | "spread";
 export type ChapterPlanSection = {
   id: string;
   learned: boolean;
+  reviewed: boolean;
   plannedAt: string;
+  reviewedPlannedAt?: string;
 };
 
 export type PlanHistoryEntry = {
@@ -113,8 +116,24 @@ export function isTodayPlan(state: SectionProgress | undefined, today: string): 
   return Boolean(state?.plannedAt && state.plannedAt === today);
 }
 
+export function isTodayBasePlan(state: SectionProgress | undefined, today: string): boolean {
+  return Boolean(state?.plannedAt && state.plannedAt === today);
+}
+
+export function isTodayReviewPlan(state: SectionProgress | undefined, today: string): boolean {
+  return Boolean(state?.reviewedPlannedAt && state.reviewedPlannedAt === today);
+}
+
 export function isOverdueTask(state: SectionProgress | undefined, today: string): boolean {
   return Boolean(state?.plannedAt && state.plannedAt < today && !state.learned);
+}
+
+export function isOverdueBaseTask(state: SectionProgress | undefined, today: string): boolean {
+  return Boolean(state?.plannedAt && state.plannedAt < today && !state.learned);
+}
+
+export function isOverdueReviewTask(state: SectionProgress | undefined, today: string): boolean {
+  return Boolean(state?.reviewedPlannedAt && state.reviewedPlannedAt < today && state.learned && !state.reviewed);
 }
 
 export function isUnreviewedTask(state: SectionProgress | undefined, today: string): boolean {
@@ -507,13 +526,16 @@ export function buildChapterPlanChanges(
   sections: ChapterPlanSection[],
   range: { start: string; end: string; includeCompleted: boolean },
   mode: ChapterPlanMode,
+  targetPhase: "base" | "review" = "base",
 ): Record<string, string> {
   if (!isDate(range.start) || (mode === "spread" && (!isDate(range.end) || range.end < range.start))) return {};
 
   const eligible = sections.filter((section) => {
-    if (!range.includeCompleted && section.learned) return false;
+    const isCompleted = targetPhase === "review" ? section.reviewed : section.learned;
+    const existingPlan = targetPhase === "review" ? section.reviewedPlannedAt : section.plannedAt;
+    if (!range.includeCompleted && isCompleted) return false;
     // “统一日期”用于补齐尚未安排的项目，不能覆盖已有计划。
-    return mode !== "uniform" || !section.plannedAt;
+    return mode !== "uniform" || !existingPlan;
   });
 
   if (mode === "uniform") {
@@ -533,12 +555,13 @@ export function buildChapterPlanChanges(
 }
 
 export function normalizeSectionProgress(value: unknown, fallback?: SectionProgress): SectionProgress {
-  const base = fallback ?? {
+  const base: SectionProgress = fallback ?? {
     learned: false,
     learnedAt: "",
     reviewed: false,
     reviewedAt: "",
     plannedAt: "",
+    reviewedPlannedAt: "",
     isCurrent: false,
   };
   if (!isRecord(value)) return base;
@@ -552,12 +575,18 @@ export function normalizeSectionProgress(value: unknown, fallback?: SectionProgr
     && Boolean(candidateReviewedAt)
     && candidateReviewedAt >= learnedAt;
 
+  const plannedAt = value.plannedAt === "" || isDate(value.plannedAt) ? value.plannedAt : base.plannedAt;
+  const reviewedPlannedAt = value.reviewedPlannedAt === "" || isDate(value.reviewedPlannedAt)
+    ? value.reviewedPlannedAt
+    : (base.reviewedPlannedAt ?? "");
+
   return {
     learned,
     learnedAt,
     reviewed,
     reviewedAt: reviewed ? candidateReviewedAt : "",
-    plannedAt: value.plannedAt === "" || isDate(value.plannedAt) ? value.plannedAt : base.plannedAt,
+    plannedAt,
+    reviewedPlannedAt,
     isCurrent: !learned && Boolean(value.isCurrent),
   };
 }
