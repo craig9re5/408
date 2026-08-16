@@ -150,7 +150,7 @@ test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () =
   assert.match(styles, /\.task-context strong\s*\{[^}]*font-size:\s*11px/);
   assert.match(styles, /\.task-date\s*\{[^}]*font-size:\s*10\.5px/);
   assert.match(styles, /\.study-switchers\s*\{[^}]*width:\s*420px;[^}]*flex:\s*0 0 420px;/);
-  assert.match(dashboard, /task-panel task-panel--review/);
+  assert.match(dashboard, /task-panel task-panel--today/);
   assert.match(dashboard, /schedule-board-grid[\s\S]*schedule-day-card/);
   assert.doesNotMatch(dashboard, /<article><span>待复习<\/span>/);
   assert.doesNotMatch(dashboard, /<article><span>项目进度<\/span>/);

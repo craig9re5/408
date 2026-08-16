@@ -241,6 +241,7 @@ type TaskEntry = {
   book: Book;
   chapterTitle: string;
   section: Section;
+  phase?: "base" | "review";
 };
 
 function projectTaskEntries(area: StudyArea): TaskEntry[] {
@@ -835,19 +836,26 @@ export function StudyDashboard() {
     ...projectTaskEntries("math"),
   ], []);
   const today = dateToday();
-  const todayBasePlan = todayTasks.filter(({ section }) => isTodayBasePlan(progress[section.id], today));
-  const todayReviewPlan = todayTasks.filter(({ section }) => isTodayReviewPlan(progress[section.id], today));
+  const todayBasePlan: TaskEntry[] = todayTasks
+    .filter(({ section }) => isTodayBasePlan(progress[section.id], today))
+    .map((task) => ({ ...task, phase: "base" }));
+  const todayReviewPlan: TaskEntry[] = todayTasks
+    .filter(({ section }) => isTodayReviewPlan(progress[section.id], today))
+    .map((task) => ({ ...task, phase: "review" }));
   const todayPlan = [...todayBasePlan, ...todayReviewPlan];
-  const overdueBaseTasks = todayTasks
+  const overdueBaseTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isOverdueBaseTask(progress[section.id], today))
+    .map((task) => ({ ...task, phase: "base" }))
     .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
-  const overdueReviewTasks = todayTasks
+  const overdueReviewTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
+    .map((task) => ({ ...task, phase: "review" }))
     .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
   const overdueTasks = [...overdueBaseTasks, ...overdueReviewTasks];
   const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
-  const unreviewedTasks = todayTasks
+  const unreviewedTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
+    .map((task) => ({ ...task, phase: "review" }))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
 
@@ -1220,30 +1228,30 @@ export function StudyDashboard() {
 
   function renderTaskList(
     tasks: TaskEntry[],
-    kind: "today" | "today-base" | "today-review" | "overdue" | "unreviewed",
+    kind: "today" | "overdue" | "unreviewed",
     emptyMessage: string,
   ) {
     if (!tasks.length) return <p className="task-empty">{emptyMessage}</p>;
     return (
       <div className="task-list">
-        {tasks.map(({ book, chapterTitle, section }) => {
+        {tasks.map(({ book, chapterTitle, section, phase }) => {
           const state = progress[section.id];
-          const isReviewAction = kind === "today-review" || kind === "unreviewed" || (kind === "overdue" && Boolean(state?.learned) && !state?.reviewed);
+          const isReviewAction = phase === "review" || kind === "unreviewed" || (!phase && Boolean(state?.learned) && !state?.reviewed);
           const checked = isReviewAction ? state?.reviewed : state?.learned;
           return (
-            <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${section.id}`}>
+            <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${phase ?? "task"}-${section.id}`}>
               <div className="task-main">
                 <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
                 <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
               </div>
-              <span className={`task-date ${isReviewAction ? "unreviewed" : kind.startsWith("today") ? "today" : "overdue"}`}>
-                {kind === "today-base" || (kind === "today" && !isReviewAction)
-                  ? state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今天新学"
-                  : kind === "today-review"
-                    ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今天复习"
-                    : kind === "overdue"
-                      ? isReviewAction ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}` : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`
-                      : state?.reviewedPlannedAt ? `计划 ${formatDateShort(state.reviewedPlannedAt)}` : `新学 ${formatDateShort(state?.learnedAt ?? "")}`}
+              <span className={`task-date ${isReviewAction ? "unreviewed" : kind === "today" ? "today" : "overdue"}`}>
+                {kind === "today"
+                  ? isReviewAction
+                    ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今日复习"
+                    : state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今日新学"
+                  : isReviewAction
+                    ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}`
+                    : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`}
               </span>
               <label className="task-check">
                 <input
@@ -1989,22 +1997,14 @@ export function StudyDashboard() {
               </div>
 
               <div className="today-sections">
-                <section className="task-panel task-panel--today" aria-labelledby="today-base-plan-title">
-                  <header><div><span>01</span><h2 id="today-base-plan-title">今日新学</h2></div><strong>{todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length}/{todayBasePlan.length}</strong></header>
-                  {renderTaskList(todayBasePlan, "today-base", "今天没有安排新学小节，完成的今日新学会保留在这里。")}
-                </section>
-                <section className="task-panel task-panel--review-today" aria-labelledby="today-review-plan-title">
-                  <header><div><span>02</span><h2 id="today-review-plan-title">今日复习</h2></div><strong>{todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length}/{todayReviewPlan.length}</strong></header>
-                  {renderTaskList(todayReviewPlan, "today-review", "今天没有安排复习小节。")}
+                <section className="task-panel task-panel--today" aria-labelledby="today-plan-title">
+                  <header><div><span>01</span><h2 id="today-plan-title">今日任务</h2></div><strong>{todayCompleted}/{todayPlan.length}</strong></header>
+                  {renderTaskList(todayPlan, "today", "今天没有安排小节，完成的今日任务也会保留在这里。")}
                 </section>
                 <section className="task-panel task-panel--overdue" aria-labelledby="overdue-title">
-                  <header><div><span>03</span><h2 id="overdue-title">逾期任务</h2></div><strong>{overdueTasks.length}</strong></header>
+                  <header><div><span>02</span><h2 id="overdue-title">逾期任务</h2></div><strong>{overdueTasks.length}</strong></header>
                   {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
                 </section>
-                {unreviewedTasks.length > 0 && <section className="task-panel task-panel--review" aria-labelledby="unreviewed-title">
-                  <header><div><span>04</span><h2 id="unreviewed-title">待规划复习</h2></div><strong>{unreviewedTasks.length}</strong></header>
-                  {renderTaskList(unreviewedTasks, "unreviewed", "没有待安排的复习任务。")}
-                </section>}
               </div>
 
               <div id="journal-timeline-section" className="journal-stream-container">
