@@ -463,14 +463,6 @@ function ProgressRing({ value }: { value: number }) {
   );
 }
 
-function UniversityLogo() {
-  return (
-    <div className="university-logo" role="img" aria-label="北京大学校徽">
-      <img src="/pku-logo.svg" alt="北京大学校徽" width={80} height={80} />
-    </div>
-  );
-}
-
 export function StudyDashboard() {
   const [activePage, setActivePage] = useState<AppPage>("progress");
   const [activeArea, setActiveArea] = useState<StudyArea>("408");
@@ -1518,14 +1510,13 @@ export function StudyDashboard() {
     : null;
 
   if (authState === "authenticated" && !loaded) {
-    return <main className="auth-shell"><div className="auth-card"><UniversityLogo /><strong>正在连接学习空间</strong><p>正在读取云端进度…</p></div></main>;
+    return <main className="auth-shell"><div className="auth-card"><strong>正在连接学习空间</strong><p>正在读取云端进度…</p></div></main>;
   }
 
   if (authState === "locked") {
     return (
       <main className="auth-shell">
         <form className={`auth-card ${isShaking ? "shaking" : ""}`} onSubmit={login}>
-          <UniversityLogo />
           <h1>学习进度</h1>
           <p className="auth-subtitle">请输入 6 位专属访问码进入空间</p>
 
