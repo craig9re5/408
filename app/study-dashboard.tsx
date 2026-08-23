@@ -1860,35 +1860,50 @@ export function StudyDashboard() {
                               key={section.id}
                             >
                               <div className="section-name">
-                                <span>{section.number}</span><strong>{section.title}</strong>
+                                <span className="section-num">{section.number}</span>
+                                <strong title={`${section.number} ${section.title}`}>{section.title}</strong>
                                 {isCurrent && <i title="当前新学" />}
-                                {!state?.learned && !isCurrent && <button type="button" onClick={() => setCurrentSection(section.id)}>设为当前</button>}
-                                {sectionJournals.length > 0 && (
+                                <div className="section-actions">
+                                  {!state?.learned && !isCurrent && (
+                                    <button
+                                      type="button"
+                                      className="section-set-current-btn"
+                                      title="设为当前学习小节"
+                                      onClick={() => setCurrentSection(section.id)}
+                                    >
+                                      设为当前
+                                    </button>
+                                  )}
+                                  {sectionJournals.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="section-journal-badge"
+                                      title={`查看此小节的 ${sectionJournals.length} 条学习日志`}
+                                      aria-label={`查看此小节的 ${sectionJournals.length} 条学习日志`}
+                                      onClick={() => setActiveDrawerSectionId(section.id)}
+                                    >
+                                      📝 <span>{sectionJournals.length}</span>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    className="section-journal-badge"
-                                    title={`查看此小节的 ${sectionJournals.length} 条学习日志`}
-                                    onClick={() => setActiveDrawerSectionId(section.id)}
+                                    className="section-record-btn"
+                                    title="写一条关于该小节的学习日志"
+                                    aria-label={`写一条关于 ${section.number} 的学习日志`}
+                                    onClick={() => openCreateJournal({
+                                      type: "section",
+                                      area: activeArea,
+                                      bookId: selectedBook.id,
+                                      sectionId: section.id,
+                                      bookTitle: selectedBook.shortTitle,
+                                      sectionTitle: section.title,
+                                      sectionNumber: section.number,
+                                    })}
                                   >
-                                    📝 {sectionJournals.length} 条记录
+                                    <span className="record-plus">+</span>
+                                    <span className="record-label">记</span>
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  className="section-record-btn"
-                                  title="写一条关于该小节的学习日志"
-                                  onClick={() => openCreateJournal({
-                                    type: "section",
-                                    area: activeArea,
-                                    bookId: selectedBook.id,
-                                    sectionId: section.id,
-                                    bookTitle: selectedBook.shortTitle,
-                                    sectionTitle: section.title,
-                                    sectionNumber: section.number,
-                                  })}
-                                >
-                                  记录 +
-                                </button>
+                                </div>
                               </div>
 
                               <div className="section-plan section-plan--base">
