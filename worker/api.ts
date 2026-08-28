@@ -51,6 +51,15 @@ export type JournalSubjectContext = {
   bookTitle?: string;
 };
 
+export type JournalSectionItem = {
+  area: "408" | "math";
+  bookId: string;
+  sectionId: string;
+  bookTitle?: string;
+  sectionTitle?: string;
+  sectionNumber?: string;
+};
+
 export type JournalSectionContext = {
   type: "section";
   area: "408" | "math";
@@ -61,10 +70,16 @@ export type JournalSectionContext = {
   sectionNumber?: string;
 };
 
+export type JournalSectionsContext = {
+  type: "sections";
+  sections: JournalSectionItem[];
+};
+
 export type JournalContext =
   | JournalProjectContext
   | JournalSubjectContext
-  | JournalSectionContext;
+  | JournalSectionContext
+  | JournalSectionsContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -314,6 +329,39 @@ function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
 function normalizeJournalContext(value: unknown): JournalContext | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
+
+  if (candidate.type === "sections" && Array.isArray(candidate.sections)) {
+    const validSections: JournalSectionItem[] = [];
+    const seenSectionIds = new Set<string>();
+
+    candidate.sections.forEach((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return;
+      const secCandidate = item as Record<string, unknown>;
+      const area = secCandidate.area === "math" ? "math" : secCandidate.area === "408" ? "408" : null;
+      if (!area) return;
+      if (typeof secCandidate.bookId !== "string" || !secCandidate.bookId.trim()) return;
+      if (typeof secCandidate.sectionId !== "string" || !secCandidate.sectionId.trim()) return;
+      const secId = secCandidate.sectionId.trim().slice(0, 120);
+      if (seenSectionIds.has(secId)) return;
+      seenSectionIds.add(secId);
+
+      validSections.push({
+        area,
+        bookId: secCandidate.bookId.trim().slice(0, 80),
+        sectionId: secId,
+        bookTitle: typeof secCandidate.bookTitle === "string" ? secCandidate.bookTitle.trim().slice(0, 100) : undefined,
+        sectionTitle: typeof secCandidate.sectionTitle === "string" ? secCandidate.sectionTitle.trim().slice(0, 100) : undefined,
+        sectionNumber: typeof secCandidate.sectionNumber === "string" ? secCandidate.sectionNumber.trim().slice(0, 30) : undefined,
+      });
+    });
+
+    if (validSections.length === 0) return null;
+    return {
+      type: "sections",
+      sections: validSections.slice(0, 50),
+    };
+  }
+
   const area = candidate.area === "math" ? "math" : candidate.area === "408" ? "408" : null;
   if (!area) return null;
 

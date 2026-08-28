@@ -16,6 +16,7 @@ import {
   createAppData,
   dateToday,
   defaultProjectSettings,
+  extractJournalSections,
   generateJournalId,
   mergeJournals,
   isOverdueTask,
@@ -34,6 +35,7 @@ import {
   type JournalContext,
   type JournalEntry,
   type JournalPublish,
+  type JournalSectionItem,
   type LocalBackup,
   type PlanChangeSource,
   type PlanHistoryEntry,
@@ -483,7 +485,7 @@ export function StudyDashboard() {
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
   const [editorTitle, setEditorTitle] = useState("");
   const [editorContent, setEditorContent] = useState("");
-  const [editorContext, setEditorContext] = useState<JournalContext | null>(null);
+  const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
   const [editorMode, setEditorMode] = useState<EditorMode>("split");
   const [showTitleInput, setShowTitleInput] = useState(false);
   const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
@@ -830,24 +832,24 @@ export function StudyDashboard() {
   const today = dateToday();
   const todayBasePlan: TaskEntry[] = todayTasks
     .filter(({ section }) => isTodayBasePlan(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "base" }));
+    .map((task) => ({ ...task, phase: "base" as const }));
   const todayReviewPlan: TaskEntry[] = todayTasks
     .filter(({ section }) => isTodayReviewPlan(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" }));
+    .map((task) => ({ ...task, phase: "review" as const }));
   const todayPlan = [...todayBasePlan, ...todayReviewPlan];
   const overdueBaseTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isOverdueBaseTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "base" }))
+    .map((task) => ({ ...task, phase: "base" as const }))
     .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
   const overdueReviewTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" }))
+    .map((task) => ({ ...task, phase: "review" as const }))
     .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
   const overdueTasks = [...overdueBaseTasks, ...overdueReviewTasks];
   const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
   const unreviewedTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" }))
+    .map((task) => ({ ...task, phase: "review" as const }))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
 
@@ -1266,10 +1268,13 @@ export function StudyDashboard() {
   const journalsBySection = useMemo(() => {
     const map: Record<string, JournalEntry[]> = {};
     journals.forEach((entry) => {
-      if (entry.context && entry.context.type === "section" && entry.context.sectionId) {
-        if (!map[entry.context.sectionId]) map[entry.context.sectionId] = [];
-        map[entry.context.sectionId].push(entry);
-      }
+      const sections = extractJournalSections(entry.context);
+      sections.forEach((sec) => {
+        if (sec.sectionId) {
+          if (!map[sec.sectionId]) map[sec.sectionId] = [];
+          map[sec.sectionId].push(entry);
+        }
+      });
     });
     Object.values(map).forEach((list) => {
       list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -1279,10 +1284,29 @@ export function StudyDashboard() {
 
   const filteredJournals = useMemo(() => {
     return journals.filter((entry) => {
-      if (journalFilter === "unlinked" && entry.context !== null) return false;
-      if (journalFilter === "linked" && entry.context === null) return false;
-      if (journalFilter === "408" && entry.context?.area !== "408") return false;
-      if (journalFilter === "math" && entry.context?.area !== "math") return false;
+      const sections = extractJournalSections(entry.context);
+      const isUnlinked = entry.context === null || (entry.context.type === "sections" && entry.context.sections.length === 0);
+
+      if (journalFilter === "unlinked" && !isUnlinked) return false;
+      if (journalFilter === "linked" && isUnlinked) return false;
+      if (journalFilter === "408") {
+        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section") {
+          if (entry.context.area !== "408") return false;
+        } else if (entry.context?.type === "sections") {
+          if (!entry.context.sections.some((s) => s.area === "408")) return false;
+        } else {
+          return false;
+        }
+      }
+      if (journalFilter === "math") {
+        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section") {
+          if (entry.context.area !== "math") return false;
+        } else if (entry.context?.type === "sections") {
+          if (!entry.context.sections.some((s) => s.area === "math")) return false;
+        } else {
+          return false;
+        }
+      }
       if (journalFilter === "published" && entry.publish?.status !== "published") return false;
 
       if (journalSearchQuery.trim()) {
@@ -1291,7 +1315,13 @@ export function StudyDashboard() {
         const contentMatch = entry.content.toLowerCase().includes(q);
         let contextMatch = false;
         if (entry.context) {
-          if (entry.context.type === "section") {
+          if (entry.context.type === "sections") {
+            contextMatch = entry.context.sections.some((s) =>
+              s.sectionTitle?.toLowerCase().includes(q)
+              || s.bookTitle?.toLowerCase().includes(q)
+              || s.sectionNumber?.toLowerCase().includes(q),
+            );
+          } else if (entry.context.type === "section") {
             contextMatch = Boolean(
               entry.context.sectionTitle?.toLowerCase().includes(q)
               || entry.context.bookTitle?.toLowerCase().includes(q)
@@ -1340,7 +1370,7 @@ export function StudyDashboard() {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
-    setEditorContext(context ?? null);
+    setEditorSections(extractJournalSections(context ?? null));
     setShowTitleInput(false);
     setEditorMode("split");
     setIsEditorOpen(true);
@@ -1350,7 +1380,7 @@ export function StudyDashboard() {
     setEditingJournalId(journal.id);
     setEditorTitle(journal.title ?? "");
     setEditorContent(journal.content);
-    setEditorContext(journal.context);
+    setEditorSections(extractJournalSections(journal.context));
     setShowTitleInput(Boolean(journal.title));
     setEditorMode("split");
     setIsEditorOpen(true);
@@ -1365,6 +1395,9 @@ export function StudyDashboard() {
 
     const trimmedTitle = editorTitle.trim() ? editorTitle.trim() : null;
     const now = new Date().toISOString();
+    const contextToSave: JournalContext | null = editorSections.length > 0
+      ? { type: "sections", sections: editorSections }
+      : null;
 
     if (editingJournalId) {
       setJournals((prev) => prev.map((entry) => {
@@ -1373,7 +1406,7 @@ export function StudyDashboard() {
           ...entry,
           title: trimmedTitle,
           content: editorContent,
-          context: editorContext,
+          context: contextToSave,
           updatedAt: now,
         };
       }));
@@ -1386,7 +1419,7 @@ export function StudyDashboard() {
         updatedAt: now,
         title: trimmedTitle,
         content: editorContent,
-        context: editorContext,
+        context: contextToSave,
         publish: {
           status: "local",
           publishedAt: null,
@@ -1402,8 +1435,8 @@ export function StudyDashboard() {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
-    setEditorContext(null);
-  }, [editorContent, editorTitle, editingJournalId, editorContext, journals]);
+    setEditorSections([]);
+  }, [editorContent, editorTitle, editingJournalId, editorSections, journals]);
 
   const handleDeleteJournal = useCallback((journal: JournalEntry) => {
     setPendingDeleteJournal(journal);
@@ -1423,7 +1456,11 @@ export function StudyDashboard() {
 
   const openBlogPublishModal = useCallback((journal: JournalEntry) => {
     setBlogPublishJournal(journal);
-    setPublishTitle(journal.title ?? (journal.context?.type === "section" && journal.context.sectionTitle ? `${journal.context.sectionTitle} 学习记录` : ""));
+    const sections = extractJournalSections(journal.context);
+    const sectionTitleFallback = sections.length > 0
+      ? `${sections.map((s) => `${s.bookTitle ?? ""} ${s.sectionNumber ?? ""} ${s.sectionTitle ?? ""}`.trim()).join(" / ")} 学习记录`
+      : "";
+    setPublishTitle(journal.title ?? sectionTitleFallback);
     setPublishSlug(journal.publish?.blogPostId || journal.id);
     setPublishContent(journal.content);
     setPublishError("");
@@ -2113,30 +2150,45 @@ export function StudyDashboard() {
                                 <div className="journal-card-meta">
                                   <div className="journal-card-badges">
                                     <span className="journal-time-tag">{formatTimeShort(entry.createdAt)}</span>
-                                    {entry.context && (
-                                      <button
-                                        type="button"
-                                        className={`journal-context-badge area-${entry.context.area}`}
-                                        title={
-                                          entry.context.type === "section"
-                                            ? `${entry.context.bookTitle ?? ""} ${entry.context.sectionNumber ?? ""} ${entry.context.sectionTitle ?? ""}`
-                                            : entry.context.type === "subject"
-                                              ? `${entry.context.bookTitle ?? entry.context.bookId}`
-                                              : entry.context.area === "408" ? "408" : "数学"
-                                        }
-                                        onClick={() => {
-                                          if (entry.context?.type === "section") {
-                                            setActiveDrawerSectionId(entry.context.sectionId);
-                                          }
-                                        }}
-                                      >
-                                        {entry.context.type === "section"
-                                          ? `📖 ${entry.context.bookTitle} · ${entry.context.sectionNumber} ${entry.context.sectionTitle}`
-                                          : entry.context.type === "subject"
-                                            ? `📚 ${entry.context.bookTitle ?? entry.context.bookId}`
-                                            : `🎯 ${entry.context.area === "408" ? "408" : "数学"}`}
-                                      </button>
-                                    )}
+                                    {entry.context && (() => {
+                                      const sections = extractJournalSections(entry.context);
+                                      if (sections.length > 0) {
+                                        return sections.map((sec) => (
+                                          <button
+                                            key={sec.sectionId}
+                                            type="button"
+                                            className={`journal-context-badge area-${sec.area}`}
+                                            title={`${sec.bookTitle ?? ""} ${sec.sectionNumber ?? ""} ${sec.sectionTitle ?? ""}`.trim()}
+                                            onClick={() => setActiveDrawerSectionId(sec.sectionId)}
+                                          >
+                                            📖 {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
+                                          </button>
+                                        ));
+                                      }
+                                      if (entry.context.type === "subject") {
+                                        return (
+                                          <button
+                                            type="button"
+                                            className={`journal-context-badge area-${entry.context.area}`}
+                                            title={entry.context.bookTitle ?? entry.context.bookId}
+                                          >
+                                            📚 {entry.context.bookTitle ?? entry.context.bookId}
+                                          </button>
+                                        );
+                                      }
+                                      if (entry.context.type === "project") {
+                                        return (
+                                          <button
+                                            type="button"
+                                            className={`journal-context-badge area-${entry.context.area}`}
+                                            title={entry.context.area === "408" ? "408" : "数学"}
+                                          >
+                                            🎯 {entry.context.area === "408" ? "408" : "数学"}
+                                          </button>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                     {entry.publish?.status === "published" && (
                                       <a
                                         href={entry.publish.blogUrl || "#"}
@@ -2837,57 +2889,98 @@ export function StudyDashboard() {
             </header>
 
             <div className="journal-editor-meta-bar">
-              <div className="journal-context-selector">
-                <span className="meta-label">关联小节:</span>
-                <select
-                  value={editorContext?.type === "section" ? editorContext.sectionId : ""}
-                  onChange={(e) => {
-                    const secId = e.target.value;
-                    if (!secId) {
-                      setEditorContext(null);
-                    } else {
+              <div className="journal-context-selector-wrap">
+                <div className="journal-context-selector">
+                  <span className="meta-label">关联小节:</span>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const secId = e.target.value;
+                      if (!secId) return;
                       const found = books
                         .flatMap((b) => b.chapters.flatMap((c) => c.sections.map((s) => ({ book: b, chapter: c, section: s }))))
                         .find((item) => item.section.id === secId);
                       if (found) {
-                        setEditorContext({
-                          type: "section",
-                          area: found.book.area,
-                          bookId: found.book.id,
-                          sectionId: found.section.id,
-                          bookTitle: found.book.shortTitle,
-                          sectionTitle: found.section.title,
-                          sectionNumber: found.section.number,
+                        setEditorSections((prev) => {
+                          if (prev.some((s) => s.sectionId === found.section.id)) return prev;
+                          return [
+                            ...prev,
+                            {
+                              area: found.book.area,
+                              bookId: found.book.id,
+                              sectionId: found.section.id,
+                              bookTitle: found.book.shortTitle,
+                              sectionTitle: found.section.title,
+                              sectionNumber: found.section.number,
+                            },
+                          ];
                         });
                       }
-                    }
-                  }}
-                  aria-label="选择关联小节"
-                >
-                  <option value="">○ 不关联小节 (纯时间流随笔)</option>
-                  <optgroup label="408 考研科目">
-                    {books.filter((b) => b.area === "408").flatMap((b) =>
-                      b.chapters.flatMap((c) =>
-                        c.sections.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {b.shortTitle} · {s.number} {s.title}
-                          </option>
-                        ))
-                      )
-                    )}
-                  </optgroup>
-                  <optgroup label="数学科目">
-                    {books.filter((b) => b.area === "math").flatMap((b) =>
-                      b.chapters.flatMap((c) =>
-                        c.sections.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {b.shortTitle} · {s.number} {s.title}
-                          </option>
-                        ))
-                      )
-                    )}
-                  </optgroup>
-                </select>
+                    }}
+                    aria-label="选择关联小节"
+                  >
+                    <option value="">+ 点击添加关联小节 (支持多选)...</option>
+                    <optgroup label="408 考研科目">
+                      {books.filter((b) => b.area === "408").flatMap((b) =>
+                        b.chapters.flatMap((c) =>
+                          c.sections.map((s) => {
+                            const isSelected = editorSections.some((es) => es.sectionId === s.id);
+                            return (
+                              <option key={s.id} value={s.id} disabled={isSelected}>
+                                {b.shortTitle} · {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
+                              </option>
+                            );
+                          })
+                        )
+                      )}
+                    </optgroup>
+                    <optgroup label="数学科目">
+                      {books.filter((b) => b.area === "math").flatMap((b) =>
+                        b.chapters.flatMap((c) =>
+                          c.sections.map((s) => {
+                            const isSelected = editorSections.some((es) => es.sectionId === s.id);
+                            return (
+                              <option key={s.id} value={s.id} disabled={isSelected}>
+                                {b.shortTitle} · {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
+                              </option>
+                            );
+                          })
+                        )
+                      )}
+                    </optgroup>
+                  </select>
+                  {editorSections.length > 0 && (
+                    <button
+                      type="button"
+                      className="journal-clear-sections-btn"
+                      onClick={() => setEditorSections([])}
+                      title="清空所有关联小节，转为纯时间流随笔"
+                    >
+                      清空关联
+                    </button>
+                  )}
+                </div>
+
+                {editorSections.length > 0 && (
+                  <div className="journal-selected-sections-list">
+                    {editorSections.map((sec) => (
+                      <span key={sec.sectionId} className={`journal-section-chip area-${sec.area}`}>
+                        <span className="chip-text">
+                          {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
+                        </span>
+                        <button
+                          type="button"
+                          className="chip-remove-btn"
+                          onClick={() => setEditorSections((prev) => prev.filter((item) => item.sectionId !== sec.sectionId))}
+                          aria-label={`移除 ${sec.sectionTitle} 关联`}
+                          title="移除关联"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="journal-title-field">

@@ -4,6 +4,7 @@ import {
   generateJournalId,
   normalizeJournals,
   normalizeJournalContext,
+  extractJournalSections,
   normalizeAppData,
   mergeJournals,
   SCHEMA_VERSION,
@@ -58,7 +59,7 @@ test("Journal ID: 单调自增且删除后不会复用序号", () => {
   assert.equal(idNext, "20260814004");
 });
 
-test("JournalContext: 底层支持 project / subject / section 三级结构并容错", () => {
+test("JournalContext: 底层支持 project / subject / section / sections 多级结构并容错", () => {
   // 1. project 级上下文
   const projectCtx = normalizeJournalContext({
     type: "project",
@@ -80,7 +81,7 @@ test("JournalContext: 底层支持 project / subject / section 三级结构并�
     bookTitle: "高等数学",
   });
 
-  // 3. section 级上下文
+  // 3. section 级上下文 (历史单小节兼容)
   const sectionCtx = normalizeJournalContext({
     type: "section",
     area: "408",
@@ -100,11 +101,78 @@ test("JournalContext: 底层支持 project / subject / section 三级结构并�
     sectionNumber: "2.3",
   });
 
-  // 4. 非法或缺字段的上下文 -> 归一化为 null
+  // 4. sections 级多小节上下文
+  const multiSectionCtx = normalizeJournalContext({
+    type: "sections",
+    sections: [
+      {
+        area: "408",
+        bookId: "operating-system",
+        sectionId: "os-2-3",
+        bookTitle: "操作系统",
+        sectionTitle: "CPU 调度",
+        sectionNumber: "2.3",
+      },
+      {
+        area: "math",
+        bookId: "linear-algebra",
+        sectionId: "la-1-1",
+        bookTitle: "线性代数",
+        sectionTitle: "行列式",
+        sectionNumber: "1.1",
+      },
+      // 重复项应被自动去重
+      {
+        area: "408",
+        bookId: "operating-system",
+        sectionId: "os-2-3",
+        bookTitle: "操作系统",
+      },
+      // 非法项应被自动过滤
+      { invalid: true },
+    ],
+  });
+  assert.deepEqual(multiSectionCtx, {
+    type: "sections",
+    sections: [
+      {
+        area: "408",
+        bookId: "operating-system",
+        sectionId: "os-2-3",
+        bookTitle: "操作系统",
+        sectionTitle: "CPU 调度",
+        sectionNumber: "2.3",
+      },
+      {
+        area: "math",
+        bookId: "linear-algebra",
+        sectionId: "la-1-1",
+        bookTitle: "线性代数",
+        sectionTitle: "行列式",
+        sectionNumber: "1.1",
+      },
+    ],
+  });
+
+  // 5. extractJournalSections 统一提取辅助方法
+  const extractedFromSingle = extractJournalSections(sectionCtx);
+  assert.equal(extractedFromSingle.length, 1);
+  assert.equal(extractedFromSingle[0].sectionId, "os-2-3");
+
+  const extractedFromMulti = extractJournalSections(multiSectionCtx);
+  assert.equal(extractedFromMulti.length, 2);
+  assert.equal(extractedFromMulti[0].sectionId, "os-2-3");
+  assert.equal(extractedFromMulti[1].sectionId, "la-1-1");
+
+  assert.deepEqual(extractJournalSections(projectCtx), []);
+  assert.deepEqual(extractJournalSections(null), []);
+
+  // 6. 非法或缺字段的上下文 -> 归一化为 null
   assert.equal(normalizeJournalContext(null), null);
   assert.equal(normalizeJournalContext({ type: "unknown", area: "408" }), null);
   assert.equal(normalizeJournalContext({ type: "subject", area: "408" }), null); // 缺少 bookId
   assert.equal(normalizeJournalContext({ type: "section", area: "408", bookId: "os" }), null); // 缺少 sectionId
+  assert.equal(normalizeJournalContext({ type: "sections", sections: [] }), null); // 空 sections 数组
 });
 
 test("Journal 数据标准化: 校验并填充默认结构与发布状态", () => {

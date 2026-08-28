@@ -57,6 +57,15 @@ export type JournalSubjectContext = {
   bookTitle?: string;
 };
 
+export type JournalSectionItem = {
+  area: StudyArea;
+  bookId: string;
+  sectionId: string;
+  bookTitle?: string;
+  sectionTitle?: string;
+  sectionNumber?: string;
+};
+
 export type JournalSectionContext = {
   type: "section";
   area: StudyArea;
@@ -67,10 +76,16 @@ export type JournalSectionContext = {
   sectionNumber?: string;
 };
 
+export type JournalSectionsContext = {
+  type: "sections";
+  sections: JournalSectionItem[];
+};
+
 export type JournalContext =
   | JournalProjectContext
   | JournalSubjectContext
-  | JournalSectionContext;
+  | JournalSectionContext
+  | JournalSectionsContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -660,8 +675,58 @@ export function generateJournalId(journals: JournalEntry[], dateStr = dateToday(
   return `${prefix}${nextSeq}`;
 }
 
+export function extractJournalSections(context: JournalContext | null): JournalSectionItem[] {
+  if (!context) return [];
+  if (context.type === "sections" && Array.isArray(context.sections)) {
+    return context.sections;
+  }
+  if (context.type === "section" && context.sectionId) {
+    return [{
+      area: context.area,
+      bookId: context.bookId,
+      sectionId: context.sectionId,
+      bookTitle: context.bookTitle,
+      sectionTitle: context.sectionTitle,
+      sectionNumber: context.sectionNumber,
+    }];
+  }
+  return [];
+}
+
 export function normalizeJournalContext(value: unknown): JournalContext | null {
   if (!isRecord(value)) return null;
+
+  if (value.type === "sections" && Array.isArray(value.sections)) {
+    const validSections: JournalSectionItem[] = [];
+    const seenSectionIds = new Set<string>();
+
+    value.sections.forEach((item) => {
+      if (!isRecord(item)) return;
+      const area = item.area === "math" ? "math" : item.area === "408" ? "408" : null;
+      if (!area) return;
+      if (typeof item.bookId !== "string" || !item.bookId.trim()) return;
+      if (typeof item.sectionId !== "string" || !item.sectionId.trim()) return;
+      const secId = item.sectionId.trim();
+      if (seenSectionIds.has(secId)) return;
+      seenSectionIds.add(secId);
+
+      validSections.push({
+        area,
+        bookId: item.bookId.trim(),
+        sectionId: secId,
+        bookTitle: typeof item.bookTitle === "string" && item.bookTitle.trim() ? item.bookTitle.trim() : undefined,
+        sectionTitle: typeof item.sectionTitle === "string" && item.sectionTitle.trim() ? item.sectionTitle.trim() : undefined,
+        sectionNumber: typeof item.sectionNumber === "string" && item.sectionNumber.trim() ? item.sectionNumber.trim() : undefined,
+      });
+    });
+
+    if (validSections.length === 0) return null;
+    return {
+      type: "sections",
+      sections: validSections,
+    };
+  }
+
   const area = value.area === "math" ? "math" : value.area === "408" ? "408" : null;
   if (!area) return null;
 
