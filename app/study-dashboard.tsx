@@ -1412,8 +1412,8 @@ export function StudyDashboard() {
         durationMinutes: null,
         secondRound: false,
         secondRoundAt: "",
-        questions: undefined,
-        questionScores: undefined,
+        questions: {},
+        questionScores: {},
       };
     }));
     setFeedbackMessage("已清空本卷所有做题记录与得分");

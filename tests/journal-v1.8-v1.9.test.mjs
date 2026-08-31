@@ -837,10 +837,29 @@ test("Sprint: 清空全部套卷记录与题号状态深度校验", () => {
     questions: {},
     questionScores: {},
   }];
-  const remerged = mergePapers(clearedPaper, modified);
+
+  // 模拟 JSON 序列化与 normalizePaperRecord 标准化传输管道
+  const roundtrippedCleared = normalizePapers(JSON.parse(JSON.stringify(clearedPaper)));
+  const targetRoundtripped = roundtrippedCleared.find((p) => p.id === "past-408-2026");
+  assert.deepEqual(targetRoundtripped?.questions, {});
+  assert.deepEqual(targetRoundtripped?.questionScores, {});
+
+  // 模拟服务端或刷新合并：已清空的本地记录合并历史云端记录
+  const remerged = mergePapers(roundtrippedCleared, modified);
   const remerged2026 = remerged.find((p) => p.id === "past-408-2026");
+  assert.equal(remerged2026?.completed, false);
+  assert.equal(remerged2026?.score, null);
+  assert.equal(remerged2026?.secondRound, false);
   assert.deepEqual(remerged2026?.questions, {});
   assert.deepEqual(remerged2026?.questionScores, {});
+
+  // 模拟页面刷新重新从云端加载：云端已存清空状态与本地默认真题合并
+  const refreshedPapers = mergePapers(defaultPastPapers(), [remerged2026]);
+  const refreshed2026 = refreshedPapers.find((p) => p.id === "past-408-2026");
+  assert.equal(refreshed2026?.completed, false);
+  assert.equal(refreshed2026?.score, null);
+  assert.deepEqual(refreshed2026?.questions, {});
+  assert.deepEqual(refreshed2026?.questionScores, {});
 });
 
 test("Sprint: 试卷分数范围校验与满分夹取", () => {

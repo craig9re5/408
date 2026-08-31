@@ -572,9 +572,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
         }
       }
     });
-    if (Object.keys(qMap).length > 0) {
-      questions = qMap;
-    }
+    questions = qMap;
   }
 
   let questionScores: Record<number, number> | undefined = undefined;
@@ -587,9 +585,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
         sMap[qNum] = Math.round(v * 10) / 10;
       }
     });
-    if (Object.keys(sMap).length > 0) {
-      questionScores = sMap;
-    }
+    questionScores = sMap;
   }
 
   return {
