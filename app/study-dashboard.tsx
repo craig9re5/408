@@ -2588,7 +2588,7 @@ export function StudyDashboard() {
 
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
-                    <span>名师模拟题集</span>
+                    <span>模拟试题</span>
                     <strong>{sprintMockCompleted} / {sprintMockTotal} <small className="stat-unit">套</small></strong>
                   </div>
                   <div className="stat-card-body">
@@ -2642,7 +2642,7 @@ export function StudyDashboard() {
                     className={sprintTab === "mock" ? "active" : ""}
                     onClick={() => setSprintTab("mock")}
                   >
-                    模拟题集 ({sprintMockTotal})
+                    模拟试题 ({sprintMockTotal})
                   </button>
                 </div>
 
