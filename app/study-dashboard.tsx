@@ -514,7 +514,7 @@ export function StudyDashboard() {
   const [editorContent, setEditorContent] = useState("");
   const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
   const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(null);
-  const [editorMode, setEditorMode] = useState<EditorMode>("split");
+  const journalTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [showTitleInput, setShowTitleInput] = useState(false);
   const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
   const [blogPublishJournal, setBlogPublishJournal] = useState<JournalEntry | null>(null);
@@ -1198,28 +1198,40 @@ export function StudyDashboard() {
       if (p.id !== paperId) return p;
       const currentMap = p.questions ?? {};
       const currentState = currentMap[qNum];
-      let nextState: QuestionState;
+      let nextState: QuestionState | undefined;
 
       if (isChoice) {
-        // Choice questions: 1-click toggle between wrong and correct
-        nextState = currentState === "wrong" ? "correct" : "wrong";
+        // Choice questions 3-step cycle: unset (⚪) -> correct (🟢) -> wrong (🔴) -> unset (⚪)
+        if (!currentState) {
+          nextState = "correct";
+        } else if (currentState === "correct") {
+          nextState = "wrong";
+        } else {
+          nextState = undefined;
+        }
       } else {
-        // 408 & general Subjective: cycle partial -> correct -> wrong -> partial
-        if (!currentState || currentState === "wrong") {
+        // Subjective cycle: unset -> partial -> correct -> wrong -> unset
+        if (!currentState) {
           nextState = "partial";
         } else if (currentState === "partial") {
           nextState = "correct";
-        } else {
+        } else if (currentState === "correct") {
           nextState = "wrong";
+        } else {
+          nextState = undefined;
         }
+      }
+
+      const nextMap = { ...currentMap };
+      if (nextState) {
+        nextMap[qNum] = nextState;
+      } else {
+        delete nextMap[qNum];
       }
 
       return {
         ...p,
-        questions: {
-          ...currentMap,
-          [qNum]: nextState,
-        },
+        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
       };
     }));
   }
@@ -1979,10 +1991,12 @@ export function StudyDashboard() {
 
   function updateExamStartDate(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-    setProjectSettings({
-      "408": { examDate: value },
-      math: { examDate: value },
-    });
+    setProjectSettings((prev) => ({
+      ...prev,
+      "408": { ...prev["408"], examDate: value },
+      math: { ...prev.math, examDate: value },
+      english: { ...prev.english, examDate: value },
+    }));
   }
 
   function renderTaskList(
@@ -2150,7 +2164,6 @@ export function StudyDashboard() {
       setEditorSections(extractJournalSections(context ?? null));
     }
     setShowTitleInput(false);
-    setEditorMode("split");
     setIsEditorOpen(true);
   }, []);
 
@@ -2166,7 +2179,6 @@ export function StudyDashboard() {
       setEditorSections(extractJournalSections(journal.context));
     }
     setShowTitleInput(Boolean(journal.title));
-    setEditorMode("split");
     setIsEditorOpen(true);
   }, []);
 
@@ -2224,6 +2236,189 @@ export function StudyDashboard() {
     setEditorSections([]);
     setEditorPaper(null);
   }, [editorContent, editorTitle, editingJournalId, editorSections, editorPaper, journals]);
+
+  const applyEditorFormat = useCallback(
+    (
+      formatter: (
+        text: string,
+        start: number,
+        end: number
+      ) => { newText: string; selectionStart: number; selectionEnd: number }
+    ) => {
+      const textarea = journalTextareaRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const result = formatter(editorContent, start, end);
+      applyTextResultToTextarea(textarea, result, setEditorContent);
+    },
+    [editorContent]
+  );
+
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const textarea = journalTextareaRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      // 1. Quick Save (Ctrl+S / Cmd+S)
+      if (isCtrlOrCmd && e.key.toLowerCase() === "s" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        handleSaveJournal();
+        return;
+      }
+
+      // 2. Bold (Ctrl+B / Cmd+B)
+      if (isCtrlOrCmd && e.key.toLowerCase() === "b" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const res = wrapSelection(editorContent, start, end, "**", "**", "加粗文本");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 3. Italic (Ctrl+I / Cmd+I)
+      if (isCtrlOrCmd && e.key.toLowerCase() === "i" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const res = wrapSelection(editorContent, start, end, "*", "*", "斜体文本");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 4. Underline (Ctrl+U / Cmd+U)
+      if (isCtrlOrCmd && e.key.toLowerCase() === "u" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const res = wrapSelection(editorContent, start, end, "<u>", "</u>", "下划线");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 5. Strikethrough (Ctrl+Shift+X or Ctrl+Shift+S or Alt+Shift+5)
+      if (
+        (isCtrlOrCmd && e.shiftKey && (e.key.toLowerCase() === "x" || e.key.toLowerCase() === "s")) ||
+        (e.altKey && e.shiftKey && e.key === "5")
+      ) {
+        e.preventDefault();
+        const res = wrapSelection(editorContent, start, end, "~~", "~~", "删除线文本");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 6. Link (Ctrl+K / Cmd+K)
+      if (isCtrlOrCmd && e.key.toLowerCase() === "k" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const res = applyLink(editorContent, start, end);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 7. Math LaTeX (Ctrl+M or Ctrl+Shift+K or Ctrl+Alt+M)
+      if (
+        (isCtrlOrCmd && e.key.toLowerCase() === "m" && !e.shiftKey && !e.altKey) ||
+        (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === "k") ||
+        (isCtrlOrCmd && e.altKey && e.key.toLowerCase() === "m")
+      ) {
+        e.preventDefault();
+        const res = applyMath(editorContent, start, end);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 8. Code / Code block (Ctrl+` or Ctrl+E or Ctrl+Shift+C)
+      if (
+        (isCtrlOrCmd && e.key === "`" && !e.shiftKey && !e.altKey) ||
+        (isCtrlOrCmd && e.key.toLowerCase() === "e" && !e.shiftKey && !e.altKey) ||
+        (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === "c")
+      ) {
+        e.preventDefault();
+        const res = applyCode(editorContent, start, end);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 9. Headings 1~4 (Ctrl+1~4 or Ctrl+Alt+1~4)
+      if (
+        (isCtrlOrCmd && !e.shiftKey && e.key >= "1" && e.key <= "4") ||
+        (isCtrlOrCmd && e.altKey && e.key >= "1" && e.key <= "4")
+      ) {
+        e.preventDefault();
+        const level = parseInt(e.key, 10) as 1 | 2 | 3 | 4;
+        const res = applyHeading(editorContent, start, end, level);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 10. Clear Heading (Ctrl+0)
+      if (isCtrlOrCmd && e.key === "0" && !e.shiftKey) {
+        e.preventDefault();
+        const res = applyHeading(editorContent, start, end, 0);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 11. Bullet List (Ctrl+Shift+U or Ctrl+Alt+U)
+      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        const res = toggleLinePrefix(editorContent, start, end, "bullet");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 12. Numbered List (Ctrl+Shift+O or Ctrl+Alt+O)
+      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        const res = toggleLinePrefix(editorContent, start, end, "number");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 13. Task List (Ctrl+Shift+T or Ctrl+Alt+T)
+      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        const res = toggleLinePrefix(editorContent, start, end, "task");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 14. Blockquote (Ctrl+Shift+Q or Ctrl+Alt+Q)
+      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "q") {
+        e.preventDefault();
+        const res = toggleLinePrefix(editorContent, start, end, "quote");
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 15. Tab / Shift+Tab (Indent / Outdent)
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const res = handleTabKey(editorContent, start, end, e.shiftKey);
+        applyTextResultToTextarea(textarea, res, setEditorContent);
+        return;
+      }
+
+      // 16. Smart Enter
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const smartRes = handleSmartEnter(editorContent, start, end);
+        if (smartRes) {
+          e.preventDefault();
+          applyTextResultToTextarea(textarea, smartRes, setEditorContent);
+          return;
+        }
+      }
+
+      // 17. Auto-pairing quotes and brackets on text selection
+      if (start < end && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const autoRes = handleAutoPair(editorContent, start, end, e.key);
+        if (autoRes) {
+          e.preventDefault();
+          applyTextResultToTextarea(textarea, autoRes, setEditorContent);
+          return;
+        }
+      }
+    },
+    [editorContent, handleSaveJournal]
+  );
 
   const handleDeleteJournal = useCallback((journal: JournalEntry) => {
     setPendingDeleteJournal(journal);
@@ -3009,18 +3204,19 @@ export function StudyDashboard() {
                                           </button>
                                         );
                                       }
-                                      if (entry.context.type === "paper") {
+                                      if (entry.context?.type === "paper") {
+                                        const paperCtx = entry.context;
                                         return (
                                           <button
                                             type="button"
-                                            className={`journal-context-badge area-${entry.context.area}`}
-                                            title={entry.context.paperTitle}
+                                            className={`journal-context-badge area-${paperCtx.area}`}
+                                            title={paperCtx.paperTitle}
                                             onClick={() => {
-                                              setActiveArea(entry.context.area);
+                                              setActiveArea(paperCtx.area);
                                               setActivePage("sprint");
                                             }}
                                           >
-                                            🎯 {entry.context.paperTitle}
+                                            🎯 {paperCtx.paperTitle}
                                           </button>
                                         );
                                       }
@@ -4041,47 +4237,6 @@ export function StudyDashboard() {
                 <span className="dialog-kicker">{editingJournalId ? "编辑记录" : "新建记录"}</span>
                 <h2 id="journal-editor-title">{editingJournalId ? "编辑学习日志" : "写一条学习日志"}</h2>
               </div>
-              <div className="journal-editor-view-modes">
-                <div className="desktop-view-modes" role="group" aria-label="视图模式">
-                  <button
-                    type="button"
-                    className={editorMode === "edit" ? "active" : ""}
-                    onClick={() => setEditorMode("edit")}
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    className={editorMode === "split" ? "active" : ""}
-                    onClick={() => setEditorMode("split")}
-                  >
-                    分栏
-                  </button>
-                  <button
-                    type="button"
-                    className={editorMode === "preview" ? "active" : ""}
-                    onClick={() => setEditorMode("preview")}
-                  >
-                    预览
-                  </button>
-                </div>
-                <div className="mobile-view-modes" role="group" aria-label="移动端视图">
-                  <button
-                    type="button"
-                    className={editorMode !== "preview" ? "active" : ""}
-                    onClick={() => setEditorMode("edit")}
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    className={editorMode === "preview" ? "active" : ""}
-                    onClick={() => setEditorMode("preview")}
-                  >
-                    预览
-                  </button>
-                </div>
-              </div>
               <button
                 type="button"
                 className="journal-modal-close"
@@ -4241,43 +4396,159 @@ export function StudyDashboard() {
               </div>
             </div>
 
-            <div className={`journal-editor-body mode-${editorMode}`}>
-              {(editorMode === "edit" || editorMode === "split") && (
-                <div className="journal-editor-pane pane-input">
-                  <textarea
-                    className="journal-textarea"
-                    placeholder="写下今天的学习心得、对定理/算法的理解或复盘体会...&#10;&#10;支持 Markdown 语法与 LaTeX 数学公式：&#10;- 行内公式：$O(n \log n)$ 或 $e^{i\pi} + 1 = 0$&#10;- 块级公式：$$\int_0^1 f(x)dx$$&#10;- 代码块：```cpp ... ```&#10;- 任务列表：- [ ] 待复习"
-                    value={editorContent}
-                    onChange={(e) => setEditorContent(e.target.value)}
-                    autoFocus
-                  />
-                  <div className="journal-editor-statusbar">
-                    <span>{editorContent.length} 字</span>
-                    <span className="math-hint">公式：`$行内$` 与 `$$块级$$`</span>
-                  </div>
+            <div className="journal-editor-body mode-split">
+              <div className="journal-editor-pane pane-input">
+                <div className="journal-editor-toolbar" role="toolbar" aria-label="Markdown 格式化工具栏">
+                  <button
+                    type="button"
+                    className="journal-tb-btn journal-tb-btn--bold"
+                    title="加粗 (Ctrl+B)"
+                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "**", "**", "加粗文本"))}
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn journal-tb-btn--italic"
+                    title="斜体 (Ctrl+I)"
+                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "*", "*", "斜体文本"))}
+                  >
+                    I
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn journal-tb-btn--strike"
+                    title="删除线 (Ctrl+Shift+X)"
+                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "~~", "~~", "删除线文本"))}
+                  >
+                    S
+                  </button>
+                  <span className="journal-tb-divider" />
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="1级标题 (Ctrl+1)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 1))}
+                  >
+                    H1
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="2级标题 (Ctrl+2)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 2))}
+                  >
+                    H2
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="3级标题 (Ctrl+3)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 3))}
+                  >
+                    H3
+                  </button>
+                  <span className="journal-tb-divider" />
+                  <button
+                    type="button"
+                    className="journal-tb-btn journal-tb-btn--mono"
+                    title="LaTeX 数学公式 (Ctrl+M)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyMath(t, s, e))}
+                  >
+                    $fx$
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn journal-tb-btn--mono"
+                    title="代码块 (Ctrl+`)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyCode(t, s, e))}
+                  >
+                    &lt;/&gt;
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="超链接 (Ctrl+K)"
+                    onClick={() => applyEditorFormat((t, s, e) => applyLink(t, s, e))}
+                  >
+                    🔗
+                  </button>
+                  <span className="journal-tb-divider" />
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="无序列表 (Ctrl+Shift+U)"
+                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "bullet"))}
+                  >
+                    • 列表
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="有序列表 (Ctrl+Shift+O)"
+                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "number"))}
+                  >
+                    1. 列表
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="待办清单 (Ctrl+Shift+T)"
+                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "task"))}
+                  >
+                    ☑ 待办
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="引用块 (Ctrl+Shift+Q)"
+                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "quote"))}
+                  >
+                    ❝ 引用
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-tb-btn"
+                    title="插入表格模板"
+                    onClick={() => applyEditorFormat((t, s, e) => applyTableTemplate(t, s, e))}
+                  >
+                    ⊞ 表格
+                  </button>
                 </div>
-              )}
 
-              {(editorMode === "preview" || editorMode === "split") && (
-                <div className="journal-editor-pane pane-preview">
-                  <div className="preview-header">
-                    <span className="preview-label">实时渲染预览</span>
-                  </div>
-                  <div className="preview-content-scroll">
-                    {editorTitle && <h3 className="preview-journal-title">{editorTitle}</h3>}
-                    {editorContent.trim() ? (
-                      <MarkdownRenderer content={editorContent} />
-                    ) : (
-                      <p className="preview-empty-hint">在左侧输入 Markdown 内容即可在此实时预览。</p>
-                    )}
-                  </div>
+                <textarea
+                  ref={journalTextareaRef}
+                  className="journal-textarea"
+                  placeholder="写下今天的学习心得、对定理/算法的理解或复盘体会...&#10;&#10;支持 Markdown 语法与 LaTeX 数学公式：&#10;- 行内公式：$O(n \log n)$ 或 $e^{i\pi} + 1 = 0$&#10;- 块级公式：$$\int_0^1 f(x)dx$$&#10;- 代码块：```cpp ... ```&#10;- 任务列表：- [ ] 待复习"
+                  value={editorContent}
+                  onChange={(e) => setEditorContent(e.target.value)}
+                  onKeyDown={handleEditorKeyDown}
+                  autoFocus
+                />
+                <div className="journal-editor-statusbar">
+                  <span>{editorContent.length} 字</span>
+                  <span className="math-hint">快捷键：Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+K 链接 · Ctrl+M 公式 · Tab 缩进</span>
                 </div>
-              )}
+              </div>
+
+              <div className="journal-editor-pane pane-preview">
+                <div className="preview-header">
+                  <span className="preview-label">实时渲染预览</span>
+                </div>
+                <div className="preview-content-scroll">
+                  {editorTitle && <h3 className="preview-journal-title">{editorTitle}</h3>}
+                  {editorContent.trim() ? (
+                    <MarkdownRenderer content={editorContent} />
+                  ) : (
+                    <p className="preview-empty-hint">在左侧输入 Markdown 内容即可在此实时预览。</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <footer className="journal-editor-footer">
               <div className="editor-footer-left">
-                <span className="editor-shortcut-hint">支持 GFM 表格、Task List 与 KaTeX 公式</span>
+                <span className="editor-shortcut-hint">支持 GFM 表格、Task List 与 KaTeX 公式 · 按 Ctrl+S 保存</span>
               </div>
               <div className="editor-footer-actions">
                 <button
@@ -4635,16 +4906,9 @@ export function StudyDashboard() {
               <div className="q-quick-btn-group">
                 <button
                   type="button"
-                  className="btn-mark-all-correct"
-                  onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
-                  title="将选择题设为全部正确"
-                >
-                  一键全对 🟢
-                </button>
-                <button
-                  type="button"
                   className="btn-clear-questions"
                   onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
+                  title="重置清空本卷所有做题记录"
                 >
                   一键清零 🔄
                 </button>
@@ -4659,8 +4923,18 @@ export function StudyDashboard() {
                   {/* Part 1: 客观题 (1~16, 包含单选与填空，纯点选对错) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">客观题</span>
-                      <span className="q-type-subtitle">第 1 ~ 16 题 · 每题 5 分 · 共 80 分</span>
+                      <div className="q-type-header-left">
+                        <span className="q-type-title">客观题</span>
+                        <span className="q-type-subtitle">第 1 ~ 16 题 · 每题 5 分 · 共 80 分</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-choice-all-correct"
+                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
+                        title="将客观选择与填空设为全部正确"
+                      >
+                        一键全对 🟢
+                      </button>
                     </div>
                     <div className="q-type-rows">
                       <div className="q-heatmap-row">
@@ -4676,7 +4950,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [单选 · 5分]：点击切换正确 / 错误`}
+                                title={`第 ${num} 题 [单选 · 5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -4698,7 +4972,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [填空 · 5分]：点击切换正确 / 错误`}
+                                title={`第 ${num} 题 [填空 · 5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -4763,8 +5037,18 @@ export function StudyDashboard() {
                   {/* Part 1: 选择题 (1~45, 完形、传统阅读、新题型) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">选择题</span>
-                      <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分</span>
+                      <div className="q-type-header-left">
+                        <span className="q-type-title">选择题</span>
+                        <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-choice-all-correct"
+                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
+                        title="将选择题设为全部正确"
+                      >
+                        一键全对 🟢
+                      </button>
                     </div>
                     <div className="q-type-rows">
                       <div className="q-heatmap-row">
@@ -4780,7 +5064,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换正确 / 错误`}
+                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -4802,7 +5086,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读A · 2分]：点击切换正确 / 错误`}
+                                title={`第 ${num} 题 [阅读A · 2分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -4824,7 +5108,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换正确 / 错误`}
+                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -4897,8 +5181,18 @@ export function StudyDashboard() {
                   {/* Part 1: 选择题 (1~40) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">选择题</span>
-                      <span className="q-type-subtitle">第 1 ~ 40 题 · 每题 2 分 · 共 80 分</span>
+                      <div className="q-type-header-left">
+                        <span className="q-type-title">选择题</span>
+                        <span className="q-type-subtitle">第 1 ~ 40 题 · 每题 2 分 · 共 80 分</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-choice-all-correct"
+                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
+                        title="将选择题设为全部正确"
+                      >
+                        一键全对 🟢
+                      </button>
                     </div>
                     <div className="q-type-rows">
                       {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
@@ -4924,7 +5218,7 @@ export function StudyDashboard() {
                                     key={num}
                                     type="button"
                                     className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
+                                    title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
                                     onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                                   >
                                     {num}
