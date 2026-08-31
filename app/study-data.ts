@@ -110,6 +110,7 @@ export type JournalEntry = {
   content: string;
   context: JournalContext | null;
   publish: JournalPublish;
+  important?: boolean;
 };
 
 export type PaperKind = "past" | "mock";
@@ -895,6 +896,7 @@ export function normalizeJournalEntry(value: unknown): JournalEntry | null {
   const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : null;
   const context = normalizeJournalContext(value.context);
   const publish = normalizeJournalPublish(value.publish);
+  const important = Boolean(value.important);
 
   return {
     id: value.id,
@@ -904,6 +906,7 @@ export function normalizeJournalEntry(value: unknown): JournalEntry | null {
     content: value.content,
     context,
     publish,
+    important,
   };
 }
 

@@ -79,7 +79,7 @@ type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "sprint" | "today" | "analytics" | "settings";
 type NavigationIcon = "progress" | "sprint" | "today" | "analytics" | "settings";
-type JournalFilter = "all" | "unlinked" | "linked" | "408" | "math" | "published";
+type JournalFilter = "all" | "important" | "unlinked" | "linked" | "408" | "math" | "published";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
@@ -515,6 +515,7 @@ export function StudyDashboard() {
   const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
   const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(null);
   const journalTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [editorImportant, setEditorImportant] = useState(false);
   const [showTitleInput, setShowTitleInput] = useState(false);
   const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
   const [blogPublishJournal, setBlogPublishJournal] = useState<JournalEntry | null>(null);
@@ -2068,6 +2069,7 @@ export function StudyDashboard() {
       const sections = extractJournalSections(entry.context);
       const isUnlinked = entry.context === null || (entry.context.type === "sections" && entry.context.sections.length === 0);
 
+      if (journalFilter === "important" && !entry.important) return false;
       if (journalFilter === "unlinked" && !isUnlinked) return false;
       if (journalFilter === "linked" && isUnlinked) return false;
       if (journalFilter === "408") {
@@ -2156,6 +2158,7 @@ export function StudyDashboard() {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
+    setEditorImportant(false);
     if (context?.type === "paper") {
       setEditorPaper(context);
       setEditorSections([]);
@@ -2171,6 +2174,7 @@ export function StudyDashboard() {
     setEditingJournalId(journal.id);
     setEditorTitle(journal.title ?? "");
     setEditorContent(journal.content);
+    setEditorImportant(Boolean(journal.important));
     if (journal.context?.type === "paper") {
       setEditorPaper(journal.context);
       setEditorSections([]);
@@ -2180,6 +2184,22 @@ export function StudyDashboard() {
     }
     setShowTitleInput(Boolean(journal.title));
     setIsEditorOpen(true);
+  }, []);
+
+  const toggleJournalImportant = useCallback((id: string) => {
+    setJournals((prev) => {
+      const target = prev.find((entry) => entry.id === id);
+      const nextImportant = !target?.important;
+      setFeedbackMessage(nextImportant ? "⭐ 已标为重点日志" : "已取消重点标记");
+      return prev.map((entry) => {
+        if (entry.id !== id) return entry;
+        return {
+          ...entry,
+          important: nextImportant,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+    });
   }, []);
 
   const handleSaveJournal = useCallback(() => {
@@ -2205,6 +2225,7 @@ export function StudyDashboard() {
           title: trimmedTitle,
           content: editorContent,
           context: contextToSave,
+          important: editorImportant,
           updatedAt: now,
         };
       }));
@@ -2218,6 +2239,7 @@ export function StudyDashboard() {
         title: trimmedTitle,
         content: editorContent,
         context: contextToSave,
+        important: editorImportant,
         publish: {
           status: "local",
           publishedAt: null,
@@ -2233,9 +2255,10 @@ export function StudyDashboard() {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
+    setEditorImportant(false);
     setEditorSections([]);
     setEditorPaper(null);
-  }, [editorContent, editorTitle, editingJournalId, editorSections, editorPaper, journals]);
+  }, [editorContent, editorTitle, editorImportant, editingJournalId, editorSections, editorPaper, journals]);
 
   const applyEditorFormat = useCallback(
     (
@@ -3779,9 +3802,6 @@ export function StudyDashboard() {
                 <article className="analytics-card macro-card">
                   <div className="macro-card__top">
                     <span className="macro-card__label">推进完成度</span>
-                    <span className="macro-badge status-badge">
-                      {analyticsLearnedPercent >= analyticsTimeProgress ? "进度超前" : "平稳跟进"}
-                    </span>
                   </div>
                   <div className="macro-card__dual-val">
                     <div>
@@ -3881,7 +3901,6 @@ export function StudyDashboard() {
                   <div className="card-header-row">
                     <div>
                       <h3>周度产出趋势</h3>
-                      <p>近 8 周新学与复习动作对比</p>
                     </div>
                     <div className="trend-legend">
                       <span className="legend-item learned"><i /> 新学</span>
