@@ -837,3 +837,41 @@ test("Sprint: 清空全部套卷记录与题号状态深度校验", () => {
   assert.deepEqual(remerged2026?.questionScores, {});
 });
 
+test("Sprint: 试卷分数范围校验与满分夹取", () => {
+  function clampPaperScore(score, area) {
+    if (score === null || score === undefined || Number.isNaN(score)) return null;
+    const maxScore = area === "english" ? 100 : 150;
+    return Math.max(0, Math.min(maxScore, Math.round(score * 10) / 10));
+  }
+
+  // 408 & 数学满分 150
+  assert.equal(clampPaperScore(135.5, "408"), 135.5);
+  assert.equal(clampPaperScore(160, "408"), 150);
+  assert.equal(clampPaperScore(-5, "math"), 0);
+  assert.equal(clampPaperScore(150, "math"), 150);
+
+  // 英语满分 100
+  assert.equal(clampPaperScore(78.5, "english"), 78.5);
+  assert.equal(clampPaperScore(105, "english"), 100);
+  assert.equal(clampPaperScore(-2, "english"), 0);
+  assert.equal(clampPaperScore(null, "english"), null);
+});
+
+test("Sprint: 模拟卷墓碑删除与多端同步过滤", () => {
+  const currentPapers = [
+    { id: "past-408-2026", kind: "past", area: "408", title: "2026年 408真题", completed: false, completedAt: "", score: null, durationMinutes: null, secondRound: false, secondRoundAt: "" },
+    { id: "mock-keep-1", kind: "mock", area: "408", title: "模拟卷一", completed: true, completedAt: "2026-08-30", score: 120, durationMinutes: 180, secondRound: false, secondRoundAt: "" },
+    { id: "mock-delete-2", kind: "mock", area: "408", title: "模拟卷二", completed: false, completedAt: "", score: null, durationMinutes: null, secondRound: false, secondRoundAt: "" },
+  ];
+
+  const deletedPaperIds = ["mock-delete-2"];
+  const deletedSet = new Set(deletedPaperIds);
+  const filtered = currentPapers.filter((p) => !deletedSet.has(p.id));
+
+  assert.equal(filtered.length, 2);
+  assert.ok(filtered.some((p) => p.id === "past-408-2026"));
+  assert.ok(filtered.some((p) => p.id === "mock-keep-1"));
+  assert.ok(!filtered.some((p) => p.id === "mock-delete-2"));
+});
+
+

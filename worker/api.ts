@@ -744,6 +744,7 @@ async function writeAppData(
   data: AppData,
   replace: boolean,
   deletedJournalIds: string[] = [],
+  deletedPaperIds: string[] = [],
 ): Promise<JournalEntry[]> {
   const statements: ReturnType<Env["DB"]["prepare"]>[] = [];
   if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(WORKSPACE_ID));
@@ -789,6 +790,12 @@ async function writeAppData(
   if (deletedJournalIds.length > 0) {
     const deletedSet = new Set(deletedJournalIds);
     finalJournals = finalJournals.filter((j) => !deletedSet.has(j.id));
+  }
+  // mergePapers is a union-only merge, so a paper removed on the client would be
+  // re-inserted from D1 unless it is dropped by tombstone here.
+  if (deletedPaperIds.length > 0) {
+    const deletedSet = new Set(deletedPaperIds);
+    finalPapers = finalPapers.filter((p) => !deletedSet.has(p.id));
   }
 
   statements.push(env.DB.prepare(
@@ -904,8 +911,11 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     const deletedJournalIds = Array.isArray(body?.deletedJournalIds)
       ? (body.deletedJournalIds as unknown[]).filter((id): id is string => typeof id === "string")
       : [];
+    const deletedPaperIds = Array.isArray(body?.deletedPaperIds)
+      ? (body.deletedPaperIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : [];
     try {
-      const savedJournals = await writeAppData(env, data, replace, deletedJournalIds);
+      const savedJournals = await writeAppData(env, data, replace, deletedJournalIds, deletedPaperIds);
       return json({ saved: true, journals: savedJournals });
     } catch {
       return json({ error: "保存应用数据失败，请稍后重试" }, { status: 503 });

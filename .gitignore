@@ -45,6 +45,9 @@ next-env.d.ts
 # local Codex / hosting configuration
 .openai/
 .codex/
+.workbuddy/
+.workbuddy-ai/
+.agents/
 
 # local preview logs
 .local-preview*.log

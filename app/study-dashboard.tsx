@@ -564,11 +564,14 @@ export function StudyDashboard() {
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
   const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
+  const [pendingClearQuestionsPaperId, setPendingClearQuestionsPaperId] = useState<string | null>(null);
+  const [pendingClearAllPapers, setPendingClearAllPapers] = useState(false);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const repositoryRef = useRef<StorageRepository | null>(null);
   const deletedJournalIdsRef = useRef<string[]>([]);
+  const deletedPaperIdsRef = useRef<string[]>([]);
   const lastSavedPayloadRef = useRef<string>("");
 
   const repository = useCallback((): StorageRepository => {
@@ -611,6 +614,7 @@ export function StudyDashboard() {
     lastSavedPayloadRef.current = JSON.stringify({
       ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList),
       deletedJournalIds: [],
+      deletedPaperIds: [],
     });
   }, [repository]);
 
@@ -658,6 +662,7 @@ export function StudyDashboard() {
     const payloadString = JSON.stringify({
       ...appData,
       deletedJournalIds: deletedJournalIdsRef.current,
+      deletedPaperIds: deletedPaperIdsRef.current,
     });
 
     // If nothing changed from last saved payload, do not trigger a network PUT
@@ -681,6 +686,7 @@ export function StudyDashboard() {
         if (!response.ok) throw new Error("progress-save-failed");
         lastSavedPayloadRef.current = payloadString;
         deletedJournalIdsRef.current = [];
+        deletedPaperIdsRef.current = [];
 
         const resData = await response.json().catch(() => null) as { saved?: boolean; journals?: JournalEntry[] } | null;
         if (resData?.journals) {
@@ -692,6 +698,7 @@ export function StudyDashboard() {
             lastSavedPayloadRef.current = JSON.stringify({
               ...createAppData(progress, projectSettings, planHistory, resData.journals),
               deletedJournalIds: [],
+              deletedPaperIds: [],
             });
           }
         }
@@ -721,6 +728,12 @@ export function StudyDashboard() {
       window.clearInterval(interval);
     };
   }, [authState, loadRemoteData]);
+
+  useEffect(() => {
+    if (activeArea === "english" && sprintTab === "mock") {
+      setSprintTab("all");
+    }
+  }, [activeArea, sprintTab]);
 
   const performLogin = useCallback(async (codeToSubmit: string) => {
     if (codeToSubmit.length !== 6 || isSubmitting) return;
@@ -950,13 +963,11 @@ export function StudyDashboard() {
   const mockPapers = useMemo(() => sprintAreaPapers.filter((p) => p.kind === "mock"), [sprintAreaPapers]);
 
   const sprintPastCompleted = useMemo(() => pastPapers.filter((p) => p.completed).length, [pastPapers]);
-  const sprintPastSecondRound = useMemo(() => pastPapers.filter((p) => p.secondRound).length, [pastPapers]);
   const sprintPastTotal = pastPapers.length;
   const sprintPastPercent = sprintPastTotal ? Math.round((sprintPastCompleted / sprintPastTotal) * 100) : 0;
 
   const sprintMockCompleted = useMemo(() => mockPapers.filter((p) => p.completed).length, [mockPapers]);
   const sprintMockTotal = mockPapers.length;
-  const sprintMockPercent = sprintMockTotal ? Math.round((sprintMockCompleted / sprintMockTotal) * 100) : 0;
 
   const scoredPastPapers = useMemo(() => pastPapers.filter((p) => typeof p.score === "number" && p.score !== null), [pastPapers]);
   const sprintPastAvgScore = useMemo(() => {
@@ -1002,20 +1013,6 @@ export function StudyDashboard() {
     return { avgChoiceScore, avgChoiceRate, count: papersWithChoice };
   }, [activeArea, pastPapers]);
 
-  const scoredPapers = useMemo(() => sprintAreaPapers.filter((p) => typeof p.score === "number" && p.score !== null), [sprintAreaPapers]);
-  const sprintAvgScore = useMemo(() => {
-    if (!scoredPapers.length) return "--";
-    const sum = scoredPapers.reduce((acc, p) => acc + (p.score ?? 0), 0);
-    return (sum / scoredPapers.length).toFixed(1);
-  }, [scoredPapers]);
-
-  const timedPapers = useMemo(() => sprintAreaPapers.filter((p) => typeof p.durationMinutes === "number" && p.durationMinutes !== null), [sprintAreaPapers]);
-  const sprintAvgDuration = useMemo(() => {
-    if (!timedPapers.length) return "--";
-    const sum = timedPapers.reduce((acc, p) => acc + (p.durationMinutes ?? 0), 0);
-    return Math.round(sum / timedPapers.length);
-  }, [timedPapers]);
-
   const journalsByPaper = useMemo(() => {
     const map: Record<string, JournalEntry[]> = {};
     journals.forEach((entry) => {
@@ -1026,10 +1023,6 @@ export function StudyDashboard() {
     });
     return map;
   }, [journals]);
-
-  const sprintJournalsCount = useMemo(() => {
-    return journals.filter((j) => j.context?.type === "paper" && j.context.area === activeArea).length;
-  }, [journals, activeArea]);
 
   const visiblePastPapers = useMemo(() => {
     const list = pastPapers.filter((p) => {
@@ -1058,7 +1051,26 @@ export function StudyDashboard() {
   }, [activePaperQuestionModalId, papers]);
 
   function updatePaper(id: string, patch: Partial<PaperRecord>) {
-    setPapers((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    let clampNotice = "";
+    setPapers((current) => current.map((p) => {
+      if (p.id !== id) return p;
+      const nextPatch = { ...patch };
+      if (typeof nextPatch.score === "number" && !Number.isNaN(nextPatch.score)) {
+        const maxScore = p.area === "english" ? 100 : 150;
+        const origScore = nextPatch.score;
+        const clamped = Math.max(0, Math.min(maxScore, Math.round(origScore * 10) / 10));
+        if (origScore > maxScore) {
+          clampNotice = `已按满分 ${maxScore} 分修正`;
+        } else if (origScore < 0) {
+          clampNotice = "得分不能低于 0 分，已修正为 0 分";
+        }
+        nextPatch.score = clamped;
+      }
+      return { ...p, ...nextPatch };
+    }));
+    if (clampNotice) {
+      setFeedbackMessage(clampNotice);
+    }
   }
 
   function togglePaperCompleted(id: string, completed: boolean) {
@@ -1069,6 +1081,8 @@ export function StudyDashboard() {
         ...p,
         completed,
         completedAt: completed ? (p.completedAt || todayStr) : "",
+        secondRound: completed ? p.secondRound : false,
+        secondRoundAt: completed ? p.secondRoundAt : "",
       };
     }));
   }
@@ -1077,8 +1091,11 @@ export function StudyDashboard() {
     const todayStr = dateToday();
     setPapers((current) => current.map((p) => {
       if (p.id !== id) return p;
+      const nextCompleted = secondRound ? true : p.completed;
       return {
         ...p,
+        completed: nextCompleted,
+        completedAt: nextCompleted ? (p.completedAt || todayStr) : "",
         secondRound,
         secondRoundAt: secondRound ? (p.secondRoundAt || todayStr) : "",
       };
@@ -1109,6 +1126,12 @@ export function StudyDashboard() {
   }
 
   function handleDeleteMockPaper(id: string) {
+    // Record a tombstone: mergePapers is a union-only merge, so a deletion would
+    // otherwise be re-inserted from D1 on the next poll unless the server is told
+    // to drop this id explicitly.
+    if (!deletedPaperIdsRef.current.includes(id)) {
+      deletedPaperIdsRef.current.push(id);
+    }
     setPapers((current) => current.filter((p) => p.id !== id));
     setPendingDeletePaperId(null);
     setFeedbackMessage("已删除模拟试卷");
@@ -1395,107 +1418,41 @@ export function StudyDashboard() {
       (paper.questionScores && Object.keys(paper.questionScores).length > 0)
     );
 
+    type ChoiceGroup = { name: string; start: number; count: number; label: string };
+    type BigQuestion = { num: number; name: string; max?: number };
+
+    let choiceGroups: ChoiceGroup[] = [];
+    let bigQuestions: BigQuestion[] = [];
+    let choiceTagLabel = "选择";
+    let subjTagLabel = "大题";
+    let subjectiveLabel = "大题";
+
     if (paper.area === "408") {
-      const choiceGroups = [
-        { name: "DS", start: 1, count: 11, label: "数构" },
-        { name: "CO", start: 12, count: 11, label: "计组" },
-        { name: "OS", start: 23, count: 10, label: "系统" },
-        { name: "CN", start: 33, count: 8, label: "计网" },
+      choiceGroups = [
+        { name: "数构", start: 1, count: 11, label: "数构" },
+        { name: "计组", start: 12, count: 11, label: "计组" },
+        { name: "系统", start: 23, count: 10, label: "系统" },
+        { name: "计网", start: 33, count: 8, label: "计网" },
       ];
-      const bigQuestions = [
-        { num: 41, subj: "DS", name: "数据结构" },
-        { num: 42, subj: "DS", name: "数据结构" },
-        { num: 43, subj: "CO", name: "组成原理" },
-        { num: 44, subj: "CO", name: "组成原理" },
-        { num: 45, subj: "OS", name: "操作系统" },
-        { num: 46, subj: "OS", name: "操作系统" },
-        { num: 47, subj: "CN", name: "计网" },
+      bigQuestions = [
+        { num: 41, name: "数构" },
+        { num: 42, name: "数构" },
+        { num: 43, name: "计组" },
+        { num: 44, name: "计组" },
+        { num: 45, name: "系统" },
+        { num: 46, name: "系统" },
+        { num: 47, name: "计网" },
       ];
-
-      return (
-        <div
-          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title="点击打开答题卡录入或调整做题表现"
-          onClick={() => {
-            setActivePaperQuestionModalId(paper.id);
-            setQuickWrongInput("");
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              setActivePaperQuestionModalId(paper.id);
-              setQuickWrongInput("");
-            }
-          }}
-        >
-          <div className="mini-heatmap-head">
-            <div className="mini-heatmap-tags">
-              {qSummary ? (
-                <>
-                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
-                    选择: {qSummary.choiceAccuracyPercent}%
-                  </span>
-                  {qSummary.subjectiveRecorded > 0 && (
-                    <span className="mini-heatmap-tag tag-subj">
-                      大题: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mini-heatmap-rows-stack">
-            {choiceGroups.map((grp) => (
-              <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                <span className="mini-row-label">{grp.name}:</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: grp.count }, (_, i) => {
-                    const num = grp.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <div className="mini-heatmap-row mini-heatmap-row--subj">
-              <span className="mini-row-label">大题:</span>
-              <div className="mini-subj-chips">
-                {bigQuestions.map((bq) => {
-                  const st = paper.questions?.[bq.num];
-                  const sc = paper.questionScores?.[bq.num];
-                  return (
-                    <span
-                      key={bq.num}
-                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                      title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                    >
-                      {bq.num}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
+      choiceTagLabel = "选择";
+      subjTagLabel = "大题";
+      subjectiveLabel = "大题";
     } else if (paper.area === "english") {
-      const choiceGroups = [
-        { name: "CL", start: 1, count: 20, label: "完形" },
-        { name: "RA", start: 21, count: 20, label: "阅读A" },
-        { name: "RB", start: 41, count: 5, label: "新题型" },
+      choiceGroups = [
+        { name: "完形", start: 1, count: 20, label: "完形" },
+        { name: "阅读A", start: 21, count: 20, label: "阅读A" },
+        { name: "阅读B", start: 41, count: 5, label: "阅读B" },
       ];
-      const bigQuestions = [
+      bigQuestions = [
         { num: 46, name: "翻译 1" },
         { num: 47, name: "翻译 2" },
         { num: 48, name: "翻译 3" },
@@ -1504,190 +1461,105 @@ export function StudyDashboard() {
         { num: 51, name: "小作文" },
         { num: 52, name: "大作文" },
       ];
-
-      return (
-        <div
-          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title="点击打开答题卡录入或调整做题表现"
-          onClick={() => {
-            setActivePaperQuestionModalId(paper.id);
-            setQuickWrongInput("");
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              setActivePaperQuestionModalId(paper.id);
-              setQuickWrongInput("");
-            }
-          }}
-        >
-          <div className="mini-heatmap-head">
-            <div className="mini-heatmap-tags">
-              {qSummary ? (
-                <>
-                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
-                    选择: {qSummary.choiceAccuracyPercent}%
-                  </span>
-                  {qSummary.subjectiveRecorded > 0 && (
-                    <span className="mini-heatmap-tag tag-subj">
-                      主观: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mini-heatmap-rows-stack">
-            {choiceGroups.map((grp) => (
-              <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                <span className="mini-row-label">{grp.name}:</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: grp.count }, (_, i) => {
-                    const num = grp.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <div className="mini-heatmap-row mini-heatmap-row--subj">
-              <span className="mini-row-label">主观:</span>
-              <div className="mini-subj-chips">
-                {bigQuestions.map((bq) => {
-                  const st = paper.questions?.[bq.num];
-                  const sc = paper.questionScores?.[bq.num];
-                  return (
-                    <span
-                      key={bq.num}
-                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                      title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                    >
-                      {bq.num}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
+      choiceTagLabel = "选择";
+      subjTagLabel = "主观";
+      subjectiveLabel = "主观";
     } else {
-      // Math: 1~10 选择, 11~16 填空, 17~22 解答
-      const choiceGroup = { name: "单选", start: 1, count: 10, label: "单选" };
-      const blankGroup = { name: "填空", start: 11, count: 6, label: "填空" };
-      const solvingGroup = [
-        { num: 17, max: 10 },
-        { num: 18, max: 12 },
-        { num: 19, max: 12 },
-        { num: 20, max: 12 },
-        { num: 21, max: 12 },
-        { num: 22, max: 12 },
+      choiceGroups = [
+        { name: "单选", start: 1, count: 10, label: "单选 · 5分" },
+        { name: "填空", start: 11, count: 6, label: "填空 · 5分" },
       ];
+      bigQuestions = [
+        { num: 17, max: 10, name: "解答题 · 10分" },
+        { num: 18, max: 12, name: "解答题 · 12分" },
+        { num: 19, max: 12, name: "解答题 · 12分" },
+        { num: 20, max: 12, name: "解答题 · 12分" },
+        { num: 21, max: 12, name: "解答题 · 12分" },
+        { num: 22, max: 12, name: "解答题 · 12分" },
+      ];
+      choiceTagLabel = "选填";
+      subjTagLabel = "大题";
+      subjectiveLabel = "解答";
+    }
 
-      return (
-        <div
-          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title="点击打开答题卡录入或调整做题表现"
-          onClick={() => {
+    return (
+      <div
+        className="bento-mini-heatmap"
+        title="点击打开答题卡录入或调整做题表现"
+        onClick={() => {
+          setActivePaperQuestionModalId(paper.id);
+          setQuickWrongInput("");
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
             setActivePaperQuestionModalId(paper.id);
             setQuickWrongInput("");
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              setActivePaperQuestionModalId(paper.id);
-              setQuickWrongInput("");
-            }
-          }}
-        >
-          <div className="mini-heatmap-head">
-            <div className="mini-heatmap-tags">
-              {qSummary ? (
-                <>
-                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
-                    选填: {qSummary.choiceAccuracyPercent}%
+          }
+        }}
+      >
+        <div className="mini-heatmap-head">
+          <div className="mini-heatmap-tags">
+            {qSummary ? (
+              <>
+                <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
+                  {choiceTagLabel}: {qSummary.choiceAccuracyPercent}%
+                </span>
+                {qSummary.subjectiveRecorded > 0 && (
+                  <span className="mini-heatmap-tag tag-subj">
+                    {subjTagLabel}: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
                   </span>
-                  {qSummary.subjectiveRecorded > 0 && (
-                    <span className="mini-heatmap-tag tag-subj">
-                      大题: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
-              )}
-            </div>
+                )}
+              </>
+            ) : (
+              <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
+            )}
           </div>
+        </div>
 
-          <div className="mini-heatmap-rows-stack">
-            <div className="mini-heatmap-row" title="第 1~10 题 单项选择">
-              <span className="mini-row-label">单选:</span>
+        <div className="mini-heatmap-rows-stack">
+          {choiceGroups.map((grp) => (
+            <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+              <span className="mini-row-label">{grp.name}:</span>
               <div className="mini-group-dots">
-                {Array.from({ length: choiceGroup.count }, (_, i) => {
-                  const num = choiceGroup.start + i;
+                {Array.from({ length: grp.count }, (_, i) => {
+                  const num = grp.start + i;
                   const st = paper.questions?.[num];
                   return (
                     <span
                       key={num}
                       className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                      title={`第 ${num} 题 [单选 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确" : st === "wrong" ? "错题" : "未答"}`}
                     />
                   );
                 })}
               </div>
             </div>
+          ))}
 
-            <div className="mini-heatmap-row" title="第 11~16 题 填空题">
-              <span className="mini-row-label">填空:</span>
-              <div className="mini-group-dots">
-                {Array.from({ length: blankGroup.count }, (_, i) => {
-                  const num = blankGroup.start + i;
-                  const st = paper.questions?.[num];
-                  return (
-                    <span
-                      key={num}
-                      className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                      title={`第 ${num} 题 [填空 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mini-heatmap-row mini-heatmap-row--subj">
-              <span className="mini-row-label">解答:</span>
-              <div className="mini-subj-chips">
-                {solvingGroup.map((bq) => {
-                  const st = paper.questions?.[bq.num];
-                  const sc = paper.questionScores?.[bq.num];
-                  return (
-                    <span
-                      key={bq.num}
-                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                      title={`第 ${bq.num} 题 [解答题 · ${bq.max}分]: ${st === "correct" ? `满分/优 🟢 (${sc ?? bq.max}分)` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                    >
-                      {bq.num}
-                    </span>
-                  );
-                })}
-              </div>
+          <div className="mini-heatmap-row mini-heatmap-row--subj">
+            <span className="mini-row-label">{subjectiveLabel}:</span>
+            <div className="mini-subj-chips">
+              {bigQuestions.map((bq) => {
+                const st = paper.questions?.[bq.num];
+                const sc = paper.questionScores?.[bq.num];
+                const scoreInfo = sc !== undefined ? `(${sc}分)` : bq.max ? `(${bq.max}分)` : "";
+                return (
+                  <span
+                    key={bq.num}
+                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 ${scoreInfo}` : st === "partial" ? `部分得分/良 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                  >
+                    {bq.num}
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
-      );
-    }
+      </div>
+    );
   }
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
@@ -1909,8 +1781,9 @@ export function StudyDashboard() {
         body: JSON.stringify({ ...data, replace: true }),
       });
       if (!response.ok) throw new Error("app-data-replace-failed");
-      lastSavedPayloadRef.current = JSON.stringify({ ...data, deletedJournalIds: [] });
+      lastSavedPayloadRef.current = JSON.stringify({ ...data, deletedJournalIds: [], deletedPaperIds: [] });
       deletedJournalIdsRef.current = [];
+      deletedPaperIdsRef.current = [];
       setSyncStatus("saved");
       return true;
     } catch {
@@ -2013,12 +1886,12 @@ export function StudyDashboard() {
   }
 
   async function clearAllPaperRecords() {
-    if (!window.confirm("⚠️ 危险操作确认：\n\n确定要清空全部套卷和题目的完成记录与打分吗？\n\n此操作将重置 408、数学、英语 所有历年真题与模拟卷的做题状态、得分与错题点阵，并在云端和本地同步生效。")) return;
     const cleanPapers = defaultPastPapers();
     setPapers(cleanPapers);
     const cleanAppData = createAppData(progress, projectSettings, planHistory, journals, cleanPapers);
     repository().save(cleanAppData);
     await replaceCloudData(cleanAppData);
+    setPendingClearAllPapers(false);
     setFeedbackMessage("已成功清空全部套卷与题目的做题记录");
   }
 
@@ -2750,7 +2623,10 @@ export function StudyDashboard() {
                     type="button"
                     key={area}
                     aria-pressed={activeArea === area}
-                    onClick={() => setActiveArea(area)}
+                    onClick={() => {
+                      setActiveArea(area);
+                      if (area === "english" && sprintTab === "mock") setSprintTab("all");
+                    }}
                   >
                     {area === "408" ? "408" : area === "math" ? "数学" : "英语"}
                   </button>
@@ -3382,7 +3258,9 @@ export function StudyDashboard() {
                     <span className="score-box-label">真题平均分</span>
                     <div className="score-box-num">
                       <strong>{sprintPastAvgScore}</strong>
-                      <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small>
+                      {sprintPastAvgScore !== "--" && (
+                        <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -3411,7 +3289,9 @@ export function StudyDashboard() {
                       <span className="score-box-label">选择题加权均分</span>
                       <div className="score-box-num">
                         <strong>{englishChoiceStats?.avgChoiceScore ?? "--"}</strong>
-                        <small className="stat-unit">/ 60 分</small>
+                        {Boolean(englishChoiceStats?.avgChoiceScore) && (
+                          <small className="stat-unit">/ 60 分</small>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -3451,7 +3331,9 @@ export function StudyDashboard() {
                       <span className="score-box-label">模拟卷平均分</span>
                       <div className="score-box-num">
                         <strong>{sprintMockAvgScore}</strong>
-                        <small className="stat-unit">/ 150 分</small>
+                        {sprintMockAvgScore !== "--" && (
+                          <small className="stat-unit">/ 150 分</small>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -3459,67 +3341,73 @@ export function StudyDashboard() {
               </div>
 
               <div className="sprint-toolbar">
-                <div className="sprint-tab-group" role="tablist" aria-label="试卷类型筛选">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={sprintTab === "all"}
-                    className={sprintTab === "all" ? "active" : ""}
-                    onClick={() => setSprintTab("all")}
-                  >
-                    全部 ({sprintAreaPapers.length})
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={sprintTab === "past"}
-                    className={sprintTab === "past" ? "active" : ""}
-                    onClick={() => setSprintTab("past")}
-                  >
-                    历年真题 ({sprintPastTotal})
-                  </button>
-                  {activeArea !== "english" && (
+                <div className="sprint-filter-section">
+                  <span className="sprint-filter-label">类型</span>
+                  <div className="sprint-tab-group" role="tablist" aria-label="试卷类型筛选">
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={sprintTab === "mock"}
-                      className={sprintTab === "mock" ? "active" : ""}
-                      onClick={() => setSprintTab("mock")}
+                      aria-selected={sprintTab === "all"}
+                      className={sprintTab === "all" ? "active" : ""}
+                      onClick={() => setSprintTab("all")}
                     >
-                      模拟试题 ({sprintMockTotal})
+                      全部 ({sprintAreaPapers.length})
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sprintTab === "past"}
+                      className={sprintTab === "past" ? "active" : ""}
+                      onClick={() => setSprintTab("past")}
+                    >
+                      历年真题 ({sprintPastTotal})
+                    </button>
+                    {activeArea !== "english" && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={sprintTab === "mock"}
+                        className={sprintTab === "mock" ? "active" : ""}
+                        onClick={() => setSprintTab("mock")}
+                      >
+                        模拟试题 ({sprintMockTotal})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="sprint-toolbar-right">
-                  <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
-                    <button
-                      type="button"
-                      className={sprintStatusFilter === "all" ? "active" : ""}
-                      onClick={() => setSprintStatusFilter("all")}
-                    >
-                      全部
-                    </button>
-                    <button
-                      type="button"
-                      className={sprintStatusFilter === "uncompleted" ? "active" : ""}
-                      onClick={() => setSprintStatusFilter("uncompleted")}
-                    >
-                      未完成
-                    </button>
-                    <button
-                      type="button"
-                      className={sprintStatusFilter === "completed" ? "active" : ""}
-                      onClick={() => setSprintStatusFilter("completed")}
-                    >
-                      已完成
-                    </button>
+                  <div className="sprint-filter-section">
+                    <span className="sprint-filter-label">状态</span>
+                    <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
+                      <button
+                        type="button"
+                        className={sprintStatusFilter === "all" ? "active" : ""}
+                        onClick={() => setSprintStatusFilter("all")}
+                      >
+                        全部
+                      </button>
+                      <button
+                        type="button"
+                        className={sprintStatusFilter === "uncompleted" ? "active" : ""}
+                        onClick={() => setSprintStatusFilter("uncompleted")}
+                      >
+                        未完成
+                      </button>
+                      <button
+                        type="button"
+                        className={sprintStatusFilter === "completed" ? "active" : ""}
+                        onClick={() => setSprintStatusFilter("completed")}
+                      >
+                        已完成
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div className="sprint-bento-container">
-                {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
+                {(sprintTab === "all" || sprintTab === "past") && (
                   <section className="sprint-section" aria-labelledby="past-bento-heading">
                     <div className="sprint-section-header">
                       <div className="sprint-header-title-group">
@@ -3545,6 +3433,17 @@ export function StudyDashboard() {
                         </button>
                       </div>
                     </div>
+                    {visiblePastPapers.length === 0 ? (
+                      <div className="sprint-empty-card">
+                        <p>
+                          {sprintStatusFilter === "completed"
+                            ? "当前科目暂无已完成的真题记录"
+                            : sprintStatusFilter === "uncompleted"
+                            ? "当前科目的真题已全部完成"
+                            : "暂无历年真题"}
+                        </p>
+                      </div>
+                    ) : (
                       <div className="sprint-bento-grid">
                         {visiblePastPapers.map((paper) => {
                           const paperJournals = journalsByPaper[paper.id] ?? [];
@@ -3642,8 +3541,9 @@ export function StudyDashboard() {
                           );
                         })}
                       </div>
-                    </section>
-                  )}
+                    )}
+                  </section>
+                )}
 
                   {(sprintTab === "all" || sprintTab === "mock") && activeArea !== "english" && (
                     <section className="sprint-section" aria-labelledby="mock-bento-heading">
@@ -3660,7 +3560,13 @@ export function StudyDashboard() {
 
                       {visibleMockPapers.length === 0 ? (
                         <div className="sprint-empty-card">
-                          <p>暂无模拟试卷</p>
+                          <p>
+                            {sprintStatusFilter === "completed"
+                              ? "当前科目暂无已完成的模拟卷记录"
+                              : sprintStatusFilter === "uncompleted"
+                              ? (mockPapers.length === 0 ? "暂无模拟试卷，点击右上角添加" : "当前科目的模拟卷已全部完成")
+                              : "暂无模拟试卷，点击右上角添加"}
+                          </p>
                         </div>
                       ) : (
                         <div className="sprint-bento-grid">
@@ -4124,7 +4030,7 @@ export function StudyDashboard() {
                         <button type="button" className="settings-btn settings-btn--secondary" onClick={() => importInputRef.current?.click()}>
                           导入 JSON
                         </button>
-                        <button type="button" className="settings-btn settings-btn--danger" onClick={clearAllPaperRecords} title="清空全部学科历年真题与模拟卷的做题与打分记录">
+                        <button type="button" className="settings-btn settings-btn--danger" onClick={() => setPendingClearAllPapers(true)} title="清空全部学科历年真题与模拟卷的做题与打分记录">
                           清空套卷完成记录 ⚠️
                         </button>
                       </div>
@@ -4278,6 +4184,21 @@ export function StudyDashboard() {
               <button type="button" className="btn-cancel" onClick={() => setPendingDeleteBackup(null)}>取消</button>
               <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteBackup(pendingDeleteBackup.id)}>
                 确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingClearAllPapers && (
+        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingClearAllPapers(false); }}>
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="clear-papers-dialog-title">
+            <span className="dialog-kicker">危险操作 · 数据重置</span>
+            <h2 id="clear-papers-dialog-title">确认清空全部套卷完成记录？</h2>
+            <p>确定要清空全部套卷和题目的完成记录与打分吗？此操作将重置 408、数学、英语所有历年真题与模拟卷的做题状态、得分与错题点阵，并在云端和本地同步生效。</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setPendingClearAllPapers(false)}>取消</button>
+              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => void clearAllPaperRecords()}>
+                确认清空
               </button>
             </div>
           </div>
@@ -4933,6 +4854,29 @@ export function StudyDashboard() {
         </div>
       )}
 
+      {/* Clear Paper Questions Confirm Modal */}
+      {pendingClearQuestionsPaperId && (
+        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingClearQuestionsPaperId(null); }}>
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
+            <h2>确认清空整卷做题记录？</h2>
+            <p>清空后将重置该试卷的完成状态、得分、做题时长、二刷标记及所有题目的正误与小题得分记录，此操作不可撤销。</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setPendingClearQuestionsPaperId(null)}>取消</button>
+              <button
+                type="button"
+                className="btn-confirm btn-confirm--danger"
+                onClick={() => {
+                  clearPaperQuestions(pendingClearQuestionsPaperId);
+                  setPendingClearQuestionsPaperId(null);
+                }}
+              >
+                确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Visual Question Board Modal */}
       {activeQuestionPaper && (
         <div className="confirm-overlay paper-q-modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setActivePaperQuestionModalId(null); }}>
@@ -4998,10 +4942,10 @@ export function StudyDashboard() {
                 <button
                   type="button"
                   className="btn-clear-questions"
-                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
+                  onClick={() => setPendingClearQuestionsPaperId(activeQuestionPaper.id)}
                   title="重置清空本卷所有做题记录"
                 >
-                  一键清零 🔄
+                  一键清零
                 </button>
               </div>
             </div>
@@ -5024,7 +4968,7 @@ export function StudyDashboard() {
                         onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
                         title="将客观选择与填空设为全部正确"
                       >
-                        一键全对 🟢
+                        一键全对
                       </button>
                     </div>
                     <div className="q-type-rows">
@@ -5041,7 +4985,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [单选 · 5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                title={`第 ${num} 题 [单选 · 5分]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -5063,7 +5007,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [填空 · 5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                title={`第 ${num} 题 [填空 · 5分]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -5103,7 +5047,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分 🟢)"
+                                title="优 (满分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5111,7 +5055,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分 🟡)"
+                                title="良 (部分分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5119,7 +5063,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分 🔴)"
+                                title="差 (失分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5158,7 +5102,7 @@ export function StudyDashboard() {
                         onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
                         title="将选择题设为全部正确"
                       >
-                        一键全对 🟢
+                        一键全对
                       </button>
                     </div>
                     <div className="q-type-rows">
@@ -5175,7 +5119,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -5197,7 +5141,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读A · 2分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                title={`第 ${num} 题 [阅读A · 2分]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -5219,7 +5163,7 @@ export function StudyDashboard() {
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                               >
                                 {num}
@@ -5260,7 +5204,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分 🟢)"
+                                title="优 (满分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5268,7 +5212,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分 🟡)"
+                                title="良 (部分分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5276,7 +5220,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分 🔴)"
+                                title="差 (失分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5315,17 +5259,17 @@ export function StudyDashboard() {
                         onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
                         title="将选择题设为全部正确"
                       >
-                        一键全对 🟢
+                        一键全对
                       </button>
                     </div>
                     <div className="q-type-rows">
                       {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
                         const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
                         const abbrMap: Record<string, string> = {
-                          "数据结构": "DS",
-                          "计算机组成原理": "CO",
-                          "操作系统": "OS",
-                          "计算机网络": "CN",
+                          "数据结构": "数构",
+                          "计算机组成原理": "计组",
+                          "操作系统": "系统",
+                          "计算机网络": "计网",
                         };
                         const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
                         return (
@@ -5342,7 +5286,7 @@ export function StudyDashboard() {
                                     key={num}
                                     type="button"
                                     className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 🟢 / 错题 🔴 / 取消 ⚪`}
+                                    title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 / 错题 / 取消`}
                                     onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                                   >
                                     {num}
@@ -5364,13 +5308,13 @@ export function StudyDashboard() {
                     </div>
                     <div className="q-rating-grid">
                       {[
-                        { num: 41, subj: "DS", max: 13 },
-                        { num: 42, subj: "DS", max: 13 },
-                        { num: 43, subj: "CO", max: 13 },
-                        { num: 44, subj: "CO", max: 13 },
-                        { num: 45, subj: "OS", max: 12 },
-                        { num: 46, subj: "OS", max: 12 },
-                        { num: 47, subj: "CN", max: 11 },
+                        { num: 41, subj: "数构", max: 13 },
+                        { num: 42, subj: "数构", max: 13 },
+                        { num: 43, subj: "计组", max: 13 },
+                        { num: 44, subj: "计组", max: 13 },
+                        { num: 45, subj: "系统", max: 12 },
+                        { num: 46, subj: "系统", max: 12 },
+                        { num: 47, subj: "计网", max: 11 },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
                         const score = activeQuestionPaper.questionScores?.[item.num];
@@ -5385,7 +5329,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分 🟢)"
+                                title="优 (满分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5393,7 +5337,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分 🟡)"
+                                title="良 (部分分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5401,7 +5345,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分 🔴)"
+                                title="差 (失分)"
                               >
                                 <span className="dot-circle" />
                               </button>
@@ -5453,7 +5397,7 @@ export function StudyDashboard() {
                       setActivePaperQuestionModalId(null);
                     }}
                   >
-                    ✍ 生成错题复盘日志 {wrongNums.length > 0 ? `(${wrongNums.length}道错题)` : ""}
+                    生成错题复盘日志 {wrongNums.length > 0 ? `(${wrongNums.length}道错题)` : ""}
                   </button>
                 );
               })()}
