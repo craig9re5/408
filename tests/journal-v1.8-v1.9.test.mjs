@@ -478,8 +478,8 @@ test("createAppData: 打包导出数据包含 journals 与最新 schema", () => 
 
 test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日期", () => {
   const papers = defaultPastPapers();
-  // 408 有 17 套 (2010~2026)，数学有 17 套 (2010~2026)，英语有 17 套 (2010~2026)，共 51 套
-  assert.equal(papers.length, 51);
+  // 408 有 17 套 (2010~2026)，数学有 17 套 (2010~2026)，英语有 17 套 (2010~2026)，政治有 10 套 (2017~2026)，共 61 套
+  assert.equal(papers.length, 61);
 
   const past408 = papers.filter((p) => p.area === "408" && p.kind === "past");
   assert.equal(past408.length, 17);
@@ -496,6 +496,12 @@ test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日
   const pastEnglish = papers.filter((p) => p.area === "english" && p.kind === "past");
   assert.equal(pastEnglish.length, 17);
   assert.equal(pastEnglish[0].title, "2026年 英语真题");
+
+  const pastPolitics = papers.filter((p) => p.area === "politics" && p.kind === "past");
+  assert.equal(pastPolitics.length, 10);
+  assert.equal(pastPolitics[0].year, 2026);
+  assert.equal(pastPolitics[9].year, 2017);
+  assert.equal(pastPolitics[0].title, "2026年 政治真题");
 });
 
 test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管理", () => {
@@ -561,8 +567,8 @@ test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管
 
   const merged = mergePapers(deviceA_papers, deviceB_papers);
 
-  // 51 套真题 + 2 套模拟题 = 53 套
-  assert.equal(merged.length, 53);
+  // 61 套真题 + 2 套模拟题 = 63 套
+  assert.equal(merged.length, 63);
 
   const paper2025 = merged.find((p) => p.id === "past-408-2025");
   assert.equal(paper2025?.completed, true);

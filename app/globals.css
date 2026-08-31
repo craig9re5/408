@@ -768,7 +768,7 @@ input[type="number"] {
   .book-switcher { display: none; }
   .study-switchers { width: 236px; flex-basis: 236px; grid-template-columns: 112px 108px; gap: 6px; }
   .study-switchers.sprint-top-switchers { width: auto; flex-basis: auto; flex: 0 0 auto; display: flex; }
-  .study-switchers.sprint-top-switchers .area-switcher { width: 148px; }
+  .study-switchers.sprint-top-switchers .area-switcher { width: 196px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .book-select { display: block; width: 112px; }
   .book-select select { width: 100%; max-width: none; }
   .area-switcher { width: 108px; }
@@ -795,8 +795,8 @@ input[type="number"] {
   .topbar-title { font-size: 15px; }
   .study-switchers { display: flex; width: auto; flex: 0 0 auto; align-items: center; gap: 6px; }
   .study-switchers.sprint-top-switchers { width: auto; flex: 0 0 auto; }
-  .study-switchers.sprint-top-switchers .area-switcher { width: 130px; }
-  .study-switchers.sprint-top-switchers .area-switcher button { min-height: 26px; padding: 2px 2px; font-size: 11px; }
+  .study-switchers.sprint-top-switchers .area-switcher { width: 172px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .study-switchers.sprint-top-switchers .area-switcher button { min-height: 26px; padding: 2px 1px; font-size: 11px; }
   .book-select { display: block; padding: 0; border: 0; }
   .book-select select { height: 32px; max-width: 110px; min-width: 76px; padding: 0 20px 0 8px; font-size: 12px; font-weight: 600; border-radius: 7px; }
   .area-switcher { width: 92px; padding: 2px; border-radius: 7px; gap: 2px; }
@@ -3284,14 +3284,20 @@ input[type="number"] {
 }
 
 .study-switchers.sprint-top-switchers .area-switcher {
-  width: 172px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 224px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .journal-section-chip.area-english {
   background: rgba(116, 164, 181, 0.12);
   border-color: rgba(116, 164, 181, 0.3);
   color: var(--ink-soft);
+}
+
+.journal-section-chip.area-politics {
+  background: rgba(224, 102, 102, 0.12);
+  border-color: rgba(224, 102, 102, 0.3);
+  color: #a83232;
 }
 
 .sprint-toolbar {

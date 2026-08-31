@@ -608,6 +608,7 @@ export const defaultProjectSettings = (): ProjectSettings => ({
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },
   english: { examDate: "2026-12-19" },
+  politics: { examDate: "2026-12-19" },
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -715,7 +716,7 @@ function normalizeProgressMap(value: unknown, fallback: ProgressMap): ProgressMa
 function normalizeProjectSettings(value: unknown): ProjectSettings {
   const defaults = defaultProjectSettings();
   if (!isRecord(value)) return defaults;
-  (["408", "math", "english"] as StudyArea[]).forEach((area) => {
+  (["408", "math", "english", "politics"] as StudyArea[]).forEach((area) => {
     const setting = value[area];
     if (isRecord(setting) && isDate(setting.examDate)) defaults[area] = { examDate: setting.examDate };
   });
@@ -925,6 +926,10 @@ export const PAST_PAPER_YEARS = [
   2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
 ] as const;
 
+export const POLITICS_PAST_PAPER_YEARS = [
+  2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017
+] as const;
+
 export function defaultPastPapers(): PaperRecord[] {
   const list: PaperRecord[] = [];
   (["408", "math", "english"] as StudyArea[]).forEach((area) => {
@@ -945,6 +950,22 @@ export function defaultPastPapers(): PaperRecord[] {
       });
     });
   });
+  POLITICS_PAST_PAPER_YEARS.forEach((year) => {
+    list.push({
+      id: `past-politics-${year}`,
+      kind: "past",
+      area: "politics",
+      title: `${year}年 政治真题`,
+      groupName: "历年真题",
+      year,
+      completed: false,
+      completedAt: "",
+      score: null,
+      durationMinutes: null,
+      secondRound: false,
+      secondRoundAt: "",
+    });
+  });
   return list;
 }
 
@@ -952,7 +973,7 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || !value.id.trim()) return null;
   const kind: PaperKind = value.kind === "mock" ? "mock" : "past";
-  const area: StudyArea = value.area === "math" ? "math" : value.area === "english" ? "english" : "408";
+  const area: StudyArea = value.area === "math" ? "math" : value.area === "english" ? "english" : value.area === "politics" ? "politics" : "408";
   const title = typeof value.title === "string" && value.title.trim()
     ? value.title.trim()
     : (kind === "past" ? `${value.year ?? ""} 真题` : "模拟卷");

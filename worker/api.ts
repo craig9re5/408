@@ -493,6 +493,10 @@ const PAST_PAPER_YEARS = [
   2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
 ] as const;
 
+const POLITICS_PAST_PAPER_YEARS = [
+  2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017
+] as const;
+
 function defaultPastPapers(): PaperRecord[] {
   const list: PaperRecord[] = [];
   (["408", "math", "english"] as const).forEach((area) => {
@@ -513,6 +517,22 @@ function defaultPastPapers(): PaperRecord[] {
       });
     });
   });
+  POLITICS_PAST_PAPER_YEARS.forEach((year) => {
+    list.push({
+      id: `past-politics-${year}`,
+      kind: "past",
+      area: "politics",
+      title: `${year}年 政治真题`,
+      groupName: "历年真题",
+      year,
+      completed: false,
+      completedAt: "",
+      score: null,
+      durationMinutes: null,
+      secondRound: false,
+      secondRoundAt: "",
+    });
+  });
   return list;
 }
 
@@ -521,7 +541,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.id !== "string" || !candidate.id.trim()) return null;
   const kind: PaperKind = candidate.kind === "mock" ? "mock" : "past";
-  const area: "408" | "math" | "english" = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : "408";
+  const area: "408" | "math" | "english" | "politics" = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : candidate.area === "politics" ? "politics" : "408";
   const title = typeof candidate.title === "string" && candidate.title.trim()
     ? candidate.title.trim().slice(0, 150)
     : (kind === "past" ? `${candidate.year ?? ""} 真题` : "模拟卷");
