@@ -4,6 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
 import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
 import {
+  wrapSelection,
+  applyLink,
+  applyMath,
+  applyCode,
+  applyHeading,
+  toggleLinePrefix,
+  handleTabKey,
+  handleSmartEnter,
+  handleAutoPair,
+  applyTableTemplate,
+  applyTextResultToTextarea,
+} from "./lib/markdown-editor-utils";
+import {
   APP_VERSION,
   StorageRepository,
   addCalendarDays,
@@ -67,7 +80,6 @@ type ShiftScope = "chapter" | "subject";
 type AppPage = "progress" | "sprint" | "today" | "analytics" | "settings";
 type NavigationIcon = "progress" | "sprint" | "today" | "analytics" | "settings";
 type JournalFilter = "all" | "unlinked" | "linked" | "408" | "math" | "published";
-type EditorMode = "edit" | "split" | "preview";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
@@ -1212,69 +1224,49 @@ export function StudyDashboard() {
     }));
   }
 
-  function setPaperQuestionSpecificState(paperId: string, qNum: number, nextState: QuestionState) {
+  function setPaperQuestionSpecificState(paperId: string, qNum: number, targetState: QuestionState) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
       const currentMap = p.questions ?? {};
-      return {
-        ...p,
-        questions: {
-          ...currentMap,
-          [qNum]: nextState,
-        },
-      };
-    }));
-  }
+      const currentState = currentMap[qNum];
+      const nextState = currentState === targetState ? undefined : targetState;
+      const nextMap = { ...currentMap };
+      const currentScores = { ...(p.questionScores ?? {}) };
 
-  function setPaperQuestionScore(paperId: string, qNum: number, rawVal: string, maxScore: number) {
-    setPapers((current) => current.map((p) => {
-      if (p.id !== paperId) return p;
-      const currentScores = p.questionScores ?? {};
-      const currentQuestions = p.questions ?? {};
+      if (nextState) {
+        nextMap[qNum] = nextState;
 
-      if (rawVal.trim() === "") {
-        const nextScores = { ...currentScores };
-        delete nextScores[qNum];
-        return {
-          ...p,
-          questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
-        };
-      }
-
-      const scoreNum = parseFloat(rawVal);
-      if (Number.isNaN(scoreNum) || scoreNum < 0) return p;
-      const boundedScore = Math.min(scoreNum, maxScore);
-
-      let nextState: QuestionState = currentQuestions[qNum];
-      if (!nextState || boundedScore === 0) {
-        if (boundedScore <= 0) {
-          nextState = "wrong";
-        } else if (p.area === "408") {
-          nextState = "partial";
+        // Implicit score derivation for subjective questions
+        let max = 10;
+        if (p.area === "math") {
+          max = qNum === 17 ? 10 : 12;
+        } else if (p.area === "english") {
+          max = qNum <= 50 ? 2 : qNum === 51 ? 10 : 20;
         } else {
-          if (boundedScore >= maxScore) {
-            nextState = "correct";
-          } else if (boundedScore >= 0.5 * maxScore) {
-            nextState = "partial";
-          } else {
-            nextState = "wrong";
-          }
+          max = [45, 46].includes(qNum) ? 12 : qNum === 47 ? 11 : 13;
         }
+
+        if (nextState === "correct") {
+          currentScores[qNum] = max;
+        } else if (nextState === "partial") {
+          currentScores[qNum] = Math.round(max * 0.6);
+        } else if (nextState === "wrong") {
+          currentScores[qNum] = 0;
+        }
+      } else {
+        delete nextMap[qNum];
+        delete currentScores[qNum];
       }
 
       return {
         ...p,
-        questionScores: {
-          ...currentScores,
-          [qNum]: boundedScore,
-        },
-        questions: {
-          ...currentQuestions,
-          [qNum]: nextState,
-        },
+        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+        questionScores: Object.keys(currentScores).length > 0 ? currentScores : undefined,
       };
     }));
   }
+
+
 
   function markAllPaperQuestions(paperId: string, state: "correct" | "wrong") {
     setPapers((current) => current.map((p) => {
@@ -4722,68 +4714,42 @@ export function StudyDashboard() {
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">解答题</span>
-                      <span className="q-type-subtitle">第 17 ~ 22 题 · 共 70 分</span>
+                      <span className="q-type-subtitle">第 17 ~ 22 题 · 评级即自动记录表现</span>
                     </div>
-                    <div className="q-comp-grid q-comp-grid--solving">
-                      {[
-                        { num: 17, max: 10 },
-                        { num: 18, max: 12 },
-                        { num: 19, max: 12 },
-                        { num: 20, max: 12 },
-                        { num: 21, max: 12 },
-                        { num: 22, max: 12 },
-                      ].map((item) => {
-                        const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
+                    <div className="q-rating-grid">
+                      {[17, 18, 19, 20, 21, 22].map((num) => {
+                        const state = activeQuestionPaper.questions?.[num];
                         return (
-                          <div className="q-comp-card q-comp-card--large" key={item.num}>
-                            <div className="q-comp-card-top">
-                              <strong className="q-comp-title">第 {item.num} 题</strong>
-                              <span className="q-comp-max">{item.max} 分</span>
+                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={num}>
+                            <div className="q-rating-label">
+                              <span className="q-rating-badge">解答</span>
+                              <strong className="q-rating-title">第 {num} 题</strong>
                             </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
-                                  title="满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
-                                  title="部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
-                                  title="错题/低分 (🔴)"
-                                  aria-label="错题"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={item.max}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, item.max)}
-                                />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">{item.max}</span>
-                              </div>
+                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${num} 题评级`}>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
+                                title="优 (满分 🟢)"
+                              >
+                                🟢 优
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
+                                title="良 (部分分 🟡)"
+                              >
+                                🟡 良
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
+                                title="差 (失分 🔴)"
+                              >
+                                🔴 差
+                              </button>
                             </div>
                           </div>
                         );
@@ -4870,202 +4836,58 @@ export function StudyDashboard() {
                     </div>
                   </div>
 
-                  {/* Part 2: 英译汉 (46~50) */}
+                  {/* Part 2: 主观题 (46~50 翻译, 51~52 写作) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
-                      <span className="q-type-title">英译汉</span>
-                      <span className="q-type-subtitle">第 46 ~ 50 题 · 每题 2 分 · 共 10 分</span>
+                      <span className="q-type-title">主观题（英译汉 & 写作）</span>
+                      <span className="q-type-subtitle">第 46 ~ 52 题 · 评级即自动记录表现</span>
                     </div>
-                    <div className="q-comp-grid q-comp-grid--english-trans">
-                      {Array.from({ length: 5 }, (_, i) => 46 + i).map((num) => {
-                        const state = activeQuestionPaper.questions?.[num];
-                        const score = activeQuestionPaper.questionScores?.[num];
+                    <div className="q-rating-grid">
+                      {[
+                        { num: 46, label: "翻译 1" },
+                        { num: 47, label: "翻译 2" },
+                        { num: 48, label: "翻译 3" },
+                        { num: 49, label: "翻译 4" },
+                        { num: 50, label: "翻译 5" },
+                        { num: 51, label: "小作文" },
+                        { num: 52, label: "大作文" },
+                      ].map((item) => {
+                        const state = activeQuestionPaper.questions?.[item.num];
                         return (
-                          <div className="q-comp-card" key={num}>
-                            <div className="q-comp-card-top">
-                              <span className="q-comp-title">第 {num} 题</span>
-                              <span className="q-comp-max">2 分</span>
+                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
+                            <div className="q-rating-label">
+                              <span className="q-rating-badge">{item.label}</span>
+                              <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="优 / 满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="良 / 部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="差 / 失分较多 (🔴)"
-                                  aria-label="失分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={2}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 2)}
-                                />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">2</span>
-                              </div>
+                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                title="优 (满分 🟢)"
+                              >
+                                🟢 优
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                title="良 (部分分 🟡)"
+                              >
+                                🟡 良
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                title="差 (失分 🔴)"
+                              >
+                                🔴 差
+                              </button>
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {/* Part 3: 写作题 (51~52) */}
-                  <div className="q-type-block q-type-block--comprehensive">
-                    <div className="q-type-header">
-                      <span className="q-type-title">写作题</span>
-                      <span className="q-type-subtitle">第 51 ~ 52 题 · 共 30 分</span>
-                    </div>
-                    <div className="q-comp-grid q-comp-grid--english-essay">
-                      {/* 51 小作文 */}
-                      {(() => {
-                        const num = 51;
-                        const state = activeQuestionPaper.questions?.[num];
-                        const score = activeQuestionPaper.questionScores?.[num];
-                        return (
-                          <div className="q-comp-card q-comp-card--large" key={num}>
-                            <div className="q-comp-card-top">
-                              <div className="q-comp-title-group">
-                                <span className="q-comp-badge">小作文</span>
-                                <strong className="q-comp-title">第 51 题</strong>
-                              </div>
-                              <span className="q-comp-max">10 分</span>
-                            </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="优 / 满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="良 / 部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="差 / 失分较多 (🔴)"
-                                  aria-label="失分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={10}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 10)}
-                                />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">10</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* 52 大作文 */}
-                      {(() => {
-                        const num = 52;
-                        const state = activeQuestionPaper.questions?.[num];
-                        const score = activeQuestionPaper.questionScores?.[num];
-                        return (
-                          <div className="q-comp-card q-comp-card--large" key={num}>
-                            <div className="q-comp-card-top">
-                              <div className="q-comp-title-group">
-                                <span className="q-comp-badge">大作文</span>
-                                <strong className="q-comp-title">第 52 题</strong>
-                              </div>
-                              <span className="q-comp-max">20 分</span>
-                            </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="优 / 满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="良 / 部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="差 / 失分较多 (🔴)"
-                                  aria-label="失分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={20}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 20)}
-                                />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">20</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   </div>
                 </div>
@@ -5119,10 +4941,10 @@ export function StudyDashboard() {
                   {/* Part 2: 综合应用题 (41~47) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
-                      <span className="q-type-title">综合题</span>
-                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分</span>
+                      <span className="q-type-title">综合应用题</span>
+                      <span className="q-type-subtitle">第 41 ~ 47 题 · 评级即自动记录表现</span>
                     </div>
-                    <div className="q-comp-grid q-comp-grid--408">
+                    <div className="q-rating-grid">
                       {[
                         { num: 41, subj: "DS" },
                         { num: 42, subj: "DS" },
@@ -5133,57 +4955,37 @@ export function StudyDashboard() {
                         { num: 47, subj: "CN" },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
                         return (
-                          <div className="q-comp-card q-comp-card--large" key={item.num}>
-                            <div className="q-comp-card-top">
-                              <div className="q-comp-title-group">
-                                <span className="q-comp-badge">{item.subj}</span>
-                                <strong className="q-comp-title">第 {item.num} 题</strong>
-                              </div>
+                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
+                            <div className="q-rating-label">
+                              <span className="q-rating-badge">{item.subj}</span>
+                              <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
-                                  title="优 / 满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
-                                  title="良 / 部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
-                                  title="差 / 失分较多 (🔴)"
-                                  aria-label="失分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={25}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, 20)}
-                                />
-                                <span className="q-score-unit">分</span>
-                              </div>
+                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                title="优 (满分 🟢)"
+                              >
+                                🟢 优
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                title="良 (部分分 🟡)"
+                              >
+                                🟡 良
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                title="差 (失分 🔴)"
+                              >
+                                🔴 差
+                              </button>
                             </div>
                           </div>
                         );
