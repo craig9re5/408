@@ -495,13 +495,13 @@ test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日
 
   const pastEnglish = papers.filter((p) => p.area === "english" && p.kind === "past");
   assert.equal(pastEnglish.length, 17);
-  assert.equal(pastEnglish[0].title, "2026年 英语真题");
+  assert.equal(pastEnglish[0].title, "2026年英语真题");
 
   const pastPolitics = papers.filter((p) => p.area === "politics" && p.kind === "past");
   assert.equal(pastPolitics.length, 10);
   assert.equal(pastPolitics[0].year, 2026);
   assert.equal(pastPolitics[9].year, 2017);
-  assert.equal(pastPolitics[0].title, "2026年 政治真题");
+  assert.equal(pastPolitics[0].title, "2026年政治真题");
 });
 
 test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管理", () => {
@@ -588,13 +588,13 @@ test("JournalPaperContext: 试卷日志上下文标准化", () => {
     type: "paper",
     area: "408",
     paperId: "past-408-2025",
-    paperTitle: "2025年 408真题",
+    paperTitle: "2025年408真题",
   });
   assert.deepEqual(paperCtx, {
     type: "paper",
     area: "408",
     paperId: "past-408-2025",
-    paperTitle: "2025年 408真题",
+    paperTitle: "2025年408真题",
   });
 });
 
@@ -680,7 +680,7 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     id: "past-408-2025",
     kind: "past",
     area: "408",
-    title: "2025年 408真题",
+    title: "2025年408真题",
     completed: true,
     completedAt: "2026-10-15",
     questions: {
@@ -712,7 +712,7 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     id: "past-408-2025",
     kind: "past",
     area: "408",
-    title: "2025年 408真题",
+    title: "2025年408真题",
     completed: true,
     completedAt: "2026-10-15",
     questions: { "1": "correct", "3": "wrong" },
@@ -722,7 +722,7 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     id: "past-408-2025",
     kind: "past",
     area: "408",
-    title: "2025年 408真题",
+    title: "2025年408真题",
     completed: true,
     completedAt: "2026-10-15",
     questions: { "1": "correct", "41": "partial", "43": "wrong" },
@@ -827,7 +827,7 @@ test("Sprint: 清空全部套卷记录与题号状态深度校验", () => {
     id: "past-408-2026",
     kind: "past",
     area: "408",
-    title: "2026年 408真题",
+    title: "2026年408真题",
     completed: false,
     completedAt: "",
     score: null,
@@ -865,7 +865,7 @@ test("Sprint: 试卷分数范围校验与满分夹取", () => {
 
 test("Sprint: 模拟卷墓碑删除与多端同步过滤", () => {
   const currentPapers = [
-    { id: "past-408-2026", kind: "past", area: "408", title: "2026年 408真题", completed: false, completedAt: "", score: null, durationMinutes: null, secondRound: false, secondRoundAt: "" },
+    { id: "past-408-2026", kind: "past", area: "408", title: "2026年408真题", completed: false, completedAt: "", score: null, durationMinutes: null, secondRound: false, secondRoundAt: "" },
     { id: "mock-keep-1", kind: "mock", area: "408", title: "模拟卷一", completed: true, completedAt: "2026-08-30", score: 120, durationMinutes: 180, secondRound: false, secondRoundAt: "" },
     { id: "mock-delete-2", kind: "mock", area: "408", title: "模拟卷二", completed: false, completedAt: "", score: null, durationMinutes: null, secondRound: false, secondRoundAt: "" },
   ];

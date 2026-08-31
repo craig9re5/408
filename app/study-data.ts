@@ -938,7 +938,7 @@ export function defaultPastPapers(): PaperRecord[] {
         id: `past-${area}-${year}`,
         kind: "past",
         area,
-        title: `${year}年 ${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
+        title: `${year}年${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
         groupName: "历年真题",
         year,
         completed: false,
@@ -955,7 +955,7 @@ export function defaultPastPapers(): PaperRecord[] {
       id: `past-politics-${year}`,
       kind: "past",
       area: "politics",
-      title: `${year}年 政治真题`,
+      title: `${year}年政治真题`,
       groupName: "历年真题",
       year,
       completed: false,
@@ -974,9 +974,10 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
   if (typeof value.id !== "string" || !value.id.trim()) return null;
   const kind: PaperKind = value.kind === "mock" ? "mock" : "past";
   const area: StudyArea = value.area === "math" ? "math" : value.area === "english" ? "english" : value.area === "politics" ? "politics" : "408";
-  const title = typeof value.title === "string" && value.title.trim()
+  let title = typeof value.title === "string" && value.title.trim()
     ? value.title.trim()
-    : (kind === "past" ? `${value.year ?? ""} 真题` : "模拟卷");
+    : (kind === "past" ? `${value.year ?? ""}年真题` : "模拟卷");
+  title = title.replace(/^(\d{4}年)\s+/, "$1");
   const year = typeof value.year === "number" && value.year >= 2000 && value.year <= 2100 ? value.year : undefined;
   const completed = Boolean(value.completed);
   const completedAt = isDate(value.completedAt) ? value.completedAt : "";

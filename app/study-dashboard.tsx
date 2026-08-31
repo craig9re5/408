@@ -514,6 +514,7 @@ export function StudyDashboard() {
   const [editorTitle, setEditorTitle] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
+  const [editorBookId, setEditorBookId] = useState<string>("data-structure");
   const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(null);
   const journalTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [editorImportant, setEditorImportant] = useState(false);
@@ -2082,13 +2083,18 @@ export function StudyDashboard() {
     if (context?.type === "paper") {
       setEditorPaper(context);
       setEditorSections([]);
+      const paperRecord = papers.find((p) => p.id === context.paperId);
+      const cleanTitle = (context.paperTitle || paperRecord?.title || "").replace(/^(\d{4}年)\s+/, "$1");
+      const scoreStr = typeof paperRecord?.score === "number" ? `${paperRecord.score}` : "--";
+      setEditorTitle(`【模考复盘】${cleanTitle}`);
+      setEditorContent(`## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 最后感悟\n`);
     } else {
       setEditorPaper(null);
       setEditorSections(extractJournalSections(context ?? null));
     }
     setShowTitleInput(false);
     setIsEditorOpen(true);
-  }, []);
+  }, [papers]);
 
   const openEditJournal = useCallback((journal: JournalEntry) => {
     setEditingJournalId(journal.id);
@@ -4255,63 +4261,78 @@ export function StudyDashboard() {
               <div className="journal-context-selector-wrap">
                 <div className="journal-context-selector">
                   <span className="meta-label">关联小节:</span>
-                  <select
-                    value=""
-                    onChange={(e) => {
-                      const secId = e.target.value;
-                      if (!secId) return;
-                      const found = books
-                        .flatMap((b) => b.chapters.flatMap((c) => c.sections.map((s) => ({ book: b, chapter: c, section: s }))))
-                        .find((item) => item.section.id === secId);
-                      if (found) {
-                        setEditorSections((prev) => {
-                          if (prev.some((s) => s.sectionId === found.section.id)) return prev;
-                          return [
-                            ...prev,
-                            {
-                              area: found.book.area,
-                              bookId: found.book.id,
-                              sectionId: found.section.id,
-                              bookTitle: found.book.shortTitle,
-                              sectionTitle: found.section.title,
-                              sectionNumber: found.section.number,
-                            },
-                          ];
-                        });
-                      }
-                    }}
-                    aria-label="选择关联小节"
-                  >
-                    <option value="">+ 点击添加关联小节 (支持多选)...</option>
-                    <optgroup label="408 考研科目">
-                      {books.filter((b) => b.area === "408").flatMap((b) =>
-                        b.chapters.flatMap((c) =>
-                          c.sections.map((s) => {
-                            const isSelected = editorSections.some((es) => es.sectionId === s.id);
-                            return (
-                              <option key={s.id} value={s.id} disabled={isSelected}>
-                                {b.shortTitle} · {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
-                              </option>
-                            );
-                          })
-                        )
-                      )}
-                    </optgroup>
-                    <optgroup label="数学科目">
-                      {books.filter((b) => b.area === "math").flatMap((b) =>
-                        b.chapters.flatMap((c) =>
-                          c.sections.map((s) => {
-                            const isSelected = editorSections.some((es) => es.sectionId === s.id);
-                            return (
-                              <option key={s.id} value={s.id} disabled={isSelected}>
-                                {b.shortTitle} · {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
-                              </option>
-                            );
-                          })
-                        )
-                      )}
-                    </optgroup>
-                  </select>
+                  <div className="journal-cascading-selects">
+                    <select
+                      className="journal-book-select"
+                      value={editorBookId}
+                      onChange={(e) => setEditorBookId(e.target.value)}
+                      aria-label="第一列：选择科目与书籍"
+                    >
+                      <optgroup label="408 考研科目">
+                        {books.filter((b) => b.area === "408").map((b) => (
+                          <option key={b.id} value={b.id}>
+                            408 · {b.shortTitle} ({b.title})
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="数学科目">
+                        {books.filter((b) => b.area === "math").map((b) => (
+                          <option key={b.id} value={b.id}>
+                            数学 · {b.shortTitle} ({b.title})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+
+                    <select
+                      className="journal-section-select"
+                      value=""
+                      onChange={(e) => {
+                        const secId = e.target.value;
+                        if (!secId) return;
+                        const currentBook = books.find((b) => b.id === editorBookId);
+                        if (!currentBook) return;
+                        const found = currentBook.chapters
+                          .flatMap((c) => c.sections.map((s) => ({ book: currentBook, chapter: c, section: s })))
+                          .find((item) => item.section.id === secId);
+                        if (found) {
+                          setEditorSections((prev) => {
+                            if (prev.some((s) => s.sectionId === found.section.id)) return prev;
+                            return [
+                              ...prev,
+                              {
+                                area: found.book.area,
+                                bookId: found.book.id,
+                                sectionId: found.section.id,
+                                bookTitle: found.book.shortTitle,
+                                sectionTitle: found.section.title,
+                                sectionNumber: found.section.number,
+                              },
+                            ];
+                          });
+                        }
+                      }}
+                      aria-label="第二列：选择该科目具体小节"
+                    >
+                      <option value="">+ 添加对应小节 (支持多选)...</option>
+                      {(() => {
+                        const activeBook = books.find((b) => b.id === editorBookId);
+                        if (!activeBook) return null;
+                        return activeBook.chapters.map((chap) => (
+                          <optgroup key={chap.id} label={`第 ${chap.number} 章 ${chap.title}`}>
+                            {chap.sections.map((s) => {
+                              const isSelected = editorSections.some((es) => es.sectionId === s.id);
+                              return (
+                                <option key={s.id} value={s.id} disabled={isSelected}>
+                                  {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        ));
+                      })()}
+                    </select>
+                  </div>
                   {editorSections.length > 0 && (
                     <button
                       type="button"
@@ -5503,14 +5524,15 @@ export function StudyDashboard() {
                     type="button"
                     className="btn-create-wrong-journal"
                     onClick={() => {
-                      const title = `【模考复盘】${activeQuestionPaper.title}`;
-                      const wrongStr = wrongNums.length > 0 ? wrongNums.join(", ") : "无错题";
-                      const template = `# ${activeQuestionPaper.title} · 做题复盘\n\n- **模考得分**：${activeQuestionPaper.score ?? "--"} 分\n- **错题汇总**：第 ${wrongStr} 题\n\n## 错题分析与归因\n\n${wrongNums.map((n) => `### 第 ${n} 题\n- **考点**：\n- **错误原因**：\n- **正解与反思**：\n`).join("\n")}\n## 后续补强计划\n`;
+                      const cleanTitle = activeQuestionPaper.title.replace(/^(\d{4}年)\s+/, "$1");
+                      const scoreStr = typeof activeQuestionPaper.score === "number" ? `${activeQuestionPaper.score}` : "--";
+                      const title = `【模考复盘】${cleanTitle}`;
+                      const template = `## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 最后感悟\n`;
                       openCreateJournal({
                         type: "paper",
                         area: activeQuestionPaper.area,
                         paperId: activeQuestionPaper.id,
-                        paperTitle: activeQuestionPaper.title,
+                        paperTitle: cleanTitle,
                       });
                       setEditorTitle(title);
                       setEditorContent(template);

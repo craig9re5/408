@@ -2411,15 +2411,31 @@ input[type="number"] {
   color: var(--ink-soft);
   white-space: nowrap;
 }
-.journal-context-selector select {
+.journal-cascading-selects {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
-  max-width: 420px;
+  max-width: 580px;
+}
+.journal-context-selector select,
+.journal-book-select,
+.journal-section-select {
   padding: 6px 10px;
   font-size: 12px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+.journal-book-select {
+  width: 190px;
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.journal-section-select {
+  flex: 1;
+  min-width: 180px;
 }
 .journal-clear-sections-btn {
   padding: 5px 9px;
