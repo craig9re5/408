@@ -2033,26 +2033,28 @@ export function StudyDashboard() {
                 <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
                 <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
               </div>
-              <span className={`task-date ${isReviewAction ? "unreviewed" : kind === "today" ? "today" : "overdue"}`}>
-                {kind === "today"
-                  ? isReviewAction
-                    ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今日复习"
-                    : state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今日新学"
-                  : isReviewAction
-                    ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}`
-                    : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`}
-              </span>
-              <label className="task-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(checked)}
-                  onChange={(event) => isReviewAction
-                    ? toggleReviewed(section.id, event.target.checked)
-                    : toggleLearned(section.id, event.target.checked)}
-                />
-                <span />
-                <em>{isReviewAction ? "复习" : "新学"}</em>
-              </label>
+              <div className="task-row-right">
+                <span className={`task-date ${isReviewAction ? "unreviewed" : kind === "today" ? "today" : "overdue"}`}>
+                  {kind === "today"
+                    ? isReviewAction
+                      ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今日复习"
+                      : state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今日新学"
+                    : isReviewAction
+                      ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}`
+                      : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`}
+                </span>
+                <label className="task-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(checked)}
+                    onChange={(event) => isReviewAction
+                      ? toggleReviewed(section.id, event.target.checked)
+                      : toggleLearned(section.id, event.target.checked)}
+                  />
+                  <span />
+                  <em>{isReviewAction ? "复习" : "新学"}</em>
+                </label>
+              </div>
             </article>
           );
         })}
@@ -2864,18 +2866,38 @@ export function StudyDashboard() {
                 </div>
               </div>
 
-              <div className="summary-strip" aria-label="今日任务概览">
-                <article><span>今日任务</span><strong>{todayPlan.length}</strong><small>{todayCompleted} 项已完成</small></article>
-                <article><span>逾期任务</span><strong>{overdueTasks.length}</strong><small>新学逾期 {overdueBaseTasks.length} · 复习逾期 {overdueReviewTasks.length}</small></article>
-              </div>
-
               <div className="today-sections">
                 <section className="task-panel task-panel--today" aria-labelledby="today-plan-title">
-                  <header><div><span>01</span><h2 id="today-plan-title">今日任务</h2></div><strong>{todayCompleted}/{todayPlan.length}</strong></header>
+                  <header>
+                    <div className="task-panel-heading">
+                      <span className="task-panel-badge">01</span>
+                      <div className="task-panel-title-group">
+                        <h2 id="today-plan-title">今日任务</h2>
+                        <span className="task-panel-subtitle">{todayCompleted} / {todayPlan.length} 项已完成</span>
+                      </div>
+                    </div>
+                    <div className="task-panel-stat">
+                      <strong className="stat-num">{todayPlan.length}</strong>
+                      <span className="stat-unit">项</span>
+                    </div>
+                  </header>
                   {renderTaskList(todayPlan, "today", "今天没有安排小节，完成的今日任务也会保留在这里。")}
                 </section>
+
                 <section className="task-panel task-panel--overdue" aria-labelledby="overdue-title">
-                  <header><div><span>02</span><h2 id="overdue-title">逾期任务</h2></div><strong>{overdueTasks.length}</strong></header>
+                  <header>
+                    <div className="task-panel-heading">
+                      <span className="task-panel-badge">02</span>
+                      <div className="task-panel-title-group">
+                        <h2 id="overdue-title">逾期任务</h2>
+                        <span className="task-panel-subtitle">新学 {overdueBaseTasks.length} · 复习 {overdueReviewTasks.length}</span>
+                      </div>
+                    </div>
+                    <div className={`task-panel-stat ${overdueTasks.length > 0 ? "stat--overdue" : ""}`}>
+                      <strong className="stat-num">{overdueTasks.length}</strong>
+                      <span className="stat-unit">项</span>
+                    </div>
+                  </header>
                   {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
                 </section>
               </div>
