@@ -4037,9 +4037,25 @@ export function StudyDashboard() {
         <div className="confirm-overlay paper-q-modal-overlay" role="presentation">
           <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
             <div className="paper-q-modal-header">
-              <div>
-                <span className="dialog-kicker">冲刺阶段 · 试卷做题情况可视化</span>
+              <div className="paper-q-header-left">
                 <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
+                {(() => {
+                  const summary = getPaperQuestionSummary(activeQuestionPaper);
+                  const structure = activeQuestionPaper.area === "math" ? MATH_PAPER_STRUCTURE : CS408_PAPER_STRUCTURE;
+                  return (
+                    <div className="paper-q-header-metrics">
+                      <span className="q-header-pill">共 {structure.total} 题</span>
+                      <span className="q-header-pill q-pill--correct">🟢 正确 {summary?.correctCount ?? 0}</span>
+                      <span className="q-header-pill q-pill--wrong">🔴 错题 {summary?.wrongCount ?? 0}</span>
+                      {summary && summary.totalRecorded > 0 && (
+                        <span className="q-header-pill q-pill--rate">正确率 {summary.accuracyPercent}%</span>
+                      )}
+                      {activeQuestionPaper.score !== null && activeQuestionPaper.score !== undefined && (
+                        <span className="q-header-pill q-pill--score">得分 {activeQuestionPaper.score} / 150</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <button
                 type="button"
@@ -4051,42 +4067,10 @@ export function StudyDashboard() {
               </button>
             </div>
 
-            {/* Summary Stat Bar */}
-            {(() => {
-              const summary = getPaperQuestionSummary(activeQuestionPaper);
-              const structure = activeQuestionPaper.area === "math" ? MATH_PAPER_STRUCTURE : CS408_PAPER_STRUCTURE;
-              return (
-                <div className="paper-q-summary-bar">
-                  <div className="q-stat-item">
-                    <span className="q-stat-label">总题量</span>
-                    <strong>{structure.total} <small>题</small></strong>
-                  </div>
-                  <div className="q-stat-item q-stat-item--correct">
-                    <span className="q-stat-label">🟢 正确</span>
-                    <strong>{summary?.correctCount ?? 0} <small>题</small></strong>
-                  </div>
-                  <div className="q-stat-item q-stat-item--wrong">
-                    <span className="q-stat-label">🔴 错误 / 部分错</span>
-                    <strong>{summary?.wrongCount ?? 0} <small>题</small></strong>
-                  </div>
-                  <div className="q-stat-item">
-                    <span className="q-stat-label">正确率</span>
-                    <strong>{summary?.totalRecorded ? `${summary.accuracyPercent}%` : "--"}</strong>
-                  </div>
-                  {activeQuestionPaper.score !== null && activeQuestionPaper.score !== undefined && (
-                    <div className="q-stat-item">
-                      <span className="q-stat-label">模考得分</span>
-                      <strong>{activeQuestionPaper.score} <small>/ 150</small></strong>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
             {/* Quick Action Toolbar */}
             <div className="paper-q-tools">
               <div className="q-quick-input-group">
-                <label htmlFor="quick-wrong-input">批量错题快速录入：</label>
+                <label htmlFor="quick-wrong-input">批量录入错题：</label>
                 <input
                   id="quick-wrong-input"
                   type="text"
@@ -4128,69 +4112,113 @@ export function StudyDashboard() {
               </div>
             </div>
 
-            {/* Question Groups Grid */}
-            <div className="paper-q-groups-container">
+            {/* Question Heatmap Matrix */}
+            <div className="paper-q-heatmap-matrix">
               {activeQuestionPaper.area === "math" ? (
+                /* Math: 1~10 选择, 11~16 填空, 17~22 解答 */
                 MATH_PAPER_STRUCTURE.groups.map((grp) => {
                   const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
                   return (
-                    <div className="paper-q-group-card" key={grp.type}>
-                      <div className="q-group-header">
-                        <span className="q-group-title">{grp.type}</span>
-                        <span className="q-group-range">第 {grp.start} ~ {grp.end} 题 · 共 {grp.count} 题</span>
-                      </div>
-                      <div className="q-chips-grid">
-                        {numbers.map((num) => {
-                          const state = activeQuestionPaper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              title={`第 ${num} 题：点击切换正确 / 错误`}
-                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
-                            >
-                              <span className="q-chip-num">{num}</span>
-                              <span className="q-chip-icon">{state === "correct" ? "✓" : state === "wrong" ? "✕" : ""}</span>
-                            </button>
-                          );
-                        })}
+                    <div className="q-heatmap-section" key={grp.type}>
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <span className="q-label-name">{grp.type}</span>
+                          <span className="q-label-range">{grp.start}~{grp.end}</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {numbers.map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                CS408_PAPER_STRUCTURE.groups.map((grp, idx) => {
-                  const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                  return (
-                    <div className="paper-q-group-card" key={`${grp.type}-${grp.subject}-${idx}`}>
-                      <div className="q-group-header">
-                        <div className="q-group-title-wrap">
-                          <span className="q-group-type-badge">{grp.type}</span>
-                          <strong className="q-group-subject">{grp.subject}</strong>
-                        </div>
-                        <span className="q-group-range">第 {grp.start}{grp.start !== grp.end ? ` ~ ${grp.end}` : ""} 题</span>
-                      </div>
-                      <div className="q-chips-grid">
-                        {numbers.map((num) => {
-                          const state = activeQuestionPaper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
-                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
-                            >
-                              <span className="q-chip-num">{num}</span>
-                              <span className="q-chip-icon">{state === "correct" ? "✓" : state === "wrong" ? "✕" : ""}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                /* 408: 1~40 单选 (分4科), 41~47 综合大题 (分4科) */
+                <div className="q-408-container">
+                  {/* Part 1: 选择题 (1~40) */}
+                  <div className="q-type-block">
+                    <div className="q-type-header">
+                      <span className="q-type-title">单项选择题</span>
+                      <span className="q-type-subtitle">第 1 ~ 40 题 · 每题 2 分 · 共 80 分</span>
                     </div>
-                  );
-                })
+                    <div className="q-type-rows">
+                      {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
+                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        return (
+                          <div className="q-heatmap-row" key={`choice-${grp.subject}`}>
+                            <div className="q-subject-label">
+                              <span className="q-label-name">{grp.subject}</span>
+                              <span className="q-label-range">{grp.start}~{grp.end}</span>
+                            </div>
+                            <div className="q-heatmap-chips">
+                              {numbers.map((num) => {
+                                const state = activeQuestionPaper.questions?.[num];
+                                return (
+                                  <button
+                                    key={num}
+                                    type="button"
+                                    className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                    title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                  >
+                                    {num}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Part 2: 综合应用题 (41~47) */}
+                  <div className="q-type-block q-type-block--comprehensive">
+                    <div className="q-type-header">
+                      <span className="q-type-title">综合应用题</span>
+                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分</span>
+                    </div>
+                    <div className="q-comprehensive-clusters">
+                      {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "综合应用题").map((grp) => {
+                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        return (
+                          <div className="q-comp-cluster" key={`comp-${grp.subject}`}>
+                            <span className="q-comp-subject">{grp.subject}</span>
+                            <div className="q-comp-chips">
+                              {numbers.map((num) => {
+                                const state = activeQuestionPaper.questions?.[num];
+                                return (
+                                  <button
+                                    key={num}
+                                    type="button"
+                                    className={`q-chip-btn q-chip-btn--lg ${state ? `state-${state}` : "state-unset"}`}
+                                    title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                  >
+                                    {num}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
