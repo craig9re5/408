@@ -5018,30 +5018,30 @@ export function StudyDashboard() {
                               <span className="q-rating-badge">解答</span>
                               <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分)"
+                                title="优 · 满分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                优
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分)"
+                                title="良 · 部分分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                良
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分)"
+                                title="差 · 失分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                差
                               </button>
                             </div>
                             <div className="q-score-input-wrap">
@@ -5175,30 +5175,30 @@ export function StudyDashboard() {
                               <span className="q-rating-badge">{item.label}</span>
                               <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分)"
+                                title="优 · 满分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                优
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分)"
+                                title="良 · 部分分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                良
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分)"
+                                title="差 · 失分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                差
                               </button>
                             </div>
                             <div className="q-score-input-wrap">
@@ -5300,30 +5300,30 @@ export function StudyDashboard() {
                               <span className="q-rating-badge">{item.subj}</span>
                               <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 (满分)"
+                                title="优 · 满分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                优
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 (部分分)"
+                                title="良 · 部分分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                良
                               </button>
                               <button
                                 type="button"
-                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
                                 onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 (失分)"
+                                title="差 · 失分（再次点击取消）"
                               >
-                                <span className="dot-circle" />
+                                差
                               </button>
                             </div>
                             <div className="q-score-input-wrap">

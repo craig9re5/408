@@ -4354,10 +4354,10 @@ input[type="number"] {
   gap: 12px;
 }
 
-/* Subjective Item: 3 small circular dots (优/良/差) + Score Input */
+/* Subjective Item: 优/良/差 segmented rating + Score Input */
 .q-rating-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 8px 12px;
 }
 
@@ -4422,76 +4422,67 @@ input[type="number"] {
   white-space: nowrap;
 }
 
-/* Three Small Circular Dots (三个小圆点: 优 / 良 / 差) */
-.q-state-dots {
+/* Subjective Rating Segmented Control (优 / 良 / 差) */
+.q-rating-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(23, 33, 41, 0.05);
+  border-radius: 8px;
+}
+
+.q-rating-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: #ffffff;
-  border: 1px solid var(--line-soft);
-  border-radius: 20px;
-  padding: 2.5px 6px;
-}
-
-.q-state-dot-btn {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1.5px solid transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-  padding: 0;
+  height: 22px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
   background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
-.q-state-dot-btn .dot-circle {
-  width: 10px;
-  height: 10px;
+.q-rating-btn::before {
+  content: "";
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
-/* Unselected Dots */
-.q-state-dot-btn.dot-btn--correct .dot-circle {
-  background: rgba(124, 172, 133, 0.25);
-  border: 1.5px solid var(--green);
+/* Unselected: state color hinted by the small dot at low opacity */
+.q-rating-btn.rating--correct::before { background: rgba(124, 172, 133, 0.45); }
+.q-rating-btn.rating--partial::before { background: rgba(232, 178, 119, 0.55); }
+.q-rating-btn.rating--wrong::before { background: rgba(239, 132, 109, 0.45); }
+
+.q-rating-btn:hover { color: var(--ink); }
+.q-rating-btn.rating--correct:hover::before { background: var(--green); }
+.q-rating-btn.rating--partial:hover::before { background: #e8b277; }
+.q-rating-btn.rating--wrong:hover::before { background: var(--coral); }
+
+/* Active: white pill + state-tinted label & dot (colors match mini-heatmap-tag) */
+.q-rating-btn.active {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(35, 42, 44, 0.1);
 }
 
-.q-state-dot-btn.dot-btn--partial .dot-circle {
-  background: rgba(232, 178, 119, 0.3);
-  border: 1.5px solid #e8b277;
-}
+.q-rating-btn.active.rating--correct { color: #3b6c45; }
+.q-rating-btn.active.rating--correct::before { background: var(--green); }
 
-.q-state-dot-btn.dot-btn--wrong .dot-circle {
-  background: var(--coral-soft);
-  border: 1.5px solid var(--coral);
-}
+.q-rating-btn.active.rating--partial { color: #8c5b1c; }
+.q-rating-btn.active.rating--partial::before { background: #e8b277; }
 
-.q-state-dot-btn:hover {
-  transform: scale(1.15);
-}
-
-/* Active Selected Dots */
-.q-state-dot-btn.active.dot-btn--correct .dot-circle {
-  background: var(--green);
-  border-color: var(--green);
-  transform: scale(1.2);
-}
-
-.q-state-dot-btn.active.dot-btn--partial .dot-circle {
-  background: #e8b277;
-  border-color: #e8b277;
-  transform: scale(1.2);
-}
-
-.q-state-dot-btn.active.dot-btn--wrong .dot-circle {
-  background: var(--coral);
-  border-color: var(--coral);
-  transform: scale(1.2);
-}
+.q-rating-btn.active.rating--wrong { color: #c44b34; }
+.q-rating-btn.active.rating--wrong::before { background: var(--coral); }
 
 /* Score Input Box */
 .q-score-input-wrap {
@@ -4640,13 +4631,13 @@ input[type="number"] {
     z-index: 1;
   }
 
-  .q-state-dot-btn {
+  .q-rating-btn {
     position: relative;
   }
-  .q-state-dot-btn::after {
+  .q-rating-btn::after {
     content: "";
     position: absolute;
-    inset: -6px;
+    inset: -2px;
     z-index: 1;
   }
 
@@ -4673,7 +4664,7 @@ button,
 input,
 select,
 .q-chip-btn,
-.q-state-dot-btn,
+.q-rating-btn,
 .sprint-bento-card,
 .sprint-tab-group button,
 .sprint-status-filters button,
