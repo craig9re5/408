@@ -945,6 +945,50 @@ export function StudyDashboard() {
   const sprintMockTotal = mockPapers.length;
   const sprintMockPercent = sprintMockTotal ? Math.round((sprintMockCompleted / sprintMockTotal) * 100) : 0;
 
+  const scoredPastPapers = useMemo(() => pastPapers.filter((p) => typeof p.score === "number" && p.score !== null), [pastPapers]);
+  const sprintPastAvgScore = useMemo(() => {
+    if (!scoredPastPapers.length) return "--";
+    const sum = scoredPastPapers.reduce((acc, p) => acc + (p.score ?? 0), 0);
+    return (sum / scoredPastPapers.length).toFixed(1);
+  }, [scoredPastPapers]);
+
+  const scoredMockPapers = useMemo(() => mockPapers.filter((p) => typeof p.score === "number" && p.score !== null), [mockPapers]);
+  const sprintMockAvgScore = useMemo(() => {
+    if (!scoredMockPapers.length) return "--";
+    const sum = scoredMockPapers.reduce((acc, p) => acc + (p.score ?? 0), 0);
+    return (sum / scoredMockPapers.length).toFixed(1);
+  }, [scoredMockPapers]);
+
+  const englishChoiceStats = useMemo(() => {
+    if (activeArea !== "english") return null;
+    let totalRecordedScore = 0;
+    let totalEarnedScore = 0;
+    let papersWithChoice = 0;
+    for (const p of pastPapers) {
+      if (!p.questions) continue;
+      let pEarned = 0;
+      let pRecorded = 0;
+      for (let i = 1; i <= 45; i++) {
+        const st = p.questions[i];
+        const weight = i <= 20 ? 0.5 : 2.0;
+        if (st === "correct") {
+          pEarned += weight;
+          pRecorded += weight;
+        } else if (st === "wrong") {
+          pRecorded += weight;
+        }
+      }
+      if (pRecorded > 0) {
+        totalEarnedScore += pEarned;
+        totalRecordedScore += pRecorded;
+        papersWithChoice++;
+      }
+    }
+    const avgChoiceScore = papersWithChoice > 0 ? (totalEarnedScore / papersWithChoice).toFixed(1) : "--";
+    const avgChoiceRate = totalRecordedScore > 0 ? Math.round((totalEarnedScore / totalRecordedScore) * 100) : null;
+    return { avgChoiceScore, avgChoiceRate, count: papersWithChoice };
+  }, [activeArea, pastPapers]);
+
   const scoredPapers = useMemo(() => sprintAreaPapers.filter((p) => typeof p.score === "number" && p.score !== null), [sprintAreaPapers]);
   const sprintAvgScore = useMemo(() => {
     if (!scoredPapers.length) return "--";
@@ -2588,63 +2632,103 @@ export function StudyDashboard() {
           ) : activePage === "sprint" ? (
             <section className="page-view sprint-page" aria-labelledby="sprint-title">
               <div className="sprint-macro-grid">
-                <article className="sprint-stat-card">
-                  <div className="stat-card-head">
-                    <span>历年统考真题</span>
-                    <strong>{sprintPastCompleted} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
+                {/* Card 1: 历年统考真题 */}
+                <article className="sprint-stat-card sprint-stat-card--dual">
+                  <div className="stat-card-main">
+                    <div className="stat-card-head">
+                      <span>历年统考真题</span>
+                      <strong>{sprintPastCompleted} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
+                    </div>
+                    <div className="stat-card-body">
+                      <div className="stat-card-progress-bar">
+                        <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
+                      </div>
+                      <div className="stat-card-footer">
+                        <small>一刷已做 {sprintPastCompleted} 套 ({sprintPastPercent}%)</small>
+                        <small>二刷已完成 {sprintPastSecondRound} 套</small>
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card-body">
-                    <div className="stat-card-progress-bar">
-                      <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
+
+                  <div className="stat-card-score-box">
+                    <span className="score-box-label">真题平均分</span>
+                    <div className="score-box-num">
+                      <strong>{sprintPastAvgScore}</strong>
+                      <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small>
                     </div>
-                    <div className="stat-card-footer">
-                      <small>已完成 {sprintPastCompleted} 套</small>
-                      <small>二刷已完成 {sprintPastSecondRound} 套</small>
-                    </div>
+                    <span className="score-box-sub">
+                      {scoredPastPapers.length > 0 ? `已记录 ${scoredPastPapers.length} 套得分` : "暂无得分记录"}
+                    </span>
                   </div>
                 </article>
 
-                <article className="sprint-stat-card">
-                  <div className="stat-card-head">
-                    <span>{activeArea === "english" ? "英语研读" : "模拟试题"}</span>
-                    <strong>
-                      {activeArea === "english"
-                        ? `${sprintPastCompleted} / ${sprintPastTotal} `
-                        : `${sprintMockCompleted} / ${sprintMockTotal} `}
-                      <small className="stat-unit">套</small>
-                    </strong>
-                  </div>
-                  <div className="stat-card-body">
-                    <div className="stat-card-progress-bar">
-                      <div
-                        className="stat-card-progress-fill"
-                        style={{ width: `${activeArea === "english" ? sprintPastPercent : sprintMockPercent}%` }}
-                      />
+                {/* Card 2: 模拟试题 (408 / 数学) 或 客观选择题专项 (英语) */}
+                {activeArea === "english" ? (
+                  <article className="sprint-stat-card sprint-stat-card--dual">
+                    <div className="stat-card-main">
+                      <div className="stat-card-head">
+                        <span>英语选择题 (客观题)</span>
+                        <strong>{englishChoiceStats?.count ?? 0} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
+                      </div>
+                      <div className="stat-card-body">
+                        <div className="stat-card-progress-bar">
+                          <div
+                            className="stat-card-progress-fill"
+                            style={{
+                              width: `${sprintPastTotal ? Math.round(((englishChoiceStats?.count ?? 0) / sprintPastTotal) * 100) : 0}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="stat-card-footer">
+                          <small>完形 0.5分/题 · 阅读与新题型 2分/题</small>
+                          <small>共 45 题 · 满分 60分</small>
+                        </div>
+                      </div>
                     </div>
-                    <div className="stat-card-footer">
-                      <small>
-                        {activeArea === "english"
-                          ? "覆盖 2010~2026 全部真题"
-                          : sprintMockTotal > 0
-                          ? `已完成 ${sprintMockCompleted} 套`
-                          : "点击添加模拟卷"}
-                      </small>
-                      <small>{activeArea === "english" ? "不含模拟题" : `共录入 ${sprintMockTotal} 套`}</small>
-                    </div>
-                  </div>
-                </article>
 
-                <article className="sprint-stat-card">
-                  <div className="stat-card-head">
-                    <span>模考平均成绩</span>
-                    <strong>{sprintAvgScore} <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small></strong>
-                  </div>
-                  <div className="stat-card-body">
-                    <p className="stat-desc">
-                      {scoredPapers.length > 0 ? `已记录 ${scoredPapers.length} 套试卷模考得分` : "暂无得分记录，点击试卷即可录入"}
-                    </p>
-                  </div>
-                </article>
+                    <div className="stat-card-score-box">
+                      <span className="score-box-label">选择题加权均分</span>
+                      <div className="score-box-num">
+                        <strong>{englishChoiceStats?.avgChoiceScore ?? "--"}</strong>
+                        <small className="stat-unit">/ 60 分</small>
+                      </div>
+                      <span className="score-box-sub">
+                        {englishChoiceStats?.avgChoiceRate !== null && englishChoiceStats?.avgChoiceRate !== undefined
+                          ? `综合加权正答率 ${englishChoiceStats.avgChoiceRate}%`
+                          : "录入答题卡后自动计算"}
+                      </span>
+                    </div>
+                  </article>
+                ) : (
+                  <article className="sprint-stat-card sprint-stat-card--dual">
+                    <div className="stat-card-main">
+                      <div className="stat-card-head">
+                        <span>模拟试题</span>
+                        <strong>{sprintMockCompleted} / {sprintMockTotal} <small className="stat-unit">套</small></strong>
+                      </div>
+                      <div className="stat-card-body">
+                        <div className="stat-card-progress-bar">
+                          <div className="stat-card-progress-fill" style={{ width: `${sprintMockPercent}%` }} />
+                        </div>
+                        <div className="stat-card-footer">
+                          <small>{sprintMockTotal > 0 ? `已完成 ${sprintMockCompleted} 套 (${sprintMockPercent}%)` : "点击添加模拟卷"}</small>
+                          <small>共录入 {sprintMockTotal} 套</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="stat-card-score-box">
+                      <span className="score-box-label">模拟卷平均分</span>
+                      <div className="score-box-num">
+                        <strong>{sprintMockAvgScore}</strong>
+                        <small className="stat-unit">/ 150 分</small>
+                      </div>
+                      <span className="score-box-sub">
+                        {scoredMockPapers.length > 0 ? `已记录 ${scoredMockPapers.length} 套得分` : "暂无得分记录"}
+                      </span>
+                    </div>
+                  </article>
+                )}
               </div>
 
               <div className="sprint-toolbar">
@@ -2765,7 +2849,7 @@ export function StudyDashboard() {
 
                               <div className="bento-card-metrics">
                                 <div className="bento-metric-box">
-                                  <span className="bento-metric-label">模考得分</span>
+                                  <span className="bento-metric-label">得分</span>
                                   {paper.score !== null && paper.score !== undefined ? (
                                     <button
                                       type="button"
@@ -2928,7 +3012,7 @@ export function StudyDashboard() {
 
                                 <div className="bento-card-metrics">
                                   <div className="bento-metric-box">
-                                    <span className="bento-metric-label">模考得分</span>
+                                    <span className="bento-metric-label">得分</span>
                                     {paper.score !== null && paper.score !== undefined ? (
                                       <button
                                         type="button"
@@ -3056,7 +3140,7 @@ export function StudyDashboard() {
                           <div className="paper-table-head" aria-hidden="true">
                             <span>年份</span>
                             <span>打卡</span>
-                            <span>模考得分</span>
+                            <span>得分</span>
                             <span>答题卡</span>
                             <span>二刷</span>
                             <span>复盘日志</span>
@@ -3225,7 +3309,7 @@ export function StudyDashboard() {
                             <div className="paper-table-head paper-table-head--mock" aria-hidden="true">
                               <span>模拟试卷</span>
                               <span>打卡</span>
-                              <span>模考得分</span>
+                              <span>得分</span>
                               <span>答题卡</span>
                               <span>复盘日志</span>
                               <span>操作</span>
