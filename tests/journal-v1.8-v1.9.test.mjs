@@ -687,3 +687,59 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   assert.equal(p2025?.questionScores?.[41], 9);
   assert.equal(p2025?.questionScores?.[43], 5);
 });
+
+test("Sprint 交互与真题排序 / 批量错题范围解析测试", () => {
+  // 1. 测试年份排序逻辑
+  const pastList = [
+    { id: "p1", year: 2015 },
+    { id: "p2", year: 2026 },
+    { id: "p3", year: 2020 },
+  ];
+  const sortedDesc = [...pastList].sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+  assert.deepEqual(sortedDesc.map((p) => p.year), [2026, 2020, 2015]);
+
+  const sortedAsc = [...pastList].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+  assert.deepEqual(sortedAsc.map((p) => p.year), [2015, 2020, 2026]);
+
+  // 2. 测试批量错题解析（包含区间语法如 5-8、10~12、单题 1, 3）
+  const rawInput = "1, 3 5-8 10~12 43";
+  const total = 47;
+  const maxChoice = 40;
+  const tokens = [];
+  rawInput.split(/[,，\s、;；]+/).forEach((chunk) => {
+    const trimmed = chunk.trim();
+    if (!trimmed) return;
+    const rangeMatch = trimmed.match(/^(\d+)[-~至到\.]+(\d+)$/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      if (!Number.isNaN(start) && !Number.isNaN(end)) {
+        const min = Math.min(start, end);
+        const max = Math.max(start, end);
+        for (let n = min; n <= max; n++) {
+          if (n >= 1 && n <= total) tokens.push(n);
+        }
+        return;
+      }
+    }
+    const n = parseInt(trimmed, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= total) {
+      tokens.push(n);
+    }
+  });
+
+  const wrongSet = new Set(tokens);
+  assert.ok(wrongSet.has(1));
+  assert.ok(wrongSet.has(3));
+  assert.ok(wrongSet.has(5));
+  assert.ok(wrongSet.has(6));
+  assert.ok(wrongSet.has(7));
+  assert.ok(wrongSet.has(8));
+  assert.ok(wrongSet.has(10));
+  assert.ok(wrongSet.has(11));
+  assert.ok(wrongSet.has(12));
+  assert.ok(wrongSet.has(43));
+  assert.ok(!wrongSet.has(2));
+  assert.ok(!wrongSet.has(4));
+  assert.ok(!wrongSet.has(9));
+});

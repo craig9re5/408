@@ -1245,13 +1245,21 @@ export function StudyDashboard() {
       if (Number.isNaN(scoreNum) || scoreNum < 0) return p;
       const boundedScore = Math.min(scoreNum, maxScore);
 
-      let nextState: QuestionState;
-      if (boundedScore >= maxScore) {
-        nextState = "correct";
-      } else if (boundedScore >= 0.5 * maxScore) {
-        nextState = "partial";
-      } else {
-        nextState = "wrong";
+      let nextState: QuestionState = currentQuestions[qNum];
+      if (!nextState || boundedScore === 0) {
+        if (boundedScore <= 0) {
+          nextState = "wrong";
+        } else if (p.area === "408") {
+          nextState = "partial";
+        } else {
+          if (boundedScore >= maxScore) {
+            nextState = "correct";
+          } else if (boundedScore >= 0.5 * maxScore) {
+            nextState = "partial";
+          } else {
+            nextState = "wrong";
+          }
+        }
       }
 
       return {
@@ -1289,7 +1297,28 @@ export function StudyDashboard() {
       if (p.id !== paperId) return p;
       const maxChoice = p.area === "math" ? 16 : p.area === "english" ? 45 : 40;
       const total = p.area === "math" ? 22 : p.area === "english" ? 52 : 47;
-      const tokens = rawInput.split(/[,，\s、]+/).map((t) => parseInt(t.trim(), 10)).filter((n) => !Number.isNaN(n) && n >= 1 && n <= total);
+      const tokens: number[] = [];
+      rawInput.split(/[,，\s、;；]+/).forEach((chunk) => {
+        const trimmed = chunk.trim();
+        if (!trimmed) return;
+        const rangeMatch = trimmed.match(/^(\d+)[-~至到\.]+(\d+)$/);
+        if (rangeMatch) {
+          const start = parseInt(rangeMatch[1], 10);
+          const end = parseInt(rangeMatch[2], 10);
+          if (!Number.isNaN(start) && !Number.isNaN(end)) {
+            const min = Math.min(start, end);
+            const max = Math.max(start, end);
+            for (let n = min; n <= max; n++) {
+              if (n >= 1 && n <= total) tokens.push(n);
+            }
+            return;
+          }
+        }
+        const n = parseInt(trimmed, 10);
+        if (!Number.isNaN(n) && n >= 1 && n <= total) {
+          tokens.push(n);
+        }
+      });
       const wrongSet = new Set(tokens);
       const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
       for (let i = 1; i <= maxChoice; i++) {
@@ -4498,7 +4527,7 @@ export function StudyDashboard() {
 
       {/* Add Mock Paper Modal */}
       {isAddMockModalOpen && (
-        <div className="confirm-overlay" role="presentation">
+        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setIsAddMockModalOpen(false); }}>
           <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true">
             <h2>添加 {activeArea === "408" ? "408" : "数学"} 模拟试卷</h2>
             <div className="paper-modal-form">
@@ -4530,7 +4559,7 @@ export function StudyDashboard() {
 
       {/* Delete Mock Paper Modal */}
       {pendingDeletePaperId && (
-        <div className="confirm-overlay" role="presentation">
+        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingDeletePaperId(null); }}>
           <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
             <h2>确认删除该模拟试卷？</h2>
             <p>删除后将清除此模拟试卷的做题记录与得分，关联的错题复盘日志仍将保留。</p>
@@ -4546,7 +4575,7 @@ export function StudyDashboard() {
 
       {/* Visual Question Board Modal */}
       {activeQuestionPaper && (
-        <div className="confirm-overlay paper-q-modal-overlay" role="presentation">
+        <div className="confirm-overlay paper-q-modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setActivePaperQuestionModalId(null); }}>
           <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
             <div className="paper-q-modal-header">
               <h2 id="q-modal-title">{activeQuestionPaper.title.replace(/(\d{4})年\s*/, "$1 ")}</h2>
