@@ -107,6 +107,7 @@ export type JournalEntry = {
 };
 
 export type PaperKind = "past" | "mock";
+export type QuestionState = "correct" | "wrong";
 
 export type PaperRecord = {
   id: string;
@@ -122,6 +123,7 @@ export type PaperRecord = {
   secondRound?: boolean;
   secondRoundAt?: string;
   notes?: string;
+  questions?: Record<number, QuestionState>;
 };
 
 type AppStateRow = {
@@ -534,6 +536,23 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
   const groupName = typeof candidate.groupName === "string" && candidate.groupName.trim() ? candidate.groupName.trim().slice(0, 80) : undefined;
   const notes = typeof candidate.notes === "string" ? candidate.notes.trim().slice(0, 2000) : undefined;
 
+  let questions: Record<number, QuestionState> | undefined = undefined;
+  if (candidate.questions && typeof candidate.questions === "object" && !Array.isArray(candidate.questions)) {
+    const qObj = candidate.questions as Record<string, unknown>;
+    const qMap: Record<number, QuestionState> = {};
+    Object.entries(qObj).forEach(([k, v]) => {
+      const qNum = parseInt(k, 10);
+      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
+        if (v === "correct" || v === "wrong") {
+          qMap[qNum] = v;
+        }
+      }
+    });
+    if (Object.keys(qMap).length > 0) {
+      questions = qMap;
+    }
+  }
+
   return {
     id: candidate.id.trim().slice(0, 100),
     kind,
@@ -548,6 +567,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
     secondRound: secondRound && Boolean(secondRoundAt),
     secondRoundAt: secondRound ? secondRoundAt : "",
     notes,
+    questions,
   };
 }
 
@@ -588,6 +608,9 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
       const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
       const secondRound = p.secondRound || existing.secondRound;
       const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
+      const questions = p.questions || existing.questions
+        ? { ...(existing.questions ?? {}), ...(p.questions ?? {}) }
+        : undefined;
       map.set(p.id, {
         ...existing,
         ...p,
@@ -597,6 +620,7 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
         durationMinutes,
         secondRound,
         secondRoundAt,
+        questions,
       });
     }
   });

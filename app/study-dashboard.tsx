@@ -32,6 +32,8 @@ import {
   defaultPastPapers,
   normalizePapers,
   mergePapers,
+  MATH_PAPER_STRUCTURE,
+  CS408_PAPER_STRUCTURE,
   type DisciplineStats,
   type ForecastHealth,
   type HeatmapDay,
@@ -43,6 +45,8 @@ import {
   type LocalBackup,
   type PaperKind,
   type PaperRecord,
+  type QuestionState,
+  type QuestionGroupDef,
   type PlanChangeSource,
   type PlanHistoryEntry,
   type ProgressMap,
@@ -527,6 +531,7 @@ export function StudyDashboard() {
   const [pendingClearSectionId, setPendingClearSectionId] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<StudyAppData | null>(null);
   const [pendingRestore, setPendingRestore] = useState<LocalBackup | null>(null);
+  const [pendingDeleteBackup, setPendingDeleteBackup] = useState<LocalBackup | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [storageLoadIssue, setStorageLoadIssue] = useState<StorageLoadIssue | null>(null);
   const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
@@ -540,6 +545,8 @@ export function StudyDashboard() {
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
   const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
+  const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
+  const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -980,6 +987,11 @@ export function StudyDashboard() {
     });
   }, [mockPapers, sprintStatusFilter]);
 
+  const activeQuestionPaper = useMemo(() => {
+    if (!activePaperQuestionModalId) return null;
+    return papers.find((p) => p.id === activePaperQuestionModalId) ?? null;
+  }, [activePaperQuestionModalId, papers]);
+
   function updatePaper(id: string, patch: Partial<PaperRecord>) {
     setPapers((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
@@ -1035,6 +1047,90 @@ export function StudyDashboard() {
     setPapers((current) => current.filter((p) => p.id !== id));
     setPendingDeletePaperId(null);
     setFeedbackMessage("已删除模拟试卷");
+  }
+
+  function getPaperQuestionSummary(paper: PaperRecord) {
+    const totalQuestions = paper.area === "math" ? 22 : 47;
+    if (!paper.questions || Object.keys(paper.questions).length === 0) {
+      return null;
+    }
+    let correctCount = 0;
+    let wrongCount = 0;
+    for (let i = 1; i <= totalQuestions; i++) {
+      const qState = paper.questions[i];
+      if (qState === "correct") correctCount++;
+      else if (qState === "wrong") wrongCount++;
+    }
+    const totalRecorded = correctCount + wrongCount;
+    const accuracyPercent = totalRecorded > 0 ? Math.round((correctCount / totalRecorded) * 100) : 0;
+    return {
+      totalRecorded,
+      correctCount,
+      wrongCount,
+      accuracyPercent,
+      totalQuestions,
+    };
+  }
+
+  function togglePaperQuestion(paperId: string, qNum: number) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const currentMap = p.questions ?? {};
+      const currentState = currentMap[qNum];
+      const nextState: QuestionState = currentState === "wrong" ? "correct" : "wrong";
+      return {
+        ...p,
+        questions: {
+          ...currentMap,
+          [qNum]: nextState,
+        },
+      };
+    }));
+  }
+
+  function markAllPaperQuestions(paperId: string, state: "correct" | "wrong") {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const total = p.area === "math" ? 22 : 47;
+      const nextMap: Record<number, QuestionState> = {};
+      for (let i = 1; i <= total; i++) {
+        nextMap[i] = state;
+      }
+      return {
+        ...p,
+        questions: nextMap,
+      };
+    }));
+    setFeedbackMessage(state === "correct" ? "已将全部题目设为正确 🟢" : "已将全部题目设为错误 🔴");
+  }
+
+  function batchSetWrongQuestions(paperId: string, rawInput: string) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const total = p.area === "math" ? 22 : 47;
+      const tokens = rawInput.split(/[,，\s、]+/).map((t) => parseInt(t.trim(), 10)).filter((n) => !Number.isNaN(n) && n >= 1 && n <= total);
+      const wrongSet = new Set(tokens);
+      const nextMap: Record<number, QuestionState> = {};
+      for (let i = 1; i <= total; i++) {
+        nextMap[i] = wrongSet.has(i) ? "wrong" : "correct";
+      }
+      return {
+        ...p,
+        questions: nextMap,
+      };
+    }));
+    setFeedbackMessage("已更新错题与正确题标记");
+  }
+
+  function clearPaperQuestions(paperId: string) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      return {
+        ...p,
+        questions: undefined,
+      };
+    }));
+    setFeedbackMessage("已清空该试卷做题记录");
   }
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
@@ -1351,6 +1447,12 @@ export function StudyDashboard() {
     setBackups(repository().backups());
     setPendingRestore(null);
     setFeedbackMessage("备份恢复完成，已保留恢复前备份");
+  }
+
+  function handleDeleteBackup(id: string) {
+    setBackups(repository().deleteBackup(id));
+    setPendingDeleteBackup(null);
+    setFeedbackMessage("已删除本地快照");
   }
 
   function updateExamStartDate(value: string) {
@@ -2577,12 +2679,14 @@ export function StudyDashboard() {
                       <span>年份 / 试卷</span>
                       <span>完成打卡</span>
                       <span>模考得分</span>
+                      <span>答题情况</span>
                       <span>二刷</span>
                       <span>复盘日志</span>
                     </div>
 
                     {visiblePastPapers.map((paper) => {
                       const paperJournals = journalsByPaper[paper.id] ?? [];
+                      const qSummary = getPaperQuestionSummary(paper);
                       return (
                         <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
                           <div className="paper-name">
@@ -2631,6 +2735,36 @@ export function StudyDashboard() {
                                 onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
                               >
                                 + 记录得分
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="paper-q-col">
+                            {qSummary && qSummary.totalRecorded > 0 ? (
+                              <button
+                                type="button"
+                                className="paper-q-pill"
+                                title={`查看/编辑答题卡 (正确 ${qSummary.correctCount} / 错题 ${qSummary.wrongCount})`}
+                                onClick={() => {
+                                  setActivePaperQuestionModalId(paper.id);
+                                  setQuickWrongInput("");
+                                }}
+                              >
+                                <span className="q-tag-correct">🟢 {qSummary.correctCount}</span>
+                                <span className="q-tag-wrong">🔴 {qSummary.wrongCount}</span>
+                                <span className="q-tag-rate">{qSummary.accuracyPercent}%</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="paper-btn-add-val paper-btn-q-add"
+                                title="录入每道题的做题对错情况"
+                                onClick={() => {
+                                  setActivePaperQuestionModalId(paper.id);
+                                  setQuickWrongInput("");
+                                }}
+                              >
+                                + 答题卡
                               </button>
                             )}
                           </div>
@@ -2705,12 +2839,14 @@ export function StudyDashboard() {
                         <span>模拟试卷</span>
                         <span>完成打卡</span>
                         <span>模考得分</span>
+                        <span>答题情况</span>
                         <span>复盘日志</span>
                         <span>操作</span>
                       </div>
 
                       {visibleMockPapers.map((paper) => {
                         const paperJournals = journalsByPaper[paper.id] ?? [];
+                        const qSummary = getPaperQuestionSummary(paper);
                         return (
                           <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
                             <div className="paper-name">
@@ -2758,6 +2894,36 @@ export function StudyDashboard() {
                                   onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
                                 >
                                   + 记录得分
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="paper-q-col">
+                              {qSummary && qSummary.totalRecorded > 0 ? (
+                                <button
+                                  type="button"
+                                  className="paper-q-pill"
+                                  title={`查看/编辑答题卡 (正确 ${qSummary.correctCount} / 错题 ${qSummary.wrongCount})`}
+                                  onClick={() => {
+                                    setActivePaperQuestionModalId(paper.id);
+                                    setQuickWrongInput("");
+                                  }}
+                                >
+                                  <span className="q-tag-correct">🟢 {qSummary.correctCount}</span>
+                                  <span className="q-tag-wrong">🔴 {qSummary.wrongCount}</span>
+                                  <span className="q-tag-rate">{qSummary.accuracyPercent}%</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="paper-btn-add-val paper-btn-q-add"
+                                  title="录入每道题的做题对错情况"
+                                  onClick={() => {
+                                    setActivePaperQuestionModalId(paper.id);
+                                    setQuickWrongInput("");
+                                  }}
+                                >
+                                  + 答题卡
                                 </button>
                               )}
                             </div>
@@ -3191,9 +3357,19 @@ export function StudyDashboard() {
                                 </span>
                                 <span className="backup-item__time">{formatLocalDateTime(backup.createdAt)}</span>
                               </div>
-                              <button className="backup-item__restore" type="button" onClick={() => setPendingRestore(backup)}>
-                                恢复
-                              </button>
+                              <div className="backup-item__actions">
+                                <button className="backup-item__restore" type="button" onClick={() => setPendingRestore(backup)}>
+                                  恢复
+                                </button>
+                                <button
+                                  className="backup-item__delete"
+                                  type="button"
+                                  title="删除该快照"
+                                  onClick={() => setPendingDeleteBackup(backup)}
+                                >
+                                  删除
+                                </button>
+                              </div>
                             </article>
                           ))
                         ) : (
@@ -3209,25 +3385,19 @@ export function StudyDashboard() {
                 <section className="settings-card settings-card--blog">
                   <header className="settings-card__header">
                     <div>
-                      <h2>Blog 发布设置 (V1.9)</h2>
-                      <p>将优质学习日志一键发布至个人公开技术博客。</p>
+                      <h2>关于</h2>
                     </div>
-                    <span className="blog-status-badge">就绪</span>
                   </header>
                   <div className="blog-settings-content">
+                    <div className="blog-info-item">
+                      <span>版本号</span>
+                      <strong>V1.9</strong>
+                    </div>
                     <div className="blog-info-item">
                       <span>个人博客站点</span>
                       <a href="https://craig9re5.github.io/" target="_blank" rel="noreferrer">
                         https://craig9re5.github.io/ ↗
                       </a>
-                    </div>
-                    <div className="blog-info-item">
-                      <span>发布架构</span>
-                      <strong>Cloudflare Worker Serverless 安全网关（保护 GitHub 凭据）</strong>
-                    </div>
-                    <div className="blog-info-item">
-                      <span>已发布文章统计</span>
-                      <strong>{journals.filter((j) => j.publish?.status === "published").length} 篇已同步公开</strong>
                     </div>
                   </div>
                 </section>
@@ -3292,6 +3462,21 @@ export function StudyDashboard() {
             <span className="dialog-kicker">{backupKindLabel(pendingRestore.kind)} · {formatLocalDateTime(pendingRestore.createdAt)}</span><h2 id="restore-title">恢复这份备份？</h2>
             <p>恢复前也会自动备份当前数据，随后同步替换云端与本机记录。</p>
             <div><button type="button" onClick={() => setPendingRestore(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmRestore()}>确认恢复</button></div>
+          </div>
+        </div>
+      )}
+      {pendingDeleteBackup && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
+            <span className="dialog-kicker">{backupKindLabel(pendingDeleteBackup.kind)} · {formatLocalDateTime(pendingDeleteBackup.createdAt)}</span>
+            <h2>确认删除该本地快照？</h2>
+            <p>删除后此份历史快照将无法再用于恢复，当前数据不受影响。</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setPendingDeleteBackup(null)}>取消</button>
+              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteBackup(pendingDeleteBackup.id)}>
+                确认删除
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3845,6 +4030,211 @@ export function StudyDashboard() {
               <button type="button" className="btn-cancel" onClick={() => setPendingDeletePaperId(null)}>取消</button>
               <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteMockPaper(pendingDeletePaperId)}>
                 确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visual Question Board Modal */}
+      {activeQuestionPaper && (
+        <div className="confirm-overlay paper-q-modal-overlay" role="presentation">
+          <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
+            <div className="paper-q-modal-header">
+              <div>
+                <span className="dialog-kicker">冲刺阶段 · 试卷做题情况可视化</span>
+                <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
+              </div>
+              <button
+                type="button"
+                className="paper-modal-close-btn"
+                onClick={() => setActivePaperQuestionModalId(null)}
+                title="关闭"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Summary Stat Bar */}
+            {(() => {
+              const summary = getPaperQuestionSummary(activeQuestionPaper);
+              const structure = activeQuestionPaper.area === "math" ? MATH_PAPER_STRUCTURE : CS408_PAPER_STRUCTURE;
+              return (
+                <div className="paper-q-summary-bar">
+                  <div className="q-stat-item">
+                    <span className="q-stat-label">总题量</span>
+                    <strong>{structure.total} <small>题</small></strong>
+                  </div>
+                  <div className="q-stat-item q-stat-item--correct">
+                    <span className="q-stat-label">🟢 正确</span>
+                    <strong>{summary?.correctCount ?? 0} <small>题</small></strong>
+                  </div>
+                  <div className="q-stat-item q-stat-item--wrong">
+                    <span className="q-stat-label">🔴 错误 / 部分错</span>
+                    <strong>{summary?.wrongCount ?? 0} <small>题</small></strong>
+                  </div>
+                  <div className="q-stat-item">
+                    <span className="q-stat-label">正确率</span>
+                    <strong>{summary?.totalRecorded ? `${summary.accuracyPercent}%` : "--"}</strong>
+                  </div>
+                  {activeQuestionPaper.score !== null && activeQuestionPaper.score !== undefined && (
+                    <div className="q-stat-item">
+                      <span className="q-stat-label">模考得分</span>
+                      <strong>{activeQuestionPaper.score} <small>/ 150</small></strong>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Quick Action Toolbar */}
+            <div className="paper-q-tools">
+              <div className="q-quick-input-group">
+                <label htmlFor="quick-wrong-input">批量错题快速录入：</label>
+                <input
+                  id="quick-wrong-input"
+                  type="text"
+                  placeholder="输入错题题号，如: 3, 8, 14, 43"
+                  value={quickWrongInput}
+                  onChange={(e) => setQuickWrongInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && quickWrongInput.trim()) {
+                      e.preventDefault();
+                      batchSetWrongQuestions(activeQuestionPaper.id, quickWrongInput);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-apply-quick-wrong"
+                  disabled={!quickWrongInput.trim()}
+                  onClick={() => batchSetWrongQuestions(activeQuestionPaper.id, quickWrongInput)}
+                >
+                  应用
+                </button>
+              </div>
+
+              <div className="q-quick-btn-group">
+                <button
+                  type="button"
+                  className="btn-mark-all-correct"
+                  onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
+                >
+                  一键全对 🟢
+                </button>
+                <button
+                  type="button"
+                  className="btn-clear-q-marks"
+                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
+                >
+                  清空标记
+                </button>
+              </div>
+            </div>
+
+            {/* Question Groups Grid */}
+            <div className="paper-q-groups-container">
+              {activeQuestionPaper.area === "math" ? (
+                MATH_PAPER_STRUCTURE.groups.map((grp) => {
+                  const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                  return (
+                    <div className="paper-q-group-card" key={grp.type}>
+                      <div className="q-group-header">
+                        <span className="q-group-title">{grp.type}</span>
+                        <span className="q-group-range">第 {grp.start} ~ {grp.end} 题 · 共 {grp.count} 题</span>
+                      </div>
+                      <div className="q-chips-grid">
+                        {numbers.map((num) => {
+                          const state = activeQuestionPaper.questions?.[num];
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              title={`第 ${num} 题：点击切换正确 / 错误`}
+                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                            >
+                              <span className="q-chip-num">{num}</span>
+                              <span className="q-chip-icon">{state === "correct" ? "✓" : state === "wrong" ? "✕" : ""}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                CS408_PAPER_STRUCTURE.groups.map((grp, idx) => {
+                  const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                  return (
+                    <div className="paper-q-group-card" key={`${grp.type}-${grp.subject}-${idx}`}>
+                      <div className="q-group-header">
+                        <div className="q-group-title-wrap">
+                          <span className="q-group-type-badge">{grp.type}</span>
+                          <strong className="q-group-subject">{grp.subject}</strong>
+                        </div>
+                        <span className="q-group-range">第 {grp.start}{grp.start !== grp.end ? ` ~ ${grp.end}` : ""} 题</span>
+                      </div>
+                      <div className="q-chips-grid">
+                        {numbers.map((num) => {
+                          const state = activeQuestionPaper.questions?.[num];
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
+                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                            >
+                              <span className="q-chip-num">{num}</span>
+                              <span className="q-chip-icon">{state === "correct" ? "✓" : state === "wrong" ? "✕" : ""}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="paper-q-modal-footer">
+              {(() => {
+                const wrongNums = Object.entries(activeQuestionPaper.questions ?? {})
+                  .filter(([_, st]) => st === "wrong")
+                  .map(([k]) => parseInt(k, 10))
+                  .sort((a, b) => a - b);
+                return (
+                  <button
+                    type="button"
+                    className="btn-create-wrong-journal"
+                    onClick={() => {
+                      const title = `【模考复盘】${activeQuestionPaper.title}`;
+                      const wrongStr = wrongNums.length > 0 ? wrongNums.join(", ") : "无错题";
+                      const template = `# ${activeQuestionPaper.title} · 做题复盘\n\n- **模考得分**：${activeQuestionPaper.score ?? "--"} 分\n- **错题汇总**：第 ${wrongStr} 题\n\n## 错题分析与归因\n\n${wrongNums.map((n) => `### 第 ${n} 题\n- **考点**：\n- **错误原因**：\n- **正解与反思**：\n`).join("\n")}\n## 后续补强计划\n`;
+                      openCreateJournal({
+                        type: "paper",
+                        area: activeQuestionPaper.area,
+                        paperId: activeQuestionPaper.id,
+                        paperTitle: activeQuestionPaper.title,
+                      });
+                      setEditorTitle(title);
+                      setEditorContent(template);
+                      setActivePaperQuestionModalId(null);
+                    }}
+                  >
+                    ✍ 生成错题复盘日志 {wrongNums.length > 0 ? `(${wrongNums.length}道错题)` : ""}
+                  </button>
+                );
+              })()}
+
+              <button
+                type="button"
+                className="btn-confirm"
+                onClick={() => setActivePaperQuestionModalId(null)}
+              >
+                完成
               </button>
             </div>
           </div>

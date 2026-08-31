@@ -114,6 +114,39 @@ export type JournalEntry = {
 
 export type PaperKind = "past" | "mock";
 
+export type QuestionState = "correct" | "wrong";
+
+export type QuestionGroupDef = {
+  type: "选择题" | "填空题" | "解答题" | "综合应用题";
+  subject?: string;
+  start: number;
+  end: number;
+  count: number;
+};
+
+export const MATH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
+  total: 22,
+  groups: [
+    { type: "选择题", start: 1, end: 10, count: 10 },
+    { type: "填空题", start: 11, end: 16, count: 6 },
+    { type: "解答题", start: 17, end: 22, count: 6 },
+  ],
+};
+
+export const CS408_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
+  total: 47,
+  groups: [
+    { type: "选择题", subject: "数据结构", start: 1, end: 10, count: 10 },
+    { type: "选择题", subject: "计算机组成原理", start: 11, end: 20, count: 10 },
+    { type: "选择题", subject: "操作系统", start: 21, end: 30, count: 10 },
+    { type: "选择题", subject: "计算机网络", start: 31, end: 40, count: 10 },
+    { type: "综合应用题", subject: "数据结构", start: 41, end: 42, count: 2 },
+    { type: "综合应用题", subject: "计算机组成原理", start: 43, end: 44, count: 2 },
+    { type: "综合应用题", subject: "操作系统", start: 45, end: 46, count: 2 },
+    { type: "综合应用题", subject: "计算机网络", start: 47, end: 47, count: 1 },
+  ],
+};
+
 export type PaperRecord = {
   id: string;
   kind: PaperKind;
@@ -128,6 +161,7 @@ export type PaperRecord = {
   secondRound?: boolean;
   secondRoundAt?: string;
   notes?: string;
+  questions?: Record<number, QuestionState>;
 };
 
 export type StudyAppData = {
@@ -903,6 +937,22 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
   const groupName = typeof value.groupName === "string" && value.groupName.trim() ? value.groupName.trim() : undefined;
   const notes = typeof value.notes === "string" ? value.notes.trim() : undefined;
 
+  let questions: Record<number, QuestionState> | undefined = undefined;
+  if (isRecord(value.questions)) {
+    const qMap: Record<number, QuestionState> = {};
+    Object.entries(value.questions).forEach(([k, v]) => {
+      const qNum = parseInt(k, 10);
+      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
+        if (v === "correct" || v === "wrong") {
+          qMap[qNum] = v;
+        }
+      }
+    });
+    if (Object.keys(qMap).length > 0) {
+      questions = qMap;
+    }
+  }
+
   return {
     id: value.id.trim(),
     kind,
@@ -917,6 +967,7 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
     secondRound: secondRound && Boolean(secondRoundAt),
     secondRoundAt: secondRound ? secondRoundAt : "",
     notes,
+    questions,
   };
 }
 
@@ -957,6 +1008,9 @@ export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperR
       const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
       const secondRound = p.secondRound || existing.secondRound;
       const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
+      const questions = p.questions || existing.questions
+        ? { ...(existing.questions ?? {}), ...(p.questions ?? {}) }
+        : undefined;
       map.set(p.id, {
         ...existing,
         ...p,
@@ -966,6 +1020,7 @@ export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperR
         durationMinutes,
         secondRound,
         secondRoundAt,
+        questions,
       });
     }
   });
@@ -1138,6 +1193,12 @@ export class StorageRepository {
       data,
     };
     const next = [backup, ...this.backups()].slice(0, MAX_BACKUPS);
+    this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+    return next;
+  }
+
+  deleteBackup(id: string): LocalBackup[] {
+    const next = this.backups().filter((backup) => backup.id !== id);
     this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
     return next;
   }

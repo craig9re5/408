@@ -113,12 +113,18 @@ test("无法迁移的数据不会被覆盖，并保留可导出的原文", () =>
   assert.match(issue.message, /未被覆盖/);
 });
 
-test("本地备份按上限自动清理", () => {
+test("本地备份按上限自动清理与手动删除", () => {
   const storage = new MemoryStorage();
   const repository = new StorageRepository(storage);
   const data = createAppData({ section: emptyProgress() });
   for (let index = 0; index < MAX_BACKUPS + 4; index += 1) repository.createBackup(data, "manual");
   assert.equal(repository.backups().length, MAX_BACKUPS);
+
+  const target = repository.backups()[0];
+  const remaining = repository.deleteBackup(target.id);
+  assert.equal(remaining.length, MAX_BACKUPS - 1);
+  assert.ok(!remaining.some((b) => b.id === target.id));
+  assert.equal(repository.backups().length, MAX_BACKUPS - 1);
 });
 
 test("页面与 Worker 数据骨架满足 V1.5 beta 的静态约束", async () => {

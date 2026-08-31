@@ -9,7 +9,10 @@ import {
   mergeJournals,
   defaultPastPapers,
   normalizePapers,
+  normalizePaperRecord,
   mergePapers,
+  MATH_PAPER_STRUCTURE,
+  CS408_PAPER_STRUCTURE,
   SCHEMA_VERSION,
   createAppData,
 } from "../app/study-data.ts";
@@ -538,4 +541,79 @@ test("JournalPaperContext: 试卷日志上下文标准化", () => {
     paperId: "past-408-2025",
     paperTitle: "2025年 全国统考真题",
   });
+});
+
+test("Visual Question Board: 数学22题与408 47题结构与题目状态标准化", () => {
+  // 1. 验证数学题型结构
+  assert.equal(MATH_PAPER_STRUCTURE.total, 22);
+  assert.equal(MATH_PAPER_STRUCTURE.groups.length, 3);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[0].type, "选择题");
+  assert.equal(MATH_PAPER_STRUCTURE.groups[0].start, 1);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[0].end, 10);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[1].type, "填空题");
+  assert.equal(MATH_PAPER_STRUCTURE.groups[1].start, 11);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[1].end, 16);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[2].type, "解答题");
+  assert.equal(MATH_PAPER_STRUCTURE.groups[2].start, 17);
+  assert.equal(MATH_PAPER_STRUCTURE.groups[2].end, 22);
+
+  // 2. 验证 408 题型与学科结构
+  assert.equal(CS408_PAPER_STRUCTURE.total, 47);
+  assert.equal(CS408_PAPER_STRUCTURE.groups.length, 8);
+  const dsChoices = CS408_PAPER_STRUCTURE.groups[0];
+  assert.equal(dsChoices.subject, "数据结构");
+  assert.equal(dsChoices.start, 1);
+  assert.equal(dsChoices.end, 10);
+
+  const netBig = CS408_PAPER_STRUCTURE.groups[7];
+  assert.equal(netBig.subject, "计算机网络");
+  assert.equal(netBig.start, 47);
+  assert.equal(netBig.end, 47);
+
+  // 3. 验证 normalizePaperRecord 与题目状态
+  const rawPaper = {
+    id: "past-408-2025",
+    kind: "past",
+    area: "408",
+    title: "2025年 408真题",
+    completed: true,
+    completedAt: "2026-10-15",
+    questions: {
+      "1": "correct",
+      "3": "wrong",
+      "43": "wrong",
+      "999": "wrong", // 不合法题号过滤
+    },
+  };
+  const normalized = normalizePaperRecord(rawPaper);
+  assert.ok(normalized);
+  assert.equal(normalized?.questions?.[1], "correct");
+  assert.equal(normalized?.questions?.[3], "wrong");
+  assert.equal(normalized?.questions?.[43], "wrong");
+  assert.equal(normalized?.questions?.[999], undefined);
+
+  // 4. 验证 mergePapers 题目做题状态合并
+  const devA = [{
+    id: "past-408-2025",
+    kind: "past",
+    area: "408",
+    title: "2025年 408真题",
+    completed: true,
+    completedAt: "2026-10-15",
+    questions: { "1": "correct", "3": "wrong" },
+  }];
+  const devB = [{
+    id: "past-408-2025",
+    kind: "past",
+    area: "408",
+    title: "2025年 408真题",
+    completed: true,
+    completedAt: "2026-10-15",
+    questions: { "1": "correct", "43": "wrong" },
+  }];
+  const merged = mergePapers(devA, devB);
+  const p2025 = merged.find((p) => p.id === "past-408-2025");
+  assert.equal(p2025?.questions?.[1], "correct");
+  assert.equal(p2025?.questions?.[3], "wrong");
+  assert.equal(p2025?.questions?.[43], "wrong");
 });
