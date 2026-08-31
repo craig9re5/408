@@ -1351,41 +1351,19 @@ export function StudyDashboard() {
 
   function renderBentoHeatmap(paper: PaperRecord) {
     const qSummary = getPaperQuestionSummary(paper);
-    const hasRecorded = Boolean(paper.questions && Object.keys(paper.questions).length > 0);
-
-    if (!hasRecorded) {
-      return (
-        <div
-          className="bento-mini-heatmap bento-mini-heatmap--empty"
-          title="点击打开答题卡录入做题表现"
-          onClick={() => {
-            setActivePaperQuestionModalId(paper.id);
-            setQuickWrongInput("");
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              setActivePaperQuestionModalId(paper.id);
-              setQuickWrongInput("");
-            }
-          }}
-        >
-          <div className="bento-empty-slot">
-            <span className="bento-empty-slot__icon">📝</span>
-            <span className="bento-empty-slot__text">点击录入做题情况</span>
-            <span className="bento-empty-slot__btn">+ 答题卡</span>
-          </div>
-        </div>
-      );
-    }
+    const hasRecorded = Boolean(
+      paper.completed ||
+      paper.score !== null ||
+      (paper.questions && Object.keys(paper.questions).length > 0) ||
+      (paper.questionScores && Object.keys(paper.questionScores).length > 0)
+    );
 
     if (paper.area === "408") {
       const choiceGroups = [
-        { name: "DS", start: 1, count: 11 },
-        { name: "CO", start: 12, count: 11 },
-        { name: "OS", start: 23, count: 10 },
-        { name: "CN", start: 33, count: 8 },
+        { name: "DS", start: 1, count: 11, label: "数构" },
+        { name: "CO", start: 12, count: 11, label: "计组" },
+        { name: "OS", start: 23, count: 10, label: "系统" },
+        { name: "CN", start: 33, count: 8, label: "计网" },
       ];
       const bigQuestions = [
         { num: 41, subj: "DS", name: "数据结构" },
@@ -1433,64 +1411,59 @@ export function StudyDashboard() {
             </div>
           </div>
 
-          {/* Row 1: Objective Choice Matrix */}
-          <div className="mini-heatmap-row mini-heatmap-row--choice">
-            <span className="mini-row-label">选择:</span>
-            <div className="mini-heatmap-groups">
-              {choiceGroups.map((grp) => (
-                <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                  <span className="mini-group-tag">{grp.name}</span>
-                  <div className="mini-group-dots">
-                    {Array.from({ length: grp.count }, (_, i) => {
-                      const num = grp.start + i;
-                      const st = paper.questions?.[num];
-                      return (
-                        <span
-                          key={num}
-                          className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                          title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                        />
-                      );
-                    })}
-                  </div>
+          <div className="mini-heatmap-rows-stack">
+            {choiceGroups.map((grp) => (
+              <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                <span className="mini-row-label">{grp.name}:</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: grp.count }, (_, i) => {
+                    const num = grp.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            ))}
 
-          {/* Row 2: Subjective Big Questions Matrix */}
-          <div className="mini-heatmap-row mini-heatmap-row--subj">
-            <span className="mini-row-label">大题:</span>
-            <div className="mini-subj-chips">
-              {bigQuestions.map((bq) => {
-                const st = paper.questions?.[bq.num];
-                const sc = paper.questionScores?.[bq.num];
-                return (
-                  <span
-                    key={bq.num}
-                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                  >
-                    {bq.num}
-                  </span>
-                );
-              })}
+            <div className="mini-heatmap-row mini-heatmap-row--subj">
+              <span className="mini-row-label">大题:</span>
+              <div className="mini-subj-chips">
+                {bigQuestions.map((bq) => {
+                  const st = paper.questions?.[bq.num];
+                  const sc = paper.questionScores?.[bq.num];
+                  return (
+                    <span
+                      key={bq.num}
+                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                      title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                    >
+                      {bq.num}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
       );
     } else if (paper.area === "english") {
       const choiceGroups = [
-        { name: "CL", start: 1, count: 20 },
-        { name: "RA", start: 21, count: 20 },
-        { name: "RB", start: 41, count: 5 },
+        { name: "CL", start: 1, count: 20, label: "完形" },
+        { name: "RA", start: 21, count: 20, label: "阅读A" },
+        { name: "RB", start: 41, count: 5, label: "新题型" },
       ];
       const bigQuestions = [
-        { num: 46, name: "英译汉 1" },
-        { num: 47, name: "英译汉 2" },
-        { num: 48, name: "英译汉 3" },
-        { num: 49, name: "英译汉 4" },
-        { num: 50, name: "英译汉 5" },
+        { num: 46, name: "翻译 1" },
+        { num: 47, name: "翻译 2" },
+        { num: 48, name: "翻译 3" },
+        { num: 49, name: "翻译 4" },
+        { num: 50, name: "翻译 5" },
         { num: 51, name: "小作文" },
         { num: 52, name: "大作文" },
       ];
@@ -1531,54 +1504,51 @@ export function StudyDashboard() {
             </div>
           </div>
 
-          <div className="mini-heatmap-row mini-heatmap-row--choice">
-            <span className="mini-row-label">客观:</span>
-            <div className="mini-heatmap-groups">
-              {choiceGroups.map((grp) => (
-                <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                  <span className="mini-group-tag">{grp.name}</span>
-                  <div className="mini-group-dots">
-                    {Array.from({ length: grp.count }, (_, i) => {
-                      const num = grp.start + i;
-                      const st = paper.questions?.[num];
-                      return (
-                        <span
-                          key={num}
-                          className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                          title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                        />
-                      );
-                    })}
-                  </div>
+          <div className="mini-heatmap-rows-stack">
+            {choiceGroups.map((grp) => (
+              <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                <span className="mini-row-label">{grp.name}:</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: grp.count }, (_, i) => {
+                    const num = grp.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            ))}
 
-          <div className="mini-heatmap-row mini-heatmap-row--subj">
-            <span className="mini-row-label">主观:</span>
-            <div className="mini-subj-chips">
-              {bigQuestions.map((bq) => {
-                const st = paper.questions?.[bq.num];
-                const sc = paper.questionScores?.[bq.num];
-                return (
-                  <span
-                    key={bq.num}
-                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                  >
-                    {bq.num}
-                  </span>
-                );
-              })}
+            <div className="mini-heatmap-row mini-heatmap-row--subj">
+              <span className="mini-row-label">主观:</span>
+              <div className="mini-subj-chips">
+                {bigQuestions.map((bq) => {
+                  const st = paper.questions?.[bq.num];
+                  const sc = paper.questionScores?.[bq.num];
+                  return (
+                    <span
+                      key={bq.num}
+                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                      title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                    >
+                      {bq.num}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
       );
     } else {
       // Math: 1~10 选择, 11~16 填空, 17~22 解答
-      const choiceGroup = { name: "选择", start: 1, count: 10 };
-      const blankGroup = { name: "填空", start: 11, count: 6 };
+      const choiceGroup = { name: "单选", start: 1, count: 10, label: "单选" };
+      const blankGroup = { name: "填空", start: 11, count: 6, label: "填空" };
       const solvingGroup = [
         { num: 17, max: 10 },
         { num: 18, max: 12 },
@@ -1624,60 +1594,58 @@ export function StudyDashboard() {
             </div>
           </div>
 
-          <div className="mini-heatmap-row mini-heatmap-row--choice">
-            <span className="mini-row-label">选填:</span>
-            <div className="mini-heatmap-groups">
-              <div className="mini-heatmap-group" title="第 1~10 题 单项选择">
-                <span className="mini-group-tag">单选</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: choiceGroup.count }, (_, i) => {
-                    const num = choiceGroup.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [单选 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="mini-heatmap-group" title="第 11~16 题 填空题">
-                <span className="mini-group-tag">填空</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: blankGroup.count }, (_, i) => {
-                    const num = blankGroup.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [填空 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
-                </div>
+          <div className="mini-heatmap-rows-stack">
+            <div className="mini-heatmap-row" title="第 1~10 题 单项选择">
+              <span className="mini-row-label">单选:</span>
+              <div className="mini-group-dots">
+                {Array.from({ length: choiceGroup.count }, (_, i) => {
+                  const num = choiceGroup.start + i;
+                  const st = paper.questions?.[num];
+                  return (
+                    <span
+                      key={num}
+                      className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                      title={`第 ${num} 题 [单选 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                    />
+                  );
+                })}
               </div>
             </div>
-          </div>
 
-          <div className="mini-heatmap-row mini-heatmap-row--subj">
-            <span className="mini-row-label">解答:</span>
-            <div className="mini-subj-chips">
-              {solvingGroup.map((bq) => {
-                const st = paper.questions?.[bq.num];
-                const sc = paper.questionScores?.[bq.num];
-                return (
-                  <span
-                    key={bq.num}
-                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                    title={`第 ${bq.num} 题 [解答题 · ${bq.max}分]: ${st === "correct" ? `满分/优 🟢 (${sc ?? bq.max}分)` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                  >
-                    {bq.num}
-                  </span>
-                );
-              })}
+            <div className="mini-heatmap-row" title="第 11~16 题 填空题">
+              <span className="mini-row-label">填空:</span>
+              <div className="mini-group-dots">
+                {Array.from({ length: blankGroup.count }, (_, i) => {
+                  const num = blankGroup.start + i;
+                  const st = paper.questions?.[num];
+                  return (
+                    <span
+                      key={num}
+                      className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                      title={`第 ${num} 题 [填空 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mini-heatmap-row mini-heatmap-row--subj">
+              <span className="mini-row-label">解答:</span>
+              <div className="mini-subj-chips">
+                {solvingGroup.map((bq) => {
+                  const st = paper.questions?.[bq.num];
+                  const sc = paper.questionScores?.[bq.num];
+                  return (
+                    <span
+                      key={bq.num}
+                      className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                      title={`第 ${bq.num} 题 [解答题 · ${bq.max}分]: ${st === "correct" ? `满分/优 🟢 (${sc ?? bq.max}分)` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                    >
+                      {bq.num}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

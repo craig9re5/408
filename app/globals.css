@@ -38,6 +38,16 @@ button, input, select { font: inherit; }
 button { border: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
+/* Global Number Input Spinners Removal */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .app-shell { display: flex; min-height: 100vh; width: 100%; overflow-x: hidden; }
 .sidebar {
   position: fixed;
@@ -3534,14 +3544,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #f8fafc;
   border: 1px solid #eef2f6;
   border-radius: 8px;
-  padding: 6px 9px;
+  padding: 6px 10px 8px;
   cursor: pointer;
   transition: all 0.16s ease;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-height: 64px;
-  justify-content: center;
+  gap: 4px;
 }
 
 .bento-mini-heatmap:hover {
@@ -3549,61 +3557,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   border-color: #cbd5e1;
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
-}
-
-/* Bento Empty State Slot (Clean, Spacious, Distinguishable) */
-.bento-mini-heatmap--empty {
-  background: #fcfdfe;
-  border: 1px dashed #e2e8f0;
-  padding: 10px 12px;
-}
-
-.bento-mini-heatmap--empty:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  border-style: solid;
-}
-
-.bento-empty-slot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  gap: 8px;
-}
-
-.bento-empty-slot__icon {
-  font-size: 13px;
-  opacity: 0.65;
-}
-
-.bento-empty-slot__text {
-  font-size: 11.5px;
-  color: #64748b;
-  font-weight: 500;
-  flex: 1;
-}
-
-.bento-mini-heatmap--empty:hover .bento-empty-slot__text {
-  color: #1e293b;
-  font-weight: 600;
-}
-
-.bento-empty-slot__btn {
-  font-size: 11px;
-  font-weight: 700;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  padding: 2.5px 8px;
-  border-radius: 5px;
-  transition: all 0.15s ease;
-}
-
-.bento-mini-heatmap--empty:hover .bento-empty-slot__btn {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
 }
 
 .mini-heatmap-head {
@@ -3651,53 +3604,40 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   border: 1px dashed #93c5fd;
 }
 
+.mini-heatmap-rows-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
+}
+
 .mini-heatmap-row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  min-height: 14px;
 }
 
 .mini-row-label {
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 800;
   color: #94a3b8;
   width: 24px;
   flex-shrink: 0;
   text-align: right;
   letter-spacing: 0.02em;
-}
-
-.mini-heatmap-groups {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  flex: 1;
-}
-
-.mini-heatmap-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 2.5px;
-}
-
-.mini-group-tag {
-  font-size: 8.5px;
-  font-weight: 800;
-  color: #94a3b8;
   font-family: Consolas, Monaco, monospace;
-  min-width: 12px;
 }
 
 .mini-group-dots {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  flex-wrap: wrap;
 }
 
 .mini-dot {
-  width: 5.5px;
-  height: 5.5px;
+  width: 6.5px;
+  height: 6.5px;
   border-radius: 50%;
   transition: transform 0.12s ease;
   flex-shrink: 0;
@@ -3720,12 +3660,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .mini-dot.dot-wrong {
   background: #ef4444;
   box-shadow: 0 0 3px rgba(239, 68, 68, 0.6);
-  transform: scale(1.1);
 }
 
 .mini-dot.dot-unset {
-  background: #cbd5e1;
-  opacity: 0.6;
+  background: #e2e8f0;
 }
 
 .mini-subj-chips {
@@ -3733,14 +3671,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   align-items: center;
   gap: 3.5px;
   flex-wrap: wrap;
-  flex: 1;
 }
 
 .mini-subj-chip {
   font-size: 8.5px;
   font-family: Consolas, Monaco, monospace;
   font-weight: 700;
-  padding: 0 3.5px;
+  padding: 0 4px;
   height: 14px;
   line-height: 14px;
   border-radius: 3px;
@@ -3768,6 +3705,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #ef4444;
   color: #ffffff;
   box-shadow: 0 0 2px rgba(239, 68, 68, 0.4);
+}
+
+.mini-subj-chip.chip-unset {
+  background: #e2e8f0;
+  color: #94a3b8;
 }
 
 .mini-subj-chip.chip-unset {
