@@ -1,0 +1,1 @@
+ALTER TABLE app_state ADD COLUMN papers TEXT NOT NULL DEFAULT '[]';

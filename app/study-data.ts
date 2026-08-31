@@ -81,11 +81,19 @@ export type JournalSectionsContext = {
   sections: JournalSectionItem[];
 };
 
+export type JournalPaperContext = {
+  type: "paper";
+  area: StudyArea;
+  paperId: string;
+  paperTitle: string;
+};
+
 export type JournalContext =
   | JournalProjectContext
   | JournalSubjectContext
   | JournalSectionContext
-  | JournalSectionsContext;
+  | JournalSectionsContext
+  | JournalPaperContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -104,6 +112,24 @@ export type JournalEntry = {
   publish: JournalPublish;
 };
 
+export type PaperKind = "past" | "mock";
+
+export type PaperRecord = {
+  id: string;
+  kind: PaperKind;
+  area: StudyArea;
+  title: string;
+  groupName?: string;
+  year?: number;
+  completed: boolean;
+  completedAt: string;
+  score?: number | null;
+  durationMinutes?: number | null;
+  secondRound?: boolean;
+  secondRoundAt?: string;
+  notes?: string;
+};
+
 export type StudyAppData = {
   schemaVersion: number;
   appVersion: string;
@@ -111,6 +137,7 @@ export type StudyAppData = {
   projectSettings: ProjectSettings;
   planHistory: PlanHistoryEntry[];
   journals: JournalEntry[];
+  papers: PaperRecord[];
 };
 
 export type BackupKind = "manual" | "before-import" | "before-restore" | "before-migration";
@@ -761,6 +788,16 @@ export function normalizeJournalContext(value: unknown): JournalContext | null {
     };
   }
 
+  if (value.type === "paper") {
+    if (typeof value.paperId !== "string" || !value.paperId.trim()) return null;
+    return {
+      type: "paper",
+      area,
+      paperId: value.paperId.trim(),
+      paperTitle: typeof value.paperTitle === "string" && value.paperTitle.trim() ? value.paperTitle.trim() : "真题/模拟卷",
+    };
+  }
+
   return null;
 }
 
@@ -816,6 +853,126 @@ export function normalizeJournals(value: unknown): JournalEntry[] {
   return entries;
 }
 
+export const PAST_PAPER_YEARS = [
+  2026, 2025, 2024, 2023, 2022, 2021, 2020,
+  2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
+] as const;
+
+export function defaultPastPapers(): PaperRecord[] {
+  const list: PaperRecord[] = [];
+  (["408", "math"] as StudyArea[]).forEach((area) => {
+    PAST_PAPER_YEARS.forEach((year) => {
+      list.push({
+        id: `past-${area}-${year}`,
+        kind: "past",
+        area,
+        title: `${year}年 ${area === "408" ? "408 计算机学科专业基础" : "全国硕士研究生招生考试数学"} 真题`,
+        groupName: "历年真题",
+        year,
+        completed: false,
+        completedAt: "",
+        score: null,
+        durationMinutes: null,
+        secondRound: false,
+        secondRoundAt: "",
+      });
+    });
+  });
+  return list;
+}
+
+export function normalizePaperRecord(value: unknown): PaperRecord | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || !value.id.trim()) return null;
+  const kind: PaperKind = value.kind === "mock" ? "mock" : "past";
+  const area: StudyArea = value.area === "math" ? "math" : "408";
+  const title = typeof value.title === "string" && value.title.trim()
+    ? value.title.trim()
+    : (kind === "past" ? `${value.year ?? ""} 真题` : "模拟卷");
+  const year = typeof value.year === "number" && value.year >= 2000 && value.year <= 2100 ? value.year : undefined;
+  const completed = Boolean(value.completed);
+  const completedAt = isDate(value.completedAt) ? value.completedAt : "";
+  const score = typeof value.score === "number" && !Number.isNaN(value.score) && value.score >= 0 && value.score <= 150
+    ? Math.round(value.score * 10) / 10
+    : null;
+  const durationMinutes = typeof value.durationMinutes === "number" && value.durationMinutes > 0 && value.durationMinutes <= 600
+    ? Math.round(value.durationMinutes)
+    : null;
+  const secondRound = Boolean(value.secondRound);
+  const secondRoundAt = isDate(value.secondRoundAt) ? value.secondRoundAt : "";
+  const groupName = typeof value.groupName === "string" && value.groupName.trim() ? value.groupName.trim() : undefined;
+  const notes = typeof value.notes === "string" ? value.notes.trim() : undefined;
+
+  return {
+    id: value.id.trim(),
+    kind,
+    area,
+    title,
+    groupName,
+    year,
+    completed: completed && Boolean(completedAt),
+    completedAt: completed ? completedAt : "",
+    score,
+    durationMinutes,
+    secondRound: secondRound && Boolean(secondRoundAt),
+    secondRoundAt: secondRound ? secondRoundAt : "",
+    notes,
+  };
+}
+
+export function normalizePapers(value: unknown): PaperRecord[] {
+  const defaults = defaultPastPapers();
+  const map = new Map<string, PaperRecord>();
+  defaults.forEach((paper) => map.set(paper.id, paper));
+
+  if (Array.isArray(value)) {
+    value.forEach((candidate) => {
+      const normalized = normalizePaperRecord(candidate);
+      if (!normalized) return;
+      map.set(normalized.id, normalized);
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[] {
+  const map = new Map<string, PaperRecord>();
+  const defaults = defaultPastPapers();
+  defaults.forEach((p) => map.set(p.id, p));
+
+  remote.forEach((p) => {
+    if (p && p.id) map.set(p.id, p);
+  });
+
+  local.forEach((p) => {
+    if (!p || !p.id) return;
+    const existing = map.get(p.id);
+    if (!existing) {
+      map.set(p.id, p);
+    } else {
+      const completed = p.completed || existing.completed;
+      const completedAt = p.completedAt || existing.completedAt;
+      const score = p.score !== undefined && p.score !== null ? p.score : (existing.score ?? null);
+      const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
+      const secondRound = p.secondRound || existing.secondRound;
+      const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
+      map.set(p.id, {
+        ...existing,
+        ...p,
+        completed,
+        completedAt,
+        score,
+        durationMinutes,
+        secondRound,
+        secondRoundAt,
+      });
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 /**
  * Deterministic CRDT/LWW map-merge for JournalEntry lists across devices.
  * Prevents silent overwriting when different devices create or edit journals concurrently.
@@ -854,6 +1011,7 @@ export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap):
     || !Array.isArray(value.planHistory)) return null;
 
   const journals = Array.isArray(value.journals) ? normalizeJournals(value.journals) : [];
+  const papers = normalizePapers(value.papers);
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -862,6 +1020,7 @@ export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap):
     projectSettings: normalizeProjectSettings(value.projectSettings),
     planHistory: normalizePlanHistory(value.planHistory),
     journals,
+    papers,
   };
 }
 
@@ -870,6 +1029,7 @@ export function createAppData(
   projectSettings = defaultProjectSettings(),
   planHistory: PlanHistoryEntry[] = [],
   journals: JournalEntry[] = [],
+  papers: PaperRecord[] = defaultPastPapers(),
 ): StudyAppData {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -878,6 +1038,7 @@ export function createAppData(
     projectSettings,
     planHistory,
     journals,
+    papers,
   };
 }
 
@@ -888,6 +1049,7 @@ export function summarizeImport(data: StudyAppData, projectCount: number, subjec
     sections: Object.keys(data.progress).length,
     planHistory: data.planHistory.length,
     journals: data.journals.length,
+    papers: data.papers ? data.papers.length : 0,
   };
 }
 

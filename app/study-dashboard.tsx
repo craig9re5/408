@@ -29,14 +29,20 @@ import {
   normalizeAppData,
   normalizeSectionProgress,
   summarizeImport,
+  defaultPastPapers,
+  normalizePapers,
+  mergePapers,
   type DisciplineStats,
   type ForecastHealth,
   type HeatmapDay,
   type JournalContext,
   type JournalEntry,
+  type JournalPaperContext,
   type JournalPublish,
   type JournalSectionItem,
   type LocalBackup,
+  type PaperKind,
+  type PaperRecord,
   type PlanChangeSource,
   type PlanHistoryEntry,
   type ProgressMap,
@@ -53,20 +59,22 @@ type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
 type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
-type AppPage = "progress" | "today" | "analytics" | "settings";
-type NavigationIcon = "progress" | "today" | "analytics" | "settings";
+type AppPage = "progress" | "today" | "sprint" | "analytics" | "settings";
+type NavigationIcon = "progress" | "today" | "sprint" | "analytics" | "settings";
 type JournalFilter = "all" | "unlinked" | "linked" | "408" | "math" | "published";
 type EditorMode = "edit" | "split" | "preview";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
   { page: "today", icon: "today", label: "今日" },
+  { page: "sprint", icon: "sprint", label: "真题模拟" },
   { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
 const pageTitles: Record<AppPage, string> = {
   progress: "学习进度",
   today: "今日",
+  sprint: "真题模拟",
   analytics: "数据分析",
   settings: "设置",
 };
@@ -74,6 +82,7 @@ const pageTitles: Record<AppPage, string> = {
 const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
   { page: "progress", mark: "进", label: "进度" },
   { page: "today", mark: "今", label: "今日" },
+  { page: "sprint", mark: "卷", label: "冲刺" },
   { page: "analytics", mark: "析", label: "分析" },
   { page: "settings", mark: "设", label: "设置" },
 ];
@@ -486,6 +495,7 @@ export function StudyDashboard() {
   const [editorTitle, setEditorTitle] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
+  const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("split");
   const [showTitleInput, setShowTitleInput] = useState(false);
   const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
@@ -523,6 +533,14 @@ export function StudyDashboard() {
   const [analyticsScope, setAnalyticsScope] = useState<"all" | StudyArea>("all");
   const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
   const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
+  const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
+  const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
+  const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
+  const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
+  const [newMockTitle, setNewMockTitle] = useState("");
+  const [newMockGroup, setNewMockGroup] = useState("");
+  const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string; duration: string } | null>(null);
+  const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -549,6 +567,7 @@ export function StudyDashboard() {
     const mergedSettings = body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings();
     const mergedHistory = body.planHistory ?? local?.planHistory ?? [];
     let mergedJournalsList: JournalEntry[] = [];
+    let mergedPapersList: PaperRecord[] = [];
 
     setProgress(mergedProgress);
     setProjectSettings(mergedSettings);
@@ -558,11 +577,16 @@ export function StudyDashboard() {
       mergedJournalsList = mergeJournals(baseLocal, body.journals ?? []);
       return mergedJournalsList;
     });
+    setPapers((currentLocal) => {
+      const baseLocal = (includeLocal && currentLocal.length === 0 && local?.papers) ? local.papers : currentLocal;
+      mergedPapersList = mergePapers(baseLocal, body.papers ?? []);
+      return mergedPapersList;
+    });
     setBackups(repository().backups());
 
     // Record the current state payload so auto-save doesn't fire for unchanged data
     lastSavedPayloadRef.current = JSON.stringify({
-      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList),
+      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList),
       deletedJournalIds: [],
     });
   }, [repository]);
@@ -605,7 +629,7 @@ export function StudyDashboard() {
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
-    const appData = createAppData(progress, projectSettings, planHistory, journals);
+    const appData = createAppData(progress, projectSettings, planHistory, journals, papers);
     repository().save(appData);
 
     const payloadString = JSON.stringify({
@@ -898,6 +922,121 @@ export function StudyDashboard() {
     return Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
   }, [weeklyTrends]);
 
+  const sprintAreaPapers = useMemo(() => papers.filter((p) => p.area === activeArea), [papers, activeArea]);
+  const pastPapers = useMemo(() => sprintAreaPapers.filter((p) => p.kind === "past").sort((a, b) => (b.year ?? 0) - (a.year ?? 0)), [sprintAreaPapers]);
+  const mockPapers = useMemo(() => sprintAreaPapers.filter((p) => p.kind === "mock"), [sprintAreaPapers]);
+
+  const sprintPastCompleted = useMemo(() => pastPapers.filter((p) => p.completed).length, [pastPapers]);
+  const sprintPastSecondRound = useMemo(() => pastPapers.filter((p) => p.secondRound).length, [pastPapers]);
+  const sprintPastTotal = pastPapers.length;
+  const sprintPastPercent = sprintPastTotal ? Math.round((sprintPastCompleted / sprintPastTotal) * 100) : 0;
+
+  const sprintMockCompleted = useMemo(() => mockPapers.filter((p) => p.completed).length, [mockPapers]);
+  const sprintMockTotal = mockPapers.length;
+  const sprintMockPercent = sprintMockTotal ? Math.round((sprintMockCompleted / sprintMockTotal) * 100) : 0;
+
+  const scoredPapers = useMemo(() => sprintAreaPapers.filter((p) => typeof p.score === "number" && p.score !== null), [sprintAreaPapers]);
+  const sprintAvgScore = useMemo(() => {
+    if (!scoredPapers.length) return "--";
+    const sum = scoredPapers.reduce((acc, p) => acc + (p.score ?? 0), 0);
+    return (sum / scoredPapers.length).toFixed(1);
+  }, [scoredPapers]);
+
+  const timedPapers = useMemo(() => sprintAreaPapers.filter((p) => typeof p.durationMinutes === "number" && p.durationMinutes !== null), [sprintAreaPapers]);
+  const sprintAvgDuration = useMemo(() => {
+    if (!timedPapers.length) return "--";
+    const sum = timedPapers.reduce((acc, p) => acc + (p.durationMinutes ?? 0), 0);
+    return Math.round(sum / timedPapers.length);
+  }, [timedPapers]);
+
+  const journalsByPaper = useMemo(() => {
+    const map: Record<string, JournalEntry[]> = {};
+    journals.forEach((entry) => {
+      if (entry.context?.type === "paper" && entry.context.paperId) {
+        if (!map[entry.context.paperId]) map[entry.context.paperId] = [];
+        map[entry.context.paperId].push(entry);
+      }
+    });
+    return map;
+  }, [journals]);
+
+  const sprintJournalsCount = useMemo(() => {
+    return journals.filter((j) => j.context?.type === "paper" && j.context.area === activeArea).length;
+  }, [journals, activeArea]);
+
+  const visiblePastPapers = useMemo(() => {
+    return pastPapers.filter((p) => {
+      if (sprintStatusFilter === "uncompleted") return !p.completed;
+      if (sprintStatusFilter === "completed") return p.completed;
+      return true;
+    });
+  }, [pastPapers, sprintStatusFilter]);
+
+  const visibleMockPapers = useMemo(() => {
+    return mockPapers.filter((p) => {
+      if (sprintStatusFilter === "uncompleted") return !p.completed;
+      if (sprintStatusFilter === "completed") return p.completed;
+      return true;
+    });
+  }, [mockPapers, sprintStatusFilter]);
+
+  function updatePaper(id: string, patch: Partial<PaperRecord>) {
+    setPapers((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  function togglePaperCompleted(id: string, completed: boolean) {
+    const todayStr = dateToday();
+    setPapers((current) => current.map((p) => {
+      if (p.id !== id) return p;
+      return {
+        ...p,
+        completed,
+        completedAt: completed ? (p.completedAt || todayStr) : "",
+      };
+    }));
+  }
+
+  function togglePaperSecondRound(id: string, secondRound: boolean) {
+    const todayStr = dateToday();
+    setPapers((current) => current.map((p) => {
+      if (p.id !== id) return p;
+      return {
+        ...p,
+        secondRound,
+        secondRoundAt: secondRound ? (p.secondRoundAt || todayStr) : "",
+      };
+    }));
+  }
+
+  function handleAddMockPaper() {
+    if (!newMockTitle.trim()) return;
+    const newId = `mock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newRecord: PaperRecord = {
+      id: newId,
+      kind: "mock",
+      area: activeArea,
+      title: newMockTitle.trim(),
+      groupName: newMockGroup.trim() || undefined,
+      completed: false,
+      completedAt: "",
+      score: null,
+      durationMinutes: null,
+      secondRound: false,
+      secondRoundAt: "",
+    };
+    setPapers((current) => [...current, newRecord]);
+    setNewMockTitle("");
+    setNewMockGroup("");
+    setIsAddMockModalOpen(false);
+    setFeedbackMessage("已添加模拟试卷");
+  }
+
+  function handleDeleteMockPaper(id: string) {
+    setPapers((current) => current.filter((p) => p.id !== id));
+    setPendingDeletePaperId(null);
+    setFeedbackMessage("已删除模拟试卷");
+  }
+
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
     setProgress((current) => {
       const previous = current[sectionId];
@@ -1105,7 +1244,7 @@ export function StudyDashboard() {
   }
 
   function currentAppData(): StudyAppData {
-    return createAppData(progress, projectSettings, planHistory, journals);
+    return createAppData(progress, projectSettings, planHistory, journals, papers);
   }
 
   async function replaceCloudData(data: StudyAppData): Promise<boolean> {
@@ -1187,6 +1326,7 @@ export function StudyDashboard() {
     setProjectSettings(pendingImport.projectSettings);
     setPlanHistory(pendingImport.planHistory);
     setJournals(pendingImport.journals);
+    setPapers(pendingImport.papers ?? defaultPastPapers());
     repository().save(pendingImport);
     setPendingImport(null);
     setFeedbackMessage("数据导入完成，已自动保留导入前备份");
@@ -1206,6 +1346,7 @@ export function StudyDashboard() {
     setProjectSettings(restored.projectSettings);
     setPlanHistory(restored.planHistory);
     setJournals(restored.journals);
+    setPapers(restored.papers ?? defaultPastPapers());
     repository().save(restored);
     setBackups(repository().backups());
     setPendingRestore(null);
@@ -1290,7 +1431,7 @@ export function StudyDashboard() {
       if (journalFilter === "unlinked" && !isUnlinked) return false;
       if (journalFilter === "linked" && isUnlinked) return false;
       if (journalFilter === "408") {
-        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section") {
+        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section" || entry.context?.type === "paper") {
           if (entry.context.area !== "408") return false;
         } else if (entry.context?.type === "sections") {
           if (!entry.context.sections.some((s) => s.area === "408")) return false;
@@ -1299,7 +1440,7 @@ export function StudyDashboard() {
         }
       }
       if (journalFilter === "math") {
-        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section") {
+        if (entry.context?.type === "project" || entry.context?.type === "subject" || entry.context?.type === "section" || entry.context?.type === "paper") {
           if (entry.context.area !== "math") return false;
         } else if (entry.context?.type === "sections") {
           if (!entry.context.sections.some((s) => s.area === "math")) return false;
@@ -1334,6 +1475,11 @@ export function StudyDashboard() {
             );
           } else if (entry.context.type === "project") {
             contextMatch = entry.context.area.toLowerCase().includes(q);
+          } else if (entry.context.type === "paper") {
+            contextMatch = Boolean(
+              entry.context.paperTitle?.toLowerCase().includes(q)
+              || entry.context.paperId.toLowerCase().includes(q),
+            );
           }
         }
         if (!titleMatch && !contentMatch && !contextMatch) return false;
@@ -1370,7 +1516,13 @@ export function StudyDashboard() {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
-    setEditorSections(extractJournalSections(context ?? null));
+    if (context?.type === "paper") {
+      setEditorPaper(context);
+      setEditorSections([]);
+    } else {
+      setEditorPaper(null);
+      setEditorSections(extractJournalSections(context ?? null));
+    }
     setShowTitleInput(false);
     setEditorMode("split");
     setIsEditorOpen(true);
@@ -1380,7 +1532,13 @@ export function StudyDashboard() {
     setEditingJournalId(journal.id);
     setEditorTitle(journal.title ?? "");
     setEditorContent(journal.content);
-    setEditorSections(extractJournalSections(journal.context));
+    if (journal.context?.type === "paper") {
+      setEditorPaper(journal.context);
+      setEditorSections([]);
+    } else {
+      setEditorPaper(null);
+      setEditorSections(extractJournalSections(journal.context));
+    }
     setShowTitleInput(Boolean(journal.title));
     setEditorMode("split");
     setIsEditorOpen(true);
@@ -1395,9 +1553,11 @@ export function StudyDashboard() {
 
     const trimmedTitle = editorTitle.trim() ? editorTitle.trim() : null;
     const now = new Date().toISOString();
-    const contextToSave: JournalContext | null = editorSections.length > 0
-      ? { type: "sections", sections: editorSections }
-      : null;
+    const contextToSave: JournalContext | null = editorPaper
+      ? editorPaper
+      : editorSections.length > 0
+        ? { type: "sections", sections: editorSections }
+        : null;
 
     if (editingJournalId) {
       setJournals((prev) => prev.map((entry) => {
@@ -1436,7 +1596,8 @@ export function StudyDashboard() {
     setEditorTitle("");
     setEditorContent("");
     setEditorSections([]);
-  }, [editorContent, editorTitle, editingJournalId, editorSections, journals]);
+    setEditorPaper(null);
+  }, [editorContent, editorTitle, editingJournalId, editorSections, editorPaper, journals]);
 
   const handleDeleteJournal = useCallback((journal: JournalEntry) => {
     setPendingDeleteJournal(journal);
@@ -1699,6 +1860,21 @@ export function StudyDashboard() {
                       setExpandedChapters([]);
                       setCatalogFilter("all");
                     }}
+                  >
+                    {area === "408" ? "408" : "数学"}
+                  </button>
+                ))}
+              </div>
+            </div>}
+            {activePage === "sprint" && <div className="study-switchers sprint-top-switchers">
+              <div className="area-switcher" role="group" aria-label="切换冲刺科目">
+                {(["408", "math"] as StudyArea[]).map((area) => (
+                  <button
+                    className={activeArea === area ? "active" : ""}
+                    type="button"
+                    key={area}
+                    aria-pressed={activeArea === area}
+                    onClick={() => setActiveArea(area)}
                   >
                     {area === "408" ? "408" : "数学"}
                   </button>
@@ -2187,6 +2363,21 @@ export function StudyDashboard() {
                                           </button>
                                         );
                                       }
+                                      if (entry.context.type === "paper") {
+                                        return (
+                                          <button
+                                            type="button"
+                                            className={`journal-context-badge area-${entry.context.area}`}
+                                            title={entry.context.paperTitle}
+                                            onClick={() => {
+                                              setActiveArea(entry.context.area);
+                                              setActivePage("sprint");
+                                            }}
+                                          >
+                                            🎯 {entry.context.paperTitle}
+                                          </button>
+                                        );
+                                      }
                                       return null;
                                     })()}
                                     {entry.publish?.status === "published" && (
@@ -2258,6 +2449,423 @@ export function StudyDashboard() {
                   )}
                 </div>
               </div>
+            </section>
+          ) : activePage === "sprint" ? (
+            <section className="page-view sprint-page" aria-labelledby="sprint-title">
+              <div className="sprint-macro-grid">
+                <article className="sprint-stat-card">
+                  <div className="stat-card-head">
+                    <span>历年真题 (2010~2026)</span>
+                    <strong>{sprintPastCompleted}/{sprintPastTotal}</strong>
+                  </div>
+                  <div className="stat-card-body">
+                    <div className="stat-card-progress-bar">
+                      <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
+                    </div>
+                    <div className="stat-card-footer">
+                      <small>完成度 {sprintPastPercent}%</small>
+                      <small>二刷已完成 {sprintPastSecondRound} 套</small>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="sprint-stat-card">
+                  <div className="stat-card-head">
+                    <span>模拟题集</span>
+                    <strong>{sprintMockCompleted}/{sprintMockTotal}</strong>
+                  </div>
+                  <div className="stat-card-body">
+                    <div className="stat-card-progress-bar">
+                      <div className="stat-card-progress-fill" style={{ width: `${sprintMockPercent}%` }} />
+                    </div>
+                    <div className="stat-card-footer">
+                      <small>{sprintMockTotal > 0 ? `完成度 ${sprintMockPercent}%` : "点击添加模拟卷"}</small>
+                      <small>共添加 {sprintMockTotal} 套</small>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="sprint-stat-card">
+                  <div className="stat-card-head">
+                    <span>模考平均得分</span>
+                    <strong>{sprintAvgScore} <span className="stat-unit">/ 150</span></strong>
+                  </div>
+                  <div className="stat-card-body">
+                    <p className="stat-desc">
+                      {scoredPapers.length > 0 ? `已记录 ${scoredPapers.length} 次模考成绩` : "暂无得分记录，点击试卷即可录入"}
+                    </p>
+                    <div className="stat-card-footer">
+                      <small>平均用时 {sprintAvgDuration} min</small>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="sprint-stat-card">
+                  <div className="stat-card-head">
+                    <span>错题复盘日志</span>
+                    <strong>{sprintJournalsCount} <span className="stat-unit">篇</span></strong>
+                  </div>
+                  <div className="stat-card-body">
+                    <p className="stat-desc">针对试卷的错题归因与全真复盘</p>
+                    <div className="stat-card-footer">
+                      <small>关联【{activeArea === "408" ? "408" : "数学"}】试卷</small>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div className="sprint-toolbar">
+                <div className="sprint-tab-group" role="tablist" aria-label="试卷类型筛选">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sprintTab === "all"}
+                    className={sprintTab === "all" ? "active" : ""}
+                    onClick={() => setSprintTab("all")}
+                  >
+                    全部 ({sprintAreaPapers.length})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sprintTab === "past"}
+                    className={sprintTab === "past" ? "active" : ""}
+                    onClick={() => setSprintTab("past")}
+                  >
+                    历年真题 ({sprintPastTotal})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sprintTab === "mock"}
+                    className={sprintTab === "mock" ? "active" : ""}
+                    onClick={() => setSprintTab("mock")}
+                  >
+                    模拟题集 ({sprintMockTotal})
+                  </button>
+                </div>
+
+                <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
+                  <button
+                    type="button"
+                    className={sprintStatusFilter === "all" ? "active" : ""}
+                    onClick={() => setSprintStatusFilter("all")}
+                  >
+                    全部
+                  </button>
+                  <button
+                    type="button"
+                    className={sprintStatusFilter === "uncompleted" ? "active" : ""}
+                    onClick={() => setSprintStatusFilter("uncompleted")}
+                  >
+                    未完成
+                  </button>
+                  <button
+                    type="button"
+                    className={sprintStatusFilter === "completed" ? "active" : ""}
+                    onClick={() => setSprintStatusFilter("completed")}
+                  >
+                    已完成
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-add-mock-paper"
+                  onClick={() => setIsAddMockModalOpen(true)}
+                >
+                  + 添加模拟卷
+                </button>
+              </div>
+
+              {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
+                <section className="sprint-section" aria-labelledby="past-papers-heading">
+                  <div className="sprint-section-header">
+                    <h3 id="past-papers-heading">历年全国统考真题 (2010 ~ 2026)</h3>
+                    <span className="sprint-section-tag">全真模拟 · {sprintPastCompleted}/{sprintPastTotal} 已完成</span>
+                  </div>
+
+                  <div className="paper-table">
+                    <div className="paper-table-head" aria-hidden="true">
+                      <span>年份 / 试卷</span>
+                      <span>完成打卡</span>
+                      <span>模考得分</span>
+                      <span>耗时</span>
+                      <span>二刷</span>
+                      <span>复盘日志</span>
+                    </div>
+
+                    {visiblePastPapers.map((paper) => {
+                      const paperJournals = journalsByPaper[paper.id] ?? [];
+                      return (
+                        <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                          <div className="paper-name">
+                            <span className="paper-year-badge">{paper.year}</span>
+                            <div className="paper-title-group">
+                              <strong>{paper.year}年 全国统考真题</strong>
+                              <small>{activeArea === "408" ? "408 计算机学科专业基础" : "全国硕士研究生招生考试数学"}</small>
+                            </div>
+                          </div>
+
+                          <div className="paper-check-col">
+                            <label className="paper-check-label" aria-label={`${paper.year}年真题完成打卡`}>
+                              <input
+                                type="checkbox"
+                                checked={paper.completed}
+                                onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
+                              />
+                              <span />
+                            </label>
+                            {paper.completed ? (
+                              <EditableDate
+                                value={paper.completedAt}
+                                emptyLabel="未设置日期"
+                                ariaLabel={`${paper.year}年真题完成日期`}
+                                onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+                              />
+                            ) : (
+                              <span className="paper-status-hint">未做</span>
+                            )}
+                          </div>
+
+                          <div className="paper-score-col">
+                            {paper.score !== null && paper.score !== undefined ? (
+                              <button
+                                type="button"
+                                className="paper-score-pill"
+                                title="点击修改得分"
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score), duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                              >
+                                <strong>{paper.score}</strong> <small>分</small>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="paper-btn-add-val"
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: "", duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                              >
+                                + 记录得分
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="paper-duration-col">
+                            {paper.durationMinutes ? (
+                              <button
+                                type="button"
+                                className="paper-duration-pill"
+                                title="点击修改耗时"
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: String(paper.durationMinutes) })}
+                              >
+                                {paper.durationMinutes} min
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="paper-btn-add-val"
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: "" })}
+                              >
+                                + 耗时
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="paper-second-col">
+                            <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
+                              <input
+                                type="checkbox"
+                                checked={Boolean(paper.secondRound)}
+                                onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
+                              />
+                              <span />
+                            </label>
+                            {paper.secondRound && (
+                              <span className="paper-second-date">{formatDateShort(paper.secondRoundAt)}</span>
+                            )}
+                          </div>
+
+                          <div className="paper-actions-col">
+                            {paperJournals.length > 0 && (
+                              <button
+                                type="button"
+                                className="section-journal-badge"
+                                title={`查看此真题的 ${paperJournals.length} 条复盘日志`}
+                                onClick={() => {
+                                  setJournalSearchQuery(paper.title);
+                                  setActivePage("today");
+                                }}
+                              >
+                                📝 <span>{paperJournals.length}</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="section-record-btn"
+                              title="写一条关于该真题的复盘日志"
+                              onClick={() => openCreateJournal({
+                                type: "paper",
+                                area: activeArea,
+                                paperId: paper.id,
+                                paperTitle: paper.title,
+                              })}
+                            >
+                              <span className="record-plus">+</span>
+                              <span className="record-label">记</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {(sprintTab === "all" || sprintTab === "mock") && (
+                <section className="sprint-section" aria-labelledby="mock-papers-heading">
+                  <div className="sprint-section-header">
+                    <h3 id="mock-papers-heading">模拟题集与名师押题</h3>
+                    <span className="sprint-section-tag">{sprintMockCompleted}/{sprintMockTotal} 已完成</span>
+                  </div>
+
+                  {visibleMockPapers.length === 0 ? (
+                    <div className="sprint-empty-card">
+                      <p>当前暂无模拟试卷，您可以点击「添加模拟卷」记录名师预测卷（如李林、王道、合工大超越等）。</p>
+                      <button type="button" className="btn-add-mock-inline" onClick={() => setIsAddMockModalOpen(true)}>
+                        + 添加模拟卷
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="paper-table">
+                      <div className="paper-table-head paper-table-head--mock" aria-hidden="true">
+                        <span>模拟试卷</span>
+                        <span>完成打卡</span>
+                        <span>模考得分</span>
+                        <span>耗时</span>
+                        <span>复盘日志</span>
+                        <span>操作</span>
+                      </div>
+
+                      {visibleMockPapers.map((paper) => {
+                        const paperJournals = journalsByPaper[paper.id] ?? [];
+                        return (
+                          <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                            <div className="paper-name">
+                              {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
+                              <div className="paper-title-group">
+                                <strong>{paper.title}</strong>
+                              </div>
+                            </div>
+
+                            <div className="paper-check-col">
+                              <label className="paper-check-label" aria-label={`${paper.title} 完成打卡`}>
+                                <input
+                                  type="checkbox"
+                                  checked={paper.completed}
+                                  onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
+                                />
+                                <span />
+                              </label>
+                              {paper.completed ? (
+                                <EditableDate
+                                  value={paper.completedAt}
+                                  emptyLabel="未设置日期"
+                                  ariaLabel={`${paper.title} 完成日期`}
+                                  onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+                                />
+                              ) : (
+                                <span className="paper-status-hint">未做</span>
+                              )}
+                            </div>
+
+                            <div className="paper-score-col">
+                              {paper.score !== null && paper.score !== undefined ? (
+                                <button
+                                  type="button"
+                                  className="paper-score-pill"
+                                  title="点击修改得分"
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score), duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                >
+                                  <strong>{paper.score}</strong> <small>分</small>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="paper-btn-add-val"
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: "", duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                >
+                                  + 记录得分
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="paper-duration-col">
+                              {paper.durationMinutes ? (
+                                <button
+                                  type="button"
+                                  className="paper-duration-pill"
+                                  title="点击修改耗时"
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: String(paper.durationMinutes) })}
+                                >
+                                  {paper.durationMinutes} min
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="paper-btn-add-val"
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: "" })}
+                                >
+                                  + 耗时
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="paper-actions-col">
+                              {paperJournals.length > 0 && (
+                                <button
+                                  type="button"
+                                  className="section-journal-badge"
+                                  title={`查看此模拟题的 ${paperJournals.length} 条复盘日志`}
+                                  onClick={() => {
+                                    setJournalSearchQuery(paper.title);
+                                    setActivePage("today");
+                                  }}
+                                >
+                                  📝 <span>{paperJournals.length}</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="section-record-btn"
+                                title="写一条关于该模拟卷的复盘日志"
+                                onClick={() => openCreateJournal({
+                                  type: "paper",
+                                  area: activeArea,
+                                  paperId: paper.id,
+                                  paperTitle: paper.title,
+                                })}
+                              >
+                                <span className="record-plus">+</span>
+                                <span className="record-label">记</span>
+                              </button>
+                            </div>
+
+                            <div className="paper-manage-col">
+                              <button
+                                type="button"
+                                className="paper-btn-del"
+                                title="删除该模拟卷"
+                                onClick={() => setPendingDeletePaperId(paper.id)}
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              )}
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
@@ -2961,6 +3569,25 @@ export function StudyDashboard() {
                   )}
                 </div>
 
+                {editorPaper && (
+                  <div className="journal-selected-sections-list">
+                    <span className={`journal-section-chip area-${editorPaper.area}`}>
+                      <span className="chip-text">
+                        🎯 模考复盘 · {editorPaper.paperTitle}
+                      </span>
+                      <button
+                        type="button"
+                        className="chip-remove-btn"
+                        onClick={() => setEditorPaper(null)}
+                        aria-label="移除试卷关联"
+                        title="移除试卷关联"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </div>
+                )}
+
                 {editorSections.length > 0 && (
                   <div className="journal-selected-sections-list">
                     {editorSections.map((sec) => (
@@ -3247,6 +3874,121 @@ export function StudyDashboard() {
               )}
             </div>
           </aside>
+        </div>
+      )}
+
+      {/* Paper Score & Duration Modal */}
+      {editingScorePaper && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true">
+            <span className="dialog-kicker">全真模拟考记录</span>
+            <h2>模考成绩与耗时</h2>
+            <p className="paper-score-sub">记录本套试卷的真实得分（0~150分）与模拟用时（分钟）</p>
+            <div className="paper-modal-form">
+              <label className="publish-form-field">
+                <span className="field-label">得分 (0~150 分)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={150}
+                  step={0.5}
+                  placeholder="如：118.5"
+                  value={editingScorePaper.score}
+                  onChange={(e) => setEditingScorePaper({ ...editingScorePaper, score: e.target.value })}
+                  autoFocus
+                />
+              </label>
+              <label className="publish-form-field">
+                <span className="field-label">全真模拟耗时 (分钟)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={600}
+                  placeholder="如：180"
+                  value={editingScorePaper.duration}
+                  onChange={(e) => setEditingScorePaper({ ...editingScorePaper, duration: e.target.value })}
+                />
+              </label>
+            </div>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setEditingScorePaper(null)}>取消</button>
+              <button
+                type="button"
+                className="btn-confirm"
+                onClick={() => {
+                  const scoreVal = editingScorePaper.score.trim() === "" ? null : parseFloat(editingScorePaper.score);
+                  const durVal = editingScorePaper.duration.trim() === "" ? null : parseInt(editingScorePaper.duration, 10);
+                  updatePaper(editingScorePaper.id, {
+                    score: Number.isNaN(scoreVal) ? null : scoreVal,
+                    durationMinutes: Number.isNaN(durVal) ? null : durVal,
+                  });
+                  setEditingScorePaper(null);
+                  setFeedbackMessage("已保存模考成绩");
+                }}
+              >
+                保存成绩
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Mock Paper Modal */}
+      {isAddMockModalOpen && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true">
+            <span className="dialog-kicker">冲刺阶段 · 模拟题集</span>
+            <h2>添加模拟试卷</h2>
+            <p className="paper-score-sub">为【{activeArea === "408" ? "408" : "数学"}】添加名师押题或模考套卷</p>
+            <div className="paper-modal-form">
+              <label className="publish-form-field">
+                <span className="field-label">试卷名称 <strong>*</strong></span>
+                <input
+                  type="text"
+                  placeholder="如：李林 6 套卷 · 卷一 / 王道 8 套卷 · 卷二"
+                  value={newMockTitle}
+                  onChange={(e) => setNewMockTitle(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <label className="publish-form-field">
+                <span className="field-label">系列 / 押题名师 (可选)</span>
+                <input
+                  type="text"
+                  placeholder="如：李林6套卷 / 合工大超越 / 王道8套卷"
+                  value={newMockGroup}
+                  onChange={(e) => setNewMockGroup(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setIsAddMockModalOpen(false)}>取消</button>
+              <button
+                type="button"
+                className="btn-confirm"
+                disabled={!newMockTitle.trim()}
+                onClick={handleAddMockPaper}
+              >
+                确认添加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Mock Paper Modal */}
+      {pendingDeletePaperId && (
+        <div className="confirm-overlay" role="presentation">
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
+            <h2>确认删除该模拟试卷？</h2>
+            <p>删除后将清除此模拟试卷的做题记录与得分，关联的错题复盘日志仍将保留。</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn-cancel" onClick={() => setPendingDeletePaperId(null)}>取消</button>
+              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteMockPaper(pendingDeletePaperId)}>
+                确认删除
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

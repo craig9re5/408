@@ -7,6 +7,9 @@ import {
   extractJournalSections,
   normalizeAppData,
   mergeJournals,
+  defaultPastPapers,
+  normalizePapers,
+  mergePapers,
   SCHEMA_VERSION,
   createAppData,
 } from "../app/study-data.ts";
@@ -423,4 +426,116 @@ test("createAppData: 打包导出数据包含 journals 与最新 schema", () => 
   assert.equal(appData.schemaVersion, 2);
   assert.equal(appData.journals.length, 1);
   assert.equal(appData.journals[0].id, "20260814001");
+});
+
+test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日期", () => {
+  const papers = defaultPastPapers();
+  // 408 有 17 套 (2010~2026)，数学有 17 套 (2010~2026)，共 34 套
+  assert.equal(papers.length, 34);
+
+  const past408 = papers.filter((p) => p.area === "408" && p.kind === "past");
+  assert.equal(past408.length, 17);
+  assert.equal(past408[0].year, 2026);
+  assert.equal(past408[16].year, 2010);
+  assert.equal(past408[0].completed, false);
+  assert.equal(past408[0].score, null);
+  assert.equal(past408[0].durationMinutes, null);
+  assert.equal(past408[0].secondRound, false);
+
+  const pastMath = papers.filter((p) => p.area === "math" && p.kind === "past");
+  assert.equal(pastMath.length, 17);
+});
+
+test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管理", () => {
+  const basePapers = defaultPastPapers();
+
+  // 1. 模拟设备 A 完成了 2025 年真题并添加了模拟题
+  const deviceA_papers = basePapers.map((p) => {
+    if (p.id === "past-408-2025") {
+      return {
+        ...p,
+        completed: true,
+        completedAt: "2026-10-15",
+        score: 126.5,
+        durationMinutes: 175,
+        secondRound: true,
+        secondRoundAt: "2026-11-20",
+      };
+    }
+    return p;
+  });
+  deviceA_papers.push({
+    id: "mock-1",
+    kind: "mock",
+    area: "408",
+    title: "王道8套卷 · 卷一",
+    groupName: "王道8套卷",
+    completed: true,
+    completedAt: "2026-11-01",
+    score: 110,
+    durationMinutes: 180,
+    secondRound: false,
+    secondRoundAt: "",
+  });
+
+  // 2. 模拟设备 B 完成了 2026 年真题并添加了李林模拟卷
+  const deviceB_papers = basePapers.map((p) => {
+    if (p.id === "past-408-2026") {
+      return {
+        ...p,
+        completed: true,
+        completedAt: "2026-10-20",
+        score: 132,
+        durationMinutes: 170,
+        secondRound: false,
+        secondRoundAt: "",
+      };
+    }
+    return p;
+  });
+  deviceB_papers.push({
+    id: "mock-2",
+    kind: "mock",
+    area: "math",
+    title: "李林6套卷 · 卷一",
+    groupName: "李林6套卷",
+    completed: false,
+    completedAt: "",
+    score: null,
+    durationMinutes: null,
+    secondRound: false,
+    secondRoundAt: "",
+  });
+
+  const merged = mergePapers(deviceA_papers, deviceB_papers);
+
+  // 34 套真题 + 2 套模拟题 = 36 套
+  assert.equal(merged.length, 36);
+
+  const paper2025 = merged.find((p) => p.id === "past-408-2025");
+  assert.equal(paper2025?.completed, true);
+  assert.equal(paper2025?.score, 126.5);
+  assert.equal(paper2025?.secondRound, true);
+
+  const paper2026 = merged.find((p) => p.id === "past-408-2026");
+  assert.equal(paper2026?.completed, true);
+  assert.equal(paper2026?.score, 132);
+
+  assert.ok(merged.some((p) => p.id === "mock-1"));
+  assert.ok(merged.some((p) => p.id === "mock-2"));
+});
+
+test("JournalPaperContext: 试卷日志上下文标准化", () => {
+  const paperCtx = normalizeJournalContext({
+    type: "paper",
+    area: "408",
+    paperId: "past-408-2025",
+    paperTitle: "2025年 全国统考真题",
+  });
+  assert.deepEqual(paperCtx, {
+    type: "paper",
+    area: "408",
+    paperId: "past-408-2025",
+    paperTitle: "2025年 全国统考真题",
+  });
 });

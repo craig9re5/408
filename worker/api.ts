@@ -75,11 +75,19 @@ export type JournalSectionsContext = {
   sections: JournalSectionItem[];
 };
 
+export type JournalPaperContext = {
+  type: "paper";
+  area: "408" | "math";
+  paperId: string;
+  paperTitle: string;
+};
+
 export type JournalContext =
   | JournalProjectContext
   | JournalSubjectContext
   | JournalSectionContext
-  | JournalSectionsContext;
+  | JournalSectionsContext
+  | JournalPaperContext;
 
 export type JournalPublish = {
   status: "local" | "published";
@@ -98,11 +106,30 @@ export type JournalEntry = {
   publish: JournalPublish;
 };
 
+export type PaperKind = "past" | "mock";
+
+export type PaperRecord = {
+  id: string;
+  kind: PaperKind;
+  area: "408" | "math";
+  title: string;
+  groupName?: string;
+  year?: number;
+  completed: boolean;
+  completedAt: string;
+  score?: number | null;
+  durationMinutes?: number | null;
+  secondRound?: boolean;
+  secondRoundAt?: string;
+  notes?: string;
+};
+
 type AppStateRow = {
   schema_version: number;
   project_settings: string;
   plan_history: string;
   journals?: string;
+  papers?: string;
 };
 
 type AppData = {
@@ -111,6 +138,7 @@ type AppData = {
   projectSettings: ProjectSettings;
   planHistory: PlanHistoryEntry[];
   journals: JournalEntry[];
+  papers: PaperRecord[];
 };
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
@@ -396,6 +424,16 @@ function normalizeJournalContext(value: unknown): JournalContext | null {
     };
   }
 
+  if (candidate.type === "paper") {
+    if (typeof candidate.paperId !== "string" || !candidate.paperId.trim()) return null;
+    return {
+      type: "paper",
+      area,
+      paperId: candidate.paperId.trim().slice(0, 100),
+      paperTitle: typeof candidate.paperTitle === "string" ? candidate.paperTitle.trim().slice(0, 150) : "真题/模拟卷",
+    };
+  }
+
   return null;
 }
 
@@ -445,6 +483,127 @@ function normalizeJournals(value: unknown): JournalEntry[] {
   }).slice(-2000);
 }
 
+const PAST_PAPER_YEARS = [
+  2026, 2025, 2024, 2023, 2022, 2021, 2020,
+  2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
+] as const;
+
+function defaultPastPapers(): PaperRecord[] {
+  const list: PaperRecord[] = [];
+  (["408", "math"] as ("408" | "math")[]).forEach((area) => {
+    PAST_PAPER_YEARS.forEach((year) => {
+      list.push({
+        id: `past-${area}-${year}`,
+        kind: "past",
+        area,
+        title: `${year}年 ${area === "408" ? "408 计算机学科专业基础" : "全国硕士研究生招生考试数学"} 真题`,
+        groupName: "历年真题",
+        year,
+        completed: false,
+        completedAt: "",
+        score: null,
+        durationMinutes: null,
+        secondRound: false,
+        secondRoundAt: "",
+      });
+    });
+  });
+  return list;
+}
+
+function normalizePaperRecord(value: unknown): PaperRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || !candidate.id.trim()) return null;
+  const kind: PaperKind = candidate.kind === "mock" ? "mock" : "past";
+  const area: "408" | "math" = candidate.area === "math" ? "math" : "408";
+  const title = typeof candidate.title === "string" && candidate.title.trim()
+    ? candidate.title.trim().slice(0, 150)
+    : (kind === "past" ? `${candidate.year ?? ""} 真题` : "模拟卷");
+  const year = typeof candidate.year === "number" && candidate.year >= 2000 && candidate.year <= 2100 ? candidate.year : undefined;
+  const completed = Boolean(candidate.completed);
+  const completedAt = typeof candidate.completedAt === "string" && isSafeDate(candidate.completedAt) ? candidate.completedAt : "";
+  const score = typeof candidate.score === "number" && !Number.isNaN(candidate.score) && candidate.score >= 0 && candidate.score <= 150
+    ? Math.round(candidate.score * 10) / 10
+    : null;
+  const durationMinutes = typeof candidate.durationMinutes === "number" && candidate.durationMinutes > 0 && candidate.durationMinutes <= 600
+    ? Math.round(candidate.durationMinutes)
+    : null;
+  const secondRound = Boolean(candidate.secondRound);
+  const secondRoundAt = typeof candidate.secondRoundAt === "string" && isSafeDate(candidate.secondRoundAt) ? candidate.secondRoundAt : "";
+  const groupName = typeof candidate.groupName === "string" && candidate.groupName.trim() ? candidate.groupName.trim().slice(0, 80) : undefined;
+  const notes = typeof candidate.notes === "string" ? candidate.notes.trim().slice(0, 2000) : undefined;
+
+  return {
+    id: candidate.id.trim().slice(0, 100),
+    kind,
+    area,
+    title,
+    groupName,
+    year,
+    completed: completed && Boolean(completedAt),
+    completedAt: completed ? completedAt : "",
+    score,
+    durationMinutes,
+    secondRound: secondRound && Boolean(secondRoundAt),
+    secondRoundAt: secondRound ? secondRoundAt : "",
+    notes,
+  };
+}
+
+function normalizePapers(value: unknown): PaperRecord[] {
+  const defaults = defaultPastPapers();
+  const map = new Map<string, PaperRecord>();
+  defaults.forEach((paper) => map.set(paper.id, paper));
+
+  if (Array.isArray(value)) {
+    value.forEach((candidate) => {
+      const normalized = normalizePaperRecord(candidate);
+      if (!normalized) return;
+      map.set(normalized.id, normalized);
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[] {
+  const map = new Map<string, PaperRecord>();
+  const defaults = defaultPastPapers();
+  defaults.forEach((p) => map.set(p.id, p));
+
+  remote.forEach((p) => {
+    if (p && p.id) map.set(p.id, p);
+  });
+
+  local.forEach((p) => {
+    if (!p || !p.id) return;
+    const existing = map.get(p.id);
+    if (!existing) {
+      map.set(p.id, p);
+    } else {
+      const completed = p.completed || existing.completed;
+      const completedAt = p.completedAt || existing.completedAt;
+      const score = p.score !== undefined && p.score !== null ? p.score : (existing.score ?? null);
+      const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
+      const secondRound = p.secondRound || existing.secondRound;
+      const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
+      map.set(p.id, {
+        ...existing,
+        ...p,
+        completed,
+        completedAt,
+        score,
+        durationMinutes,
+        secondRound,
+        secondRoundAt,
+      });
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEntry[] {
   const map = new Map<string, JournalEntry>();
   remote.forEach((entry) => {
@@ -472,26 +631,33 @@ async function readAppData(env: Env): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
     readProgress(env),
     env.DB.prepare(
-      "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
+      "SELECT schema_version, project_settings, plan_history, journals, papers FROM app_state WHERE workspace_id = ?",
     ).bind(WORKSPACE_ID).all<AppStateRow>().catch(() => {
       return env.DB.prepare(
-        "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
-      ).bind(WORKSPACE_ID).all<AppStateRow>();
+        "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
+      ).bind(WORKSPACE_ID).all<AppStateRow>().catch(() => {
+        return env.DB.prepare(
+          "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
+        ).bind(WORKSPACE_ID).all<AppStateRow>();
+      });
     }),
   ]);
   const state = stateResult.results[0];
   let parsedSettings: unknown = null;
   let parsedHistory: unknown = null;
   let parsedJournals: unknown = null;
+  let parsedPapers: unknown = null;
   try { parsedSettings = state ? JSON.parse(state.project_settings) : null; } catch { parsedSettings = null; }
   try { parsedHistory = state ? JSON.parse(state.plan_history) : null; } catch { parsedHistory = null; }
   try { parsedJournals = state?.journals ? JSON.parse(state.journals) : null; } catch { parsedJournals = null; }
+  try { parsedPapers = state?.papers ? JSON.parse(state.papers) : null; } catch { parsedPapers = null; }
   return {
     schemaVersion: 2,
     progress,
     projectSettings: normalizeProjectSettings(parsedSettings),
     planHistory: normalizePlanHistory(parsedHistory),
     journals: normalizeJournals(parsedJournals),
+    papers: normalizePapers(parsedPapers),
   };
 }
 
@@ -521,18 +687,23 @@ async function writeAppData(
     });
 
   let finalJournals = data.journals;
+  let finalPapers = data.papers;
   if (!replace) {
-    // Read existing journals from D1 to avoid overwriting concurrently added journals on other devices
+    // Read existing journals and papers from D1 to avoid overwriting concurrently added data on other devices
     try {
       const stateRow = await env.DB.prepare(
-        "SELECT journals FROM app_state WHERE workspace_id = ?",
-      ).bind(WORKSPACE_ID).first<{ journals?: string }>();
+        "SELECT journals, papers FROM app_state WHERE workspace_id = ?",
+      ).bind(WORKSPACE_ID).first<{ journals?: string; papers?: string }>();
       if (stateRow?.journals) {
         const existingJournals = normalizeJournals(JSON.parse(stateRow.journals));
         finalJournals = mergeJournals(data.journals, existingJournals);
       }
+      if (stateRow?.papers) {
+        const existingPapers = normalizePapers(JSON.parse(stateRow.papers));
+        finalPapers = mergePapers(data.papers, existingPapers);
+      }
     } catch {
-      // Fallback to data.journals
+      // Fallback to local data
     }
   }
 
@@ -543,13 +714,14 @@ async function writeAppData(
   }
 
   statements.push(env.DB.prepare(
-    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, updated_at)
-     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
      ON CONFLICT(workspace_id) DO UPDATE SET
        schema_version = excluded.schema_version,
        project_settings = excluded.project_settings,
        plan_history = excluded.plan_history,
        journals = excluded.journals,
+       papers = excluded.papers,
        updated_at = CURRENT_TIMESTAMP`,
   ).bind(
     WORKSPACE_ID,
@@ -557,6 +729,7 @@ async function writeAppData(
     JSON.stringify(data.projectSettings),
     JSON.stringify(data.planHistory),
     JSON.stringify(finalJournals),
+    JSON.stringify(finalPapers),
   ));
   await env.DB.batch(statements);
   return finalJournals;
@@ -581,6 +754,7 @@ function normalizeAppDataBody(body: unknown): AppData | null {
     projectSettings: normalizeProjectSettings(candidate.projectSettings),
     planHistory: normalizePlanHistory(candidate.planHistory),
     journals: normalizeJournals(candidate.journals),
+    papers: normalizePapers(candidate.papers),
   };
 }
 
