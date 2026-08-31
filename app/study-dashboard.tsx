@@ -4558,19 +4558,10 @@ export function StudyDashboard() {
                 <span className="field-label">试卷名称 <strong>*</strong></span>
                 <input
                   type="text"
-                  placeholder="如：李林 6 套卷 · 卷一 / 王道 8 套卷 · 卷二"
+                  placeholder={activeArea === "408" ? "如：王道 8 套卷 · 卷一 / 王道 4 套卷 · 卷二" : "如：李林 6 套卷 · 卷一 / 合工大超越 · 卷二"}
                   value={newMockTitle}
                   onChange={(e) => setNewMockTitle(e.target.value)}
                   autoFocus
-                />
-              </label>
-              <label className="paper-form-field">
-                <span className="field-label">系列 / 押题名师 (可选)</span>
-                <input
-                  type="text"
-                  placeholder="如：李林6套卷 / 合工大超越 / 王道8套卷"
-                  value={newMockGroup}
-                  onChange={(e) => setNewMockGroup(e.target.value)}
                 />
               </label>
             </div>
