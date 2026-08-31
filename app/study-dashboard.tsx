@@ -1051,23 +1051,38 @@ export function StudyDashboard() {
 
   function getPaperQuestionSummary(paper: PaperRecord) {
     const totalQuestions = paper.area === "math" ? 22 : 47;
+    const maxChoiceNum = paper.area === "math" ? 10 : 40;
     if (!paper.questions || Object.keys(paper.questions).length === 0) {
       return null;
     }
     let correctCount = 0;
     let wrongCount = 0;
+    let choiceCorrectCount = 0;
+    let choiceWrongCount = 0;
     for (let i = 1; i <= totalQuestions; i++) {
       const qState = paper.questions[i];
-      if (qState === "correct") correctCount++;
-      else if (qState === "wrong") wrongCount++;
+      if (qState === "correct") {
+        correctCount++;
+        if (i <= maxChoiceNum) choiceCorrectCount++;
+      } else if (qState === "wrong") {
+        wrongCount++;
+        if (i <= maxChoiceNum) choiceWrongCount++;
+      }
     }
     const totalRecorded = correctCount + wrongCount;
     const accuracyPercent = totalRecorded > 0 ? Math.round((correctCount / totalRecorded) * 100) : 0;
+    const choiceRecorded = choiceCorrectCount + choiceWrongCount;
+    const choiceAccuracyPercent = choiceRecorded > 0 ? Math.round((choiceCorrectCount / choiceRecorded) * 100) : null;
     return {
       totalRecorded,
       correctCount,
       wrongCount,
       accuracyPercent,
+      choiceCorrectCount,
+      choiceWrongCount,
+      choiceRecorded,
+      choiceAccuracyPercent,
+      maxChoiceNum,
       totalQuestions,
     };
   }
@@ -2737,19 +2752,29 @@ export function StudyDashboard() {
                           </div>
 
                           <div className="paper-q-col">
-                            {qSummary && qSummary.totalRecorded > 0 ? (
+                            {qSummary && qSummary.choiceAccuracyPercent !== null ? (
                               <button
                                 type="button"
                                 className="paper-q-pill"
-                                title={`查看/编辑答题卡 (正确 ${qSummary.correctCount} / 错题 ${qSummary.wrongCount})`}
+                                title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
                                 onClick={() => {
                                   setActivePaperQuestionModalId(paper.id);
                                   setQuickWrongInput("");
                                 }}
                               >
-                                <span className="q-tag-correct">🟢 {qSummary.correctCount}</span>
-                                <span className="q-tag-wrong">🔴 {qSummary.wrongCount}</span>
-                                <span className="q-tag-rate">{qSummary.accuracyPercent}%</span>
+                                <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                              </button>
+                            ) : qSummary && qSummary.totalRecorded > 0 ? (
+                              <button
+                                type="button"
+                                className="paper-q-pill"
+                                title={`已录入答题卡 · 点击打开`}
+                                onClick={() => {
+                                  setActivePaperQuestionModalId(paper.id);
+                                  setQuickWrongInput("");
+                                }}
+                              >
+                                <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
                               </button>
                             ) : (
                               <button
@@ -2899,19 +2924,29 @@ export function StudyDashboard() {
                             </div>
 
                             <div className="paper-q-col">
-                              {qSummary && qSummary.totalRecorded > 0 ? (
+                              {qSummary && qSummary.choiceAccuracyPercent !== null ? (
                                 <button
                                   type="button"
                                   className="paper-q-pill"
-                                  title={`查看/编辑答题卡 (正确 ${qSummary.correctCount} / 错题 ${qSummary.wrongCount})`}
+                                  title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
                                   onClick={() => {
                                     setActivePaperQuestionModalId(paper.id);
                                     setQuickWrongInput("");
                                   }}
                                 >
-                                  <span className="q-tag-correct">🟢 {qSummary.correctCount}</span>
-                                  <span className="q-tag-wrong">🔴 {qSummary.wrongCount}</span>
-                                  <span className="q-tag-rate">{qSummary.accuracyPercent}%</span>
+                                  <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                                </button>
+                              ) : qSummary && qSummary.totalRecorded > 0 ? (
+                                <button
+                                  type="button"
+                                  className="paper-q-pill"
+                                  title={`已录入答题卡 · 点击打开`}
+                                  onClick={() => {
+                                    setActivePaperQuestionModalId(paper.id);
+                                    setQuickWrongInput("");
+                                  }}
+                                >
+                                  <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
                                 </button>
                               ) : (
                                 <button

@@ -3239,37 +3239,29 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .paper-q-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  justify-content: center;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .paper-q-pill:hover {
-  background: #e2e8f0;
-  border-color: #cbd5e1;
+  background: #dcfce7;
+  border-color: #86efac;
+  transform: translateY(-1px);
 }
 
-.q-tag-correct {
-  color: #059669;
-}
-
-.q-tag-wrong {
-  color: #dc2626;
-}
-
-.q-tag-rate {
-  color: #475569;
-  font-size: 10.5px;
-  margin-left: 2px;
-  border-left: 1px solid #cbd5e1;
-  padding-left: 4px;
+.q-tag-choice-rate {
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: Consolas, Monaco, monospace;
 }
 
 .paper-btn-q-add {
