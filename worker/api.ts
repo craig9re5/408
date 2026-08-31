@@ -498,7 +498,7 @@ function defaultPastPapers(): PaperRecord[] {
         id: `past-${area}-${year}`,
         kind: "past",
         area,
-        title: `${year}年 ${area === "408" ? "408 计算机学科专业基础" : "全国硕士研究生招生考试数学"} 真题`,
+        title: `${year}年 ${area === "408" ? "408真题" : "数学真题"}`,
         groupName: "历年真题",
         year,
         completed: false,

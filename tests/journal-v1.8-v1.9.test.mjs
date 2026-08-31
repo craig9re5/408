@@ -533,13 +533,13 @@ test("JournalPaperContext: 试卷日志上下文标准化", () => {
     type: "paper",
     area: "408",
     paperId: "past-408-2025",
-    paperTitle: "2025年 全国统考真题",
+    paperTitle: "2025年 408真题",
   });
   assert.deepEqual(paperCtx, {
     type: "paper",
     area: "408",
     paperId: "past-408-2025",
-    paperTitle: "2025年 全国统考真题",
+    paperTitle: "2025年 408真题",
   });
 });
 

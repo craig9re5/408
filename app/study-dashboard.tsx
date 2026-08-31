@@ -2690,8 +2690,7 @@ export function StudyDashboard() {
                           <div className="paper-name">
                             <span className="paper-year-badge">{paper.year}</span>
                             <div className="paper-title-group">
-                              <strong>{paper.year}年 全国统考真题</strong>
-                              <small>{activeArea === "408" ? "408 计算机学科专业基础" : "全国硕士研究生招生考试数学"}</small>
+                              <strong>{paper.year}年 {activeArea === "408" ? "408真题" : "数学真题"}</strong>
                             </div>
                           </div>
 
