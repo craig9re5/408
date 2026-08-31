@@ -2820,14 +2820,18 @@ export function StudyDashboard() {
                 <section className="sprint-section" aria-labelledby="mock-papers-heading">
                   <div className="sprint-section-header">
                     <h3 id="mock-papers-heading">模拟题</h3>
+                    <button
+                      type="button"
+                      className="btn-add-mock-paper"
+                      onClick={() => setIsAddMockModalOpen(true)}
+                    >
+                      + 添加模拟卷
+                    </button>
                   </div>
 
                   {visibleMockPapers.length === 0 ? (
                     <div className="sprint-empty-card">
-                      <p>当前暂无模拟试卷，您可以点击「添加模拟卷」记录名师预测卷（如李林、王道、合工大超越等）。</p>
-                      <button type="button" className="btn-add-mock-inline" onClick={() => setIsAddMockModalOpen(true)}>
-                        + 添加模拟卷
-                      </button>
+                      <p>暂无模拟试卷</p>
                     </div>
                   ) : (
                     <div className="paper-table">
