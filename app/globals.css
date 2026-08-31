@@ -2813,6 +2813,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   color: var(--text-muted, #738491);
 }
 
+.study-switchers.sprint-top-switchers {
+  display: flex;
+  justify-content: flex-end;
+  width: 420px;
+}
+
 .sprint-toolbar {
   display: flex;
   justify-content: space-between;
@@ -2823,6 +2829,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, #e5e9ec);
   border-radius: 12px;
+}
+
+.sprint-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .sprint-tab-group, .sprint-status-filters {

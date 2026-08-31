@@ -2596,9 +2596,6 @@ export function StudyDashboard() {
                     <p className="stat-desc">
                       {scoredPapers.length > 0 ? `已记录 ${scoredPapers.length} 套试卷模考得分` : "暂无得分记录，点击试卷即可录入"}
                     </p>
-                    <div className="stat-card-footer">
-                      <small>全真模拟成绩参考</small>
-                    </div>
                   </div>
                 </article>
               </div>
@@ -2634,44 +2631,45 @@ export function StudyDashboard() {
                   </button>
                 </div>
 
-                <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
+                <div className="sprint-toolbar-right">
+                  <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
+                    <button
+                      type="button"
+                      className={sprintStatusFilter === "all" ? "active" : ""}
+                      onClick={() => setSprintStatusFilter("all")}
+                    >
+                      全部
+                    </button>
+                    <button
+                      type="button"
+                      className={sprintStatusFilter === "uncompleted" ? "active" : ""}
+                      onClick={() => setSprintStatusFilter("uncompleted")}
+                    >
+                      未完成
+                    </button>
+                    <button
+                      type="button"
+                      className={sprintStatusFilter === "completed" ? "active" : ""}
+                      onClick={() => setSprintStatusFilter("completed")}
+                    >
+                      已完成
+                    </button>
+                  </div>
+
                   <button
                     type="button"
-                    className={sprintStatusFilter === "all" ? "active" : ""}
-                    onClick={() => setSprintStatusFilter("all")}
+                    className="btn-add-mock-paper"
+                    onClick={() => setIsAddMockModalOpen(true)}
                   >
-                    全部
-                  </button>
-                  <button
-                    type="button"
-                    className={sprintStatusFilter === "uncompleted" ? "active" : ""}
-                    onClick={() => setSprintStatusFilter("uncompleted")}
-                  >
-                    未完成
-                  </button>
-                  <button
-                    type="button"
-                    className={sprintStatusFilter === "completed" ? "active" : ""}
-                    onClick={() => setSprintStatusFilter("completed")}
-                  >
-                    已完成
+                    + 添加模拟卷
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  className="btn-add-mock-paper"
-                  onClick={() => setIsAddMockModalOpen(true)}
-                >
-                  + 添加模拟卷
-                </button>
               </div>
 
               {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
                 <section className="sprint-section" aria-labelledby="past-papers-heading">
                   <div className="sprint-section-header">
-                    <h3 id="past-papers-heading">历年全国统考真题 (2010 ~ 2026)</h3>
-                    <span className="sprint-section-tag">全真演练 · {sprintPastCompleted}/{sprintPastTotal} 已完成</span>
+                    <h3 id="past-papers-heading">真题</h3>
                   </div>
 
                   <div className="paper-table">
@@ -2822,8 +2820,7 @@ export function StudyDashboard() {
               {(sprintTab === "all" || sprintTab === "mock") && (
                 <section className="sprint-section" aria-labelledby="mock-papers-heading">
                   <div className="sprint-section-header">
-                    <h3 id="mock-papers-heading">模拟题集与名师押题</h3>
-                    <span className="sprint-section-tag">{sprintMockCompleted}/{sprintMockTotal} 已完成</span>
+                    <h3 id="mock-papers-heading">模拟题</h3>
                   </div>
 
                   {visibleMockPapers.length === 0 ? (
