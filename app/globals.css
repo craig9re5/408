@@ -4065,18 +4065,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   gap: 8px;
 }
 
-.q-comp-grid--blank {
+.q-comp-grid--blank,
+.q-comp-grid--english-trans {
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
 }
 
 .q-comp-grid--solving,
-.q-comp-grid--408 {
+.q-comp-grid--408,
+.q-comp-grid--english-essay {
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 10px;
-}
-
-.q-comp-grid--english-subj {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 10px;
 }
 

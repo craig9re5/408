@@ -1097,7 +1097,7 @@ export function StudyDashboard() {
 
   function getPaperQuestionSummary(paper: PaperRecord) {
     const totalQuestions = paper.area === "math" ? 22 : paper.area === "english" ? 52 : 47;
-    const maxChoiceNum = paper.area === "math" ? 10 : paper.area === "english" ? 45 : 40;
+    const maxChoiceNum = paper.area === "math" ? 16 : paper.area === "english" ? 45 : 40;
     if (!paper.questions || Object.keys(paper.questions).length === 0) {
       return null;
     }
@@ -4653,103 +4653,61 @@ export function StudyDashboard() {
               {activeQuestionPaper.area === "math" ? (
                 /* Math: 1~10 选择 (5分), 11~16 填空 (5分), 17~22 解答 (10~12分) */
                 <div className="q-subjective-container">
-                  {/* Part 1: 选择题 (1~10) */}
+                  {/* Part 1: 客观题 (1~16, 包含单选与填空，纯点选对错) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">选择题</span>
-                      <span className="q-type-subtitle">第 1 ~ 10 题 · 每题 5 分 · 共 50 分</span>
+                      <span className="q-type-title">客观题</span>
+                      <span className="q-type-subtitle">第 1 ~ 16 题 · 每题 5 分 · 共 80 分</span>
                     </div>
-                    <div className="q-heatmap-row">
-                      <div className="q-subject-label">
-                        <strong className="q-label-name">单选</strong>
-                        <span className="q-label-range">1~10</span>
+                    <div className="q-type-rows">
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <strong className="q-label-name">单选</strong>
+                          <span className="q-label-range">1~10</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题 [单选 · 5分]：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="q-heatmap-chips">
-                        {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
-                          const state = activeQuestionPaper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              title={`第 ${num} 题 [单选 · 5分]：点击切换正确 / 错误`}
-                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                            >
-                              {num}
-                            </button>
-                          );
-                        })}
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <strong className="q-label-name">填空</strong>
+                          <span className="q-label-range">11~16</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {Array.from({ length: 6 }, (_, i) => 11 + i).map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题 [填空 · 5分]：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Part 2: 填空题 (11~16) */}
-                  <div className="q-type-block">
-                    <div className="q-type-header">
-                      <span className="q-type-title">填空题</span>
-                      <span className="q-type-subtitle">第 11 ~ 16 题 · 每题 5 分 · 共 30 分</span>
-                    </div>
-                    <div className="q-comp-grid q-comp-grid--blank">
-                      {Array.from({ length: 6 }, (_, i) => 11 + i).map((num) => {
-                        const state = activeQuestionPaper.questions?.[num];
-                        const score = activeQuestionPaper.questionScores?.[num];
-                        return (
-                          <div className="q-comp-card" key={num}>
-                            <div className="q-comp-card-top">
-                              <span className="q-comp-title">第 {num} 题</span>
-                              <span className="q-comp-max">5 分</span>
-                            </div>
-                            <div className="q-comp-card-actions">
-                              <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="满分 (🟢)"
-                                  aria-label="满分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="部分得分 (🟡)"
-                                  aria-label="部分得分"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="错题 (🔴)"
-                                  aria-label="错题"
-                                >
-                                  <span className="dot-symbol" />
-                                </button>
-                              </div>
-                              <div className="q-score-input-box">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={5}
-                                  step={0.5}
-                                  placeholder="0"
-                                  value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 5)}
-                                />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">5</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Part 3: 解答题 (17~22) */}
+                  {/* Part 2: 解答题 (17~22) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">解答题</span>
@@ -4823,9 +4781,9 @@ export function StudyDashboard() {
                   </div>
                 </div>
               ) : activeQuestionPaper.area === "english" ? (
-                /* English: 1~45 选择, 46~52 主观 */
+                /* English: 1~45 选择, 46~50 英译汉, 51~52 写作 */
                 <div className="q-subjective-container">
-                  {/* Part 1: 客观单项选择题 (1~45) */}
+                  {/* Part 1: 客观选择题 (1~45) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
                       <span className="q-type-title">选择题</span>
@@ -4868,24 +4826,20 @@ export function StudyDashboard() {
                     </div>
                   </div>
 
-                  {/* Part 2: 主观题 (46~52) */}
-                  <div className="q-type-block q-type-block--comprehensive">
+                  {/* Part 2: 英译汉 (46~50) - 独立块 */}
+                  <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">主观题</span>
-                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分</span>
+                      <span className="q-type-title">英译汉</span>
+                      <span className="q-type-subtitle">第 46 ~ 50 题 · 每题 2 分 · 共 10 分</span>
                     </div>
-                    <div className="q-comp-grid q-comp-grid--english-subj">
-                      {/* 46~50 英译汉 */}
+                    <div className="q-comp-grid q-comp-grid--english-trans">
                       {Array.from({ length: 5 }, (_, i) => 46 + i).map((num) => {
                         const state = activeQuestionPaper.questions?.[num];
                         const score = activeQuestionPaper.questionScores?.[num];
                         return (
                           <div className="q-comp-card" key={num}>
                             <div className="q-comp-card-top">
-                              <div className="q-comp-title-group">
-                                <span className="q-comp-badge">英译汉</span>
-                                <span className="q-comp-title">第 {num} 题</span>
-                              </div>
+                              <span className="q-comp-title">第 {num} 题</span>
                               <span className="q-comp-max">2 分</span>
                             </div>
                             <div className="q-comp-card-actions">
@@ -4935,7 +4889,16 @@ export function StudyDashboard() {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
 
+                  {/* Part 3: 写作题 (51~52) */}
+                  <div className="q-type-block q-type-block--comprehensive">
+                    <div className="q-type-header">
+                      <span className="q-type-title">写作题</span>
+                      <span className="q-type-subtitle">第 51 ~ 52 题 · 共 30 分</span>
+                    </div>
+                    <div className="q-comp-grid q-comp-grid--english-essay">
                       {/* 51 小作文 */}
                       {(() => {
                         const num = 51;
