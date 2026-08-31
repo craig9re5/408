@@ -5151,11 +5151,11 @@ export function StudyDashboard() {
                     </div>
                   </div>
 
-                  {/* Part 2: 主观题 (46~50 翻译, 51~52 写作) */}
+                  {/* Part 2: 翻译 (46~50) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
-                      <span className="q-type-title">主观题（英译汉 & 写作）</span>
-                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分</span>
+                      <span className="q-type-title">翻译</span>
+                      <span className="q-type-subtitle">第 46 ~ 50 题 · 共 10 分</span>
                     </div>
                     <div className="q-rating-grid">
                       {[
@@ -5164,6 +5164,67 @@ export function StudyDashboard() {
                         { num: 48, label: "翻译 3", max: 2 },
                         { num: 49, label: "翻译 4", max: 2 },
                         { num: 50, label: "翻译 5", max: 2 },
+                      ].map((item) => {
+                        const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
+                        return (
+                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
+                            <div className="q-rating-label">
+                              <span className="q-rating-badge">{item.label}</span>
+                              <strong className="q-rating-title">第 {item.num} 题</strong>
+                            </div>
+                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                              <button
+                                type="button"
+                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
+                                title="优 · 满分（再次点击取消）"
+                              >
+                                优
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
+                                title="良 · 部分分（再次点击取消）"
+                              >
+                                良
+                              </button>
+                              <button
+                                type="button"
+                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
+                                title="差 · 失分（再次点击取消）"
+                              >
+                                差
+                              </button>
+                            </div>
+                            <div className="q-score-input-wrap">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.max}
+                                step={0.5}
+                                placeholder="0"
+                                value={score ?? ""}
+                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
+                              />
+                              <span className="q-score-unit">分</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Part 3: 写作 (51~52) */}
+                  <div className="q-type-block q-type-block--comprehensive">
+                    <div className="q-type-header">
+                      <span className="q-type-title">写作</span>
+                      <span className="q-type-subtitle">第 51 ~ 52 题 · 共 30 分</span>
+                    </div>
+                    <div className="q-rating-grid">
+                      {[
                         { num: 51, label: "小作文", max: 10 },
                         { num: 52, label: "大作文", max: 20 },
                       ].map((item) => {
