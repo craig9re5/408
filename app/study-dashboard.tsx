@@ -4039,34 +4039,39 @@ export function StudyDashboard() {
         <div className="confirm-overlay paper-q-modal-overlay" role="presentation">
           <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
             <div className="paper-q-modal-header">
-              <div className="paper-q-header-left">
-                <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
+              <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
+              <div className="paper-q-header-right">
                 {(() => {
-                  const summary = getPaperQuestionSummary(activeQuestionPaper);
-                  const structure = activeQuestionPaper.area === "math" ? MATH_PAPER_STRUCTURE : CS408_PAPER_STRUCTURE;
+                  const is408 = activeQuestionPaper.area === "408";
+                  const maxChoiceNum = is408 ? 40 : 10;
+                  let correct = 0;
+                  let wrong = 0;
+                  for (let i = 1; i <= maxChoiceNum; i++) {
+                    const st = activeQuestionPaper.questions?.[i];
+                    if (st === "correct") correct++;
+                    else if (st === "wrong") wrong++;
+                  }
+                  const total = correct + wrong;
+                  const rate = total > 0 ? Math.round((correct / total) * 100) : null;
                   return (
                     <div className="paper-q-header-metrics">
-                      <span className="q-header-pill">共 {structure.total} 题</span>
-                      <span className="q-header-pill q-pill--correct">🟢 正确 {summary?.correctCount ?? 0}</span>
-                      <span className="q-header-pill q-pill--wrong">🔴 错题 {summary?.wrongCount ?? 0}</span>
-                      {summary && summary.totalRecorded > 0 && (
-                        <span className="q-header-pill q-pill--rate">正确率 {summary.accuracyPercent}%</span>
-                      )}
-                      {activeQuestionPaper.score !== null && activeQuestionPaper.score !== undefined && (
-                        <span className="q-header-pill q-pill--score">得分 {activeQuestionPaper.score} / 150</span>
+                      <span className="q-header-pill q-pill--correct">🟢 正确 {correct}</span>
+                      <span className="q-header-pill q-pill--wrong">🔴 错题 {wrong}</span>
+                      {rate !== null && (
+                        <span className="q-header-pill q-pill--rate">选择题正确率 {rate}%</span>
                       )}
                     </div>
                   );
                 })()}
+                <button
+                  type="button"
+                  className="paper-modal-close-btn"
+                  onClick={() => setActivePaperQuestionModalId(null)}
+                  title="关闭"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                className="paper-modal-close-btn"
-                onClick={() => setActivePaperQuestionModalId(null)}
-                title="关闭"
-              >
-                ✕
-              </button>
             </div>
 
             {/* Quick Action Toolbar */}
@@ -4076,7 +4081,7 @@ export function StudyDashboard() {
                 <input
                   id="quick-wrong-input"
                   type="text"
-                  placeholder="输入错题题号，如: 3, 8, 14, 43"
+                  placeholder="如: 3, 8, 14, 43"
                   value={quickWrongInput}
                   onChange={(e) => setQuickWrongInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -4104,13 +4109,6 @@ export function StudyDashboard() {
                 >
                   一键全对 🟢
                 </button>
-                <button
-                  type="button"
-                  className="btn-clear-q-marks"
-                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
-                >
-                  清空标记
-                </button>
               </div>
             </div>
 
@@ -4124,7 +4122,7 @@ export function StudyDashboard() {
                     <div className="q-heatmap-section" key={grp.type}>
                       <div className="q-heatmap-row">
                         <div className="q-subject-label">
-                          <span className="q-label-name">{grp.type}</span>
+                          <strong className="q-label-name">{grp.type}</strong>
                           <span className="q-label-range">{grp.start}~{grp.end}</span>
                         </div>
                         <div className="q-heatmap-chips">
@@ -4148,7 +4146,7 @@ export function StudyDashboard() {
                   );
                 })
               ) : (
-                /* 408: 1~40 单选 (分4科), 41~47 综合大题 (分4科) */
+                /* 408: 1~40 单选 (分 DS, CO, OS, CN), 41~47 综合大题 (分 DS, CO, OS, CN) */
                 <div className="q-408-container">
                   {/* Part 1: 选择题 (1~40) */}
                   <div className="q-type-block">
@@ -4159,10 +4157,17 @@ export function StudyDashboard() {
                     <div className="q-type-rows">
                       {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
                         const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        const abbrMap: Record<string, string> = {
+                          "数据结构": "DS",
+                          "计算机组成原理": "CO",
+                          "操作系统": "OS",
+                          "计算机网络": "CN",
+                        };
+                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
                         return (
                           <div className="q-heatmap-row" key={`choice-${grp.subject}`}>
                             <div className="q-subject-label">
-                              <span className="q-label-name">{grp.subject}</span>
+                              <strong className="q-label-name">{subjectAbbr}</strong>
                               <span className="q-label-range">{grp.start}~{grp.end}</span>
                             </div>
                             <div className="q-heatmap-chips">
@@ -4196,9 +4201,16 @@ export function StudyDashboard() {
                     <div className="q-comprehensive-clusters">
                       {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "综合应用题").map((grp) => {
                         const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        const abbrMap: Record<string, string> = {
+                          "数据结构": "DS",
+                          "计算机组成原理": "CO",
+                          "操作系统": "OS",
+                          "计算机网络": "CN",
+                        };
+                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
                         return (
                           <div className="q-comp-cluster" key={`comp-${grp.subject}`}>
-                            <span className="q-comp-subject">{grp.subject}</span>
+                            <span className="q-comp-subject">{subjectAbbr}</span>
                             <div className="q-comp-chips">
                               {numbers.map((num) => {
                                 const state = activeQuestionPaper.questions?.[num];

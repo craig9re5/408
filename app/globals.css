@@ -3302,18 +3302,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   border-bottom: 1px solid #eef2f5;
 }
 
-.paper-q-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.paper-q-header-left h2 {
+.paper-q-modal-header h2 {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
   color: #1e293b;
+}
+
+.paper-q-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .paper-q-header-metrics {
@@ -3436,7 +3436,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   gap: 6px;
 }
 
-.btn-mark-all-correct, .btn-clear-q-marks {
+.btn-mark-all-correct {
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -3452,12 +3452,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #ecfdf5;
   border-color: #10b981;
   color: #047857;
-}
-
-.btn-clear-q-marks:hover {
-  background: #fef2f2;
-  border-color: #f87171;
-  color: #b91c1c;
 }
 
 /* Heatmap Matrix */
@@ -3515,7 +3509,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .q-subject-label {
-  width: 120px;
+  width: 82px;
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
@@ -3525,15 +3519,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .q-label-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: 0.03em;
 }
 
 .q-label-range {
   font-size: 10.5px;
   color: #94a3b8;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .q-heatmap-chips {
@@ -3603,9 +3598,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .q-comp-subject {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: 0.03em;
 }
 
 .q-comp-chips {
