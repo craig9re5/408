@@ -564,7 +564,6 @@ export function StudyDashboard() {
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
   const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
-  const [pendingClearQuestionsPaperId, setPendingClearQuestionsPaperId] = useState<string | null>(null);
   const [pendingClearAllPapers, setPendingClearAllPapers] = useState(false);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -4854,29 +4853,6 @@ export function StudyDashboard() {
         </div>
       )}
 
-      {/* Clear Paper Questions Confirm Modal */}
-      {pendingClearQuestionsPaperId && (
-        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingClearQuestionsPaperId(null); }}>
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
-            <h2>确认清空整卷做题记录？</h2>
-            <p>清空后将重置该试卷的完成状态、得分、做题时长、二刷标记及所有题目的正误与小题得分记录，此操作不可撤销。</p>
-            <div className="confirm-actions">
-              <button type="button" className="btn-cancel" onClick={() => setPendingClearQuestionsPaperId(null)}>取消</button>
-              <button
-                type="button"
-                className="btn-confirm btn-confirm--danger"
-                onClick={() => {
-                  clearPaperQuestions(pendingClearQuestionsPaperId);
-                  setPendingClearQuestionsPaperId(null);
-                }}
-              >
-                确认清空
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Visual Question Board Modal */}
       {activeQuestionPaper && (
         <div className="confirm-overlay paper-q-modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setActivePaperQuestionModalId(null); }}>
@@ -4942,7 +4918,7 @@ export function StudyDashboard() {
                 <button
                   type="button"
                   className="btn-clear-questions"
-                  onClick={() => setPendingClearQuestionsPaperId(activeQuestionPaper.id)}
+                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
                   title="重置清空本卷所有做题记录"
                 >
                   一键清零
