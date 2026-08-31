@@ -1265,9 +1265,9 @@ export function StudyDashboard() {
   function markAllPaperQuestions(paperId: string, state: "correct" | "wrong") {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
-      const total = p.area === "math" ? 22 : p.area === "english" ? 52 : 47;
-      const nextMap: Record<number, QuestionState> = {};
-      for (let i = 1; i <= total; i++) {
+      const maxChoice = p.area === "math" ? 16 : p.area === "english" ? 45 : 40;
+      const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
+      for (let i = 1; i <= maxChoice; i++) {
         nextMap[i] = state;
       }
       return {
@@ -1275,18 +1275,24 @@ export function StudyDashboard() {
         questions: nextMap,
       };
     }));
-    setFeedbackMessage(state === "correct" ? "已将全部题目设为正确 🟢" : "已将全部题目设为错误 🔴");
+    setFeedbackMessage(state === "correct" ? "已将选择题设为全部正确 🟢" : "已将选择题设为全部错误 🔴");
   }
 
   function batchSetWrongQuestions(paperId: string, rawInput: string) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
+      const maxChoice = p.area === "math" ? 16 : p.area === "english" ? 45 : 40;
       const total = p.area === "math" ? 22 : p.area === "english" ? 52 : 47;
       const tokens = rawInput.split(/[,，\s、]+/).map((t) => parseInt(t.trim(), 10)).filter((n) => !Number.isNaN(n) && n >= 1 && n <= total);
       const wrongSet = new Set(tokens);
-      const nextMap: Record<number, QuestionState> = {};
-      for (let i = 1; i <= total; i++) {
+      const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
+      for (let i = 1; i <= maxChoice; i++) {
         nextMap[i] = wrongSet.has(i) ? "wrong" : "correct";
+      }
+      for (let i = maxChoice + 1; i <= total; i++) {
+        if (wrongSet.has(i)) {
+          nextMap[i] = "wrong";
+        }
       }
       return {
         ...p,
@@ -1301,8 +1307,8 @@ export function StudyDashboard() {
       if (p.id !== paperId) return p;
       return {
         ...p,
-        questions: undefined,
-        questionScores: undefined,
+        questions: {},
+        questionScores: {},
       };
     }));
     setFeedbackMessage("已清空该试卷做题记录");
@@ -4483,7 +4489,7 @@ export function StudyDashboard() {
         <div className="confirm-overlay paper-q-modal-overlay" role="presentation">
           <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
             <div className="paper-q-modal-header">
-              <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
+              <h2 id="q-modal-title">{activeQuestionPaper.title.replace(/(\d{4})年\s*/, "$1 ")}</h2>
               <div className="paper-q-header-right">
                 {(() => {
                   const qSummary = getPaperQuestionSummary(activeQuestionPaper);
@@ -4544,6 +4550,7 @@ export function StudyDashboard() {
                   type="button"
                   className="btn-mark-all-correct"
                   onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
+                  title="将选择题设为全部正确"
                 >
                   一键全对 🟢
                 </button>
@@ -4692,51 +4699,84 @@ export function StudyDashboard() {
               ) : activeQuestionPaper.area === "english" ? (
                 /* English: 1~45 选择, 46~50 英译汉, 51~52 写作 */
                 <div className="q-subjective-container">
-                  {/* Part 1: 客观选择题 (1~45) */}
+                  {/* Part 1: 选择题 (1~45, 完形、传统阅读、新题型) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
                       <span className="q-type-title">选择题</span>
-                      <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分 (完形 0.5分/题，阅读与新题型 2分/题)</span>
+                      <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分</span>
                     </div>
                     <div className="q-type-rows">
-                      {ENGLISH_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
-                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                        const abbrMap: Record<string, string> = {
-                          "完形填空": "CL",
-                          "传统阅读": "RA",
-                          "新题型": "RB",
-                        };
-                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
-                        return (
-                          <div className="q-heatmap-row" key={`choice-${grp.subject}`}>
-                            <div className="q-subject-label">
-                              <strong className="q-label-name">{subjectAbbr}</strong>
-                              <span className="q-label-range">{grp.start}~{grp.end}</span>
-                            </div>
-                            <div className="q-heatmap-chips">
-                              {numbers.map((num) => {
-                                const state = activeQuestionPaper.questions?.[num];
-                                return (
-                                  <button
-                                    key={num}
-                                    type="button"
-                                    className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject} · ${grp.scorePerQuestion}分]：点击切换正确 / 错误`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                                  >
-                                    {num}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <strong className="q-label-name">完形</strong>
+                          <span className="q-label-range">1~20</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <strong className="q-label-name">阅读A</strong>
+                          <span className="q-label-range">21~40</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {Array.from({ length: 20 }, (_, i) => 21 + i).map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题 [阅读A · 2分]：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="q-heatmap-row">
+                        <div className="q-subject-label">
+                          <strong className="q-label-name">阅读B</strong>
+                          <span className="q-label-range">41~45</span>
+                        </div>
+                        <div className="q-heatmap-chips">
+                          {Array.from({ length: 5 }, (_, i) => 41 + i).map((num) => {
+                            const state = activeQuestionPaper.questions?.[num];
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换正确 / 错误`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Part 2: 英译汉 (46~50) - 独立块 */}
-                  <div className="q-type-block">
+                  {/* Part 2: 英译汉 (46~50) */}
+                  <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">英译汉</span>
                       <span className="q-type-subtitle">第 46 ~ 50 题 · 每题 2 分 · 共 10 分</span>
@@ -4757,7 +4797,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="满分 (🟢)"
+                                  title="优 / 满分 (🟢)"
                                   aria-label="满分"
                                 >
                                   <span className="dot-symbol" />
@@ -4766,7 +4806,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="部分得分 (🟡)"
+                                  title="良 / 部分得分 (🟡)"
                                   aria-label="部分得分"
                                 >
                                   <span className="dot-symbol" />
@@ -4775,8 +4815,8 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="错题 (🔴)"
-                                  aria-label="错题"
+                                  title="差 / 失分较多 (🔴)"
+                                  aria-label="失分"
                                 >
                                   <span className="dot-symbol" />
                                 </button>
@@ -4828,7 +4868,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="满分 (🟢)"
+                                  title="优 / 满分 (🟢)"
                                   aria-label="满分"
                                 >
                                   <span className="dot-symbol" />
@@ -4837,8 +4877,8 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="良好 (🟡)"
-                                  aria-label="良好"
+                                  title="良 / 部分得分 (🟡)"
+                                  aria-label="部分得分"
                                 >
                                   <span className="dot-symbol" />
                                 </button>
@@ -4846,8 +4886,8 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="偏低 (🔴)"
-                                  aria-label="偏低"
+                                  title="差 / 失分较多 (🔴)"
+                                  aria-label="失分"
                                 >
                                   <span className="dot-symbol" />
                                 </button>
@@ -4890,7 +4930,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
-                                  title="满分 (🟢)"
+                                  title="优 / 满分 (🟢)"
                                   aria-label="满分"
                                 >
                                   <span className="dot-symbol" />
@@ -4899,8 +4939,8 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
-                                  title="良好 (🟡)"
-                                  aria-label="良好"
+                                  title="良 / 部分得分 (🟡)"
+                                  aria-label="部分得分"
                                 >
                                   <span className="dot-symbol" />
                                 </button>
@@ -4908,8 +4948,8 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
-                                  title="偏低 (🔴)"
-                                  aria-label="偏低"
+                                  title="差 / 失分较多 (🔴)"
+                                  aria-label="失分"
                                 >
                                   <span className="dot-symbol" />
                                 </button>
@@ -4935,7 +4975,7 @@ export function StudyDashboard() {
                   </div>
                 </div>
               ) : (
-                /* 408: 1~40 单选, 41~47 综合大题 */
+                /* 408: 1~40 选择 (每题 2 分), 41~47 综合题 */
                 <div className="q-subjective-container">
                   {/* Part 1: 选择题 (1~40) */}
                   <div className="q-type-block">
@@ -4989,13 +5029,13 @@ export function StudyDashboard() {
                     </div>
                     <div className="q-comp-grid q-comp-grid--408">
                       {[
-                        { num: 41, subj: "DS", defaultMax: 13 },
-                        { num: 42, subj: "DS", defaultMax: 10 },
-                        { num: 43, subj: "CO", defaultMax: 13 },
-                        { num: 44, subj: "CO", defaultMax: 10 },
-                        { num: 45, subj: "OS", defaultMax: 8 },
-                        { num: 46, subj: "OS", defaultMax: 7 },
-                        { num: 47, subj: "CN", defaultMax: 9 },
+                        { num: 41, subj: "DS" },
+                        { num: 42, subj: "DS" },
+                        { num: 43, subj: "CO" },
+                        { num: 44, subj: "CO" },
+                        { num: 45, subj: "OS" },
+                        { num: 46, subj: "OS" },
+                        { num: 47, subj: "CN" },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
                         const score = activeQuestionPaper.questionScores?.[item.num];
@@ -5006,7 +5046,6 @@ export function StudyDashboard() {
                                 <span className="q-comp-badge">{item.subj}</span>
                                 <strong className="q-comp-title">第 {item.num} 题</strong>
                               </div>
-                              <span className="q-comp-max">{item.defaultMax} 分</span>
                             </div>
                             <div className="q-comp-card-actions">
                               <div className="q-state-dots" role="radiogroup" aria-label="题目评级">
@@ -5014,7 +5053,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
-                                  title="满分 / 优 (🟢)"
+                                  title="优 / 满分 (🟢)"
                                   aria-label="满分"
                                 >
                                   <span className="dot-symbol" />
@@ -5023,7 +5062,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
-                                  title="部分得分 / 良 (🟡)"
+                                  title="良 / 部分得分 (🟡)"
                                   aria-label="部分得分"
                                 >
                                   <span className="dot-symbol" />
@@ -5032,7 +5071,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
                                   onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
-                                  title="失分较多 / 差 (🔴)"
+                                  title="差 / 失分较多 (🔴)"
                                   aria-label="失分"
                                 >
                                   <span className="dot-symbol" />
@@ -5042,14 +5081,13 @@ export function StudyDashboard() {
                                 <input
                                   type="number"
                                   min={0}
-                                  max={20}
+                                  max={25}
                                   step={0.5}
                                   placeholder="0"
                                   value={score ?? ""}
-                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, item.defaultMax)}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, 20)}
                                 />
-                                <span className="q-score-slash">/</span>
-                                <span className="q-score-max">{item.defaultMax}</span>
+                                <span className="q-score-unit">分</span>
                               </div>
                             </div>
                           </div>

@@ -4138,56 +4138,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.q-state-cycle-btn {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  cursor: pointer;
-  background: #ffffff;
-  color: #475569;
-  transition: all 0.12s;
-}
-
-.q-state-cycle-btn.state-correct {
-  background: #10b981;
-  color: #ffffff;
-  border-color: #059669;
-}
-
-.q-state-cycle-btn.state-partial {
-  background: #f59e0b;
-  color: #ffffff;
-  border-color: #d97706;
-}
-
-.q-state-cycle-btn.state-wrong {
-  background: #ef4444;
-  color: #ffffff;
-  border-color: #dc2626;
+  gap: 8px;
 }
 
 .q-state-dots {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  background: #ffffff;
+  gap: 4px;
+  background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 2px 3px;
+  border-radius: 20px;
+  padding: 2px 4px;
 }
 
 .q-state-dot-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4196,11 +4164,26 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   padding: 0;
 }
 
+/* Unselected state: clearly visible tinted circles */
+.q-state-dot-btn.dot-btn--correct {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.q-state-dot-btn.dot-btn--partial {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.q-state-dot-btn.dot-btn--wrong {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
 .q-state-dot-btn .dot-symbol {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  opacity: 0.35;
   transition: all 0.15s ease;
 }
 
@@ -4216,80 +4199,90 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #ef4444;
 }
 
-.q-state-dot-btn:hover .dot-symbol {
-  opacity: 0.85;
+/* Hover state */
+.q-state-dot-btn:hover {
+  transform: scale(1.15);
+}
+
+/* Active Selected state: solid vivid glowing circle */
+.q-state-dot-btn.active.dot-btn--correct {
+  background: #10b981;
+  border-color: #059669;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
   transform: scale(1.2);
 }
 
-.q-state-dot-btn.active.dot-btn--correct {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-}
-
 .q-state-dot-btn.active.dot-btn--correct .dot-symbol {
-  opacity: 1;
-  transform: scale(1.25);
-  box-shadow: 0 0 5px rgba(16, 185, 129, 0.6);
+  background: #ffffff;
+  width: 6px;
+  height: 6px;
 }
 
 .q-state-dot-btn.active.dot-btn--partial {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: #f59e0b;
+  border-color: #d97706;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  transform: scale(1.2);
 }
 
 .q-state-dot-btn.active.dot-btn--partial .dot-symbol {
-  opacity: 1;
-  transform: scale(1.25);
-  box-shadow: 0 0 5px rgba(245, 158, 11, 0.6);
+  background: #ffffff;
+  width: 6px;
+  height: 6px;
 }
 
 .q-state-dot-btn.active.dot-btn--wrong {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: #ef4444;
+  border-color: #dc2626;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  transform: scale(1.2);
 }
 
 .q-state-dot-btn.active.dot-btn--wrong .dot-symbol {
-  opacity: 1;
-  transform: scale(1.25);
-  box-shadow: 0 0 5px rgba(239, 68, 68, 0.6);
+  background: #ffffff;
+  width: 6px;
+  height: 6px;
 }
 
 .q-score-input-box {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
-  padding: 2px 6px;
+  padding: 1px 6px;
   height: 26px;
+  transition: all 0.15s ease;
+}
+
+.q-score-input-box:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .q-score-input-box input {
-  width: 36px;
+  width: 32px;
   border: none;
+  background: transparent;
   font-size: 13px;
   font-weight: 700;
   font-family: Consolas, Monaco, monospace;
   text-align: center;
   color: #1e293b;
-  background: transparent;
   outline: none;
   padding: 0;
 }
 
 .q-score-slash {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.q-score-max, .q-score-unit {
   font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
-}
-
-.q-score-max {
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 700;
-  font-family: Consolas, Monaco, monospace;
-  padding-right: 2px;
 }
 
 .paper-q-modal-footer {
