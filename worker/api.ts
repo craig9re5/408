@@ -524,7 +524,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
     : (kind === "past" ? `${candidate.year ?? ""} 真题` : "模拟卷");
   const year = typeof candidate.year === "number" && candidate.year >= 2000 && candidate.year <= 2100 ? candidate.year : undefined;
   const completed = Boolean(candidate.completed);
-  const completedAt = typeof candidate.completedAt === "string" && isSafeDate(candidate.completedAt) ? candidate.completedAt : "";
+  const completedAt = typeof candidate.completedAt === "string" && isDate(candidate.completedAt) ? candidate.completedAt : "";
   const score = typeof candidate.score === "number" && !Number.isNaN(candidate.score) && candidate.score >= 0 && candidate.score <= 150
     ? Math.round(candidate.score * 10) / 10
     : null;
@@ -532,7 +532,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
     ? Math.round(candidate.durationMinutes)
     : null;
   const secondRound = Boolean(candidate.secondRound);
-  const secondRoundAt = typeof candidate.secondRoundAt === "string" && isSafeDate(candidate.secondRoundAt) ? candidate.secondRoundAt : "";
+  const secondRoundAt = typeof candidate.secondRoundAt === "string" && isDate(candidate.secondRoundAt) ? candidate.secondRoundAt : "";
   const groupName = typeof candidate.groupName === "string" && candidate.groupName.trim() ? candidate.groupName.trim().slice(0, 80) : undefined;
   const notes = typeof candidate.notes === "string" ? candidate.notes.trim().slice(0, 2000) : undefined;
 
@@ -791,8 +791,9 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     if (!authenticated) return json({ authenticated: false });
     try {
       return json({ authenticated: true, ...(await readAppData(env)) });
-    } catch {
-      return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
+    } catch (err) {
+      console.error("Session readAppData error:", err);
+      return json({ error: "读取学习进度失败，请稍后重试", details: String(err) }, { status: 503 });
     }
   }
 
@@ -809,8 +810,9 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
         { authenticated: true, ...(await readAppData(env)) },
         { headers: { "set-cookie": cookieHeader(await createSession(secret), request) } },
       );
-    } catch {
-      return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
+    } catch (err) {
+      console.error("Login readAppData error:", err);
+      return json({ error: "读取学习进度失败，请稍后重试", details: String(err) }, { status: 503 });
     }
   }
 
