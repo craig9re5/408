@@ -3900,6 +3900,9 @@ export function StudyDashboard() {
                                   {backupKindLabel(backup.kind)}
                                 </span>
                                 <span className="backup-item__time">{formatLocalDateTime(backup.createdAt)}</span>
+                                <span className="backup-item__meta">
+                                  {Object.keys(backup.data?.progress ?? {}).length}节 · {backup.data?.journals?.length ?? 0}日志 · {backup.data?.papers?.length ?? 0}试卷
+                                </span>
                               </div>
                               <div className="backup-item__actions">
                                 <button className="backup-item__restore" type="button" onClick={() => setPendingRestore(backup)}>
