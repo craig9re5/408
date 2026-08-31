@@ -543,6 +543,7 @@ export function StudyDashboard() {
   const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
   const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
+  const [pastPaperSortOrder, setPastPaperSortOrder] = useState<"desc" | "asc">("desc");
   const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
@@ -1018,12 +1019,17 @@ export function StudyDashboard() {
   }, [journals, activeArea]);
 
   const visiblePastPapers = useMemo(() => {
-    return pastPapers.filter((p) => {
+    const list = pastPapers.filter((p) => {
       if (sprintStatusFilter === "uncompleted") return !p.completed;
       if (sprintStatusFilter === "completed") return p.completed;
       return true;
     });
-  }, [pastPapers, sprintStatusFilter]);
+    return [...list].sort((a, b) => {
+      const yearA = a.year ?? 0;
+      const yearB = b.year ?? 0;
+      return pastPaperSortOrder === "asc" ? yearA - yearB : yearB - yearA;
+    });
+  }, [pastPapers, sprintStatusFilter, pastPaperSortOrder]);
 
   const visibleMockPapers = useMemo(() => {
     return mockPapers.filter((p) => {
@@ -3203,7 +3209,28 @@ export function StudyDashboard() {
                 {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
                   <section className="sprint-section" aria-labelledby="past-bento-heading">
                     <div className="sprint-section-header">
-                      <h3 id="past-bento-heading">真题</h3>
+                      <div className="sprint-header-title-group">
+                        <h3 id="past-bento-heading">真题</h3>
+                        <span className="sprint-count-badge">{visiblePastPapers.length} 套</span>
+                      </div>
+                      <div className="sprint-sort-filters" role="group" aria-label="真题年份排序">
+                        <button
+                          type="button"
+                          className={`sprint-sort-btn ${pastPaperSortOrder === "desc" ? "active" : ""}`}
+                          onClick={() => setPastPaperSortOrder("desc")}
+                          title="按年份倒序排列 (2026 ➔ 2010)"
+                        >
+                          倒序 ↓
+                        </button>
+                        <button
+                          type="button"
+                          className={`sprint-sort-btn ${pastPaperSortOrder === "asc" ? "active" : ""}`}
+                          onClick={() => setPastPaperSortOrder("asc")}
+                          title="按年份正序排列 (2010 ➔ 2026)"
+                        >
+                          正序 ↑
+                        </button>
+                      </div>
                     </div>
                       <div className="sprint-bento-grid">
                         {visiblePastPapers.map((paper) => {
