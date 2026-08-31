@@ -625,7 +625,7 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   assert.equal(writing.start, 51);
   assert.equal(writing.end, 52);
 
-  // 3. 验证 normalizePaperRecord 与题目状态
+  // 3. 验证 normalizePaperRecord 与题目状态 (支持 correct, partial, wrong 及 questionScores)
   const rawPaper = {
     id: "past-408-2025",
     kind: "past",
@@ -636,18 +636,28 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     questions: {
       "1": "correct",
       "3": "wrong",
+      "41": "partial",
       "43": "wrong",
       "999": "wrong", // 不合法题号过滤
+    },
+    questionScores: {
+      "41": 8.5,
+      "43": 4,
+      "999": 10,
     },
   };
   const normalized = normalizePaperRecord(rawPaper);
   assert.ok(normalized);
   assert.equal(normalized?.questions?.[1], "correct");
   assert.equal(normalized?.questions?.[3], "wrong");
+  assert.equal(normalized?.questions?.[41], "partial");
   assert.equal(normalized?.questions?.[43], "wrong");
   assert.equal(normalized?.questions?.[999], undefined);
+  assert.equal(normalized?.questionScores?.[41], 8.5);
+  assert.equal(normalized?.questionScores?.[43], 4);
+  assert.equal(normalized?.questionScores?.[999], undefined);
 
-  // 4. 验证 mergePapers 题目做题状态合并
+  // 4. 验证 mergePapers 题目做题状态与得分合并
   const devA = [{
     id: "past-408-2025",
     kind: "past",
@@ -656,6 +666,7 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     completed: true,
     completedAt: "2026-10-15",
     questions: { "1": "correct", "3": "wrong" },
+    questionScores: { "41": 9 },
   }];
   const devB = [{
     id: "past-408-2025",
@@ -664,11 +675,15 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
     title: "2025年 408真题",
     completed: true,
     completedAt: "2026-10-15",
-    questions: { "1": "correct", "43": "wrong" },
+    questions: { "1": "correct", "41": "partial", "43": "wrong" },
+    questionScores: { "43": 5 },
   }];
   const merged = mergePapers(devA, devB);
   const p2025 = merged.find((p) => p.id === "past-408-2025");
   assert.equal(p2025?.questions?.[1], "correct");
   assert.equal(p2025?.questions?.[3], "wrong");
+  assert.equal(p2025?.questions?.[41], "partial");
   assert.equal(p2025?.questions?.[43], "wrong");
+  assert.equal(p2025?.questionScores?.[41], 9);
+  assert.equal(p2025?.questionScores?.[43], 5);
 });

@@ -114,7 +114,7 @@ export type JournalEntry = {
 
 export type PaperKind = "past" | "mock";
 
-export type QuestionState = "correct" | "wrong";
+export type QuestionState = "correct" | "partial" | "wrong";
 
 export type QuestionGroupDef = {
   type: "选择题" | "填空题" | "解答题" | "综合应用题" | "主观表达题";
@@ -123,28 +123,36 @@ export type QuestionGroupDef = {
   end: number;
   count: number;
   scorePerQuestion?: number;
+  questionScores?: Record<number, number>;
 };
 
 export const MATH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
   total: 22,
   groups: [
-    { type: "选择题", start: 1, end: 10, count: 10 },
-    { type: "填空题", start: 11, end: 16, count: 6 },
-    { type: "解答题", start: 17, end: 22, count: 6 },
+    { type: "选择题", start: 1, end: 10, count: 10, scorePerQuestion: 5 },
+    { type: "填空题", start: 11, end: 16, count: 6, scorePerQuestion: 5 },
+    {
+      type: "解答题",
+      start: 17,
+      end: 22,
+      count: 6,
+      scorePerQuestion: 12,
+      questionScores: { 17: 10, 18: 12, 19: 12, 20: 12, 21: 12, 22: 12 },
+    },
   ],
 };
 
 export const CS408_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
   total: 47,
   groups: [
-    { type: "选择题", subject: "数据结构", start: 1, end: 11, count: 11 },
-    { type: "选择题", subject: "计算机组成原理", start: 12, end: 22, count: 11 },
-    { type: "选择题", subject: "操作系统", start: 23, end: 32, count: 10 },
-    { type: "选择题", subject: "计算机网络", start: 33, end: 40, count: 8 },
-    { type: "综合应用题", subject: "数据结构", start: 41, end: 42, count: 2 },
-    { type: "综合应用题", subject: "计算机组成原理", start: 43, end: 44, count: 2 },
-    { type: "综合应用题", subject: "操作系统", start: 45, end: 46, count: 2 },
-    { type: "综合应用题", subject: "计算机网络", start: 47, end: 47, count: 1 },
+    { type: "选择题", subject: "数据结构", start: 1, end: 11, count: 11, scorePerQuestion: 2.0 },
+    { type: "选择题", subject: "计算机组成原理", start: 12, end: 22, count: 11, scorePerQuestion: 2.0 },
+    { type: "选择题", subject: "操作系统", start: 23, end: 32, count: 10, scorePerQuestion: 2.0 },
+    { type: "选择题", subject: "计算机网络", start: 33, end: 40, count: 8, scorePerQuestion: 2.0 },
+    { type: "综合应用题", subject: "数据结构", start: 41, end: 42, count: 2, scorePerQuestion: 10 },
+    { type: "综合应用题", subject: "计算机组成原理", start: 43, end: 44, count: 2, scorePerQuestion: 10 },
+    { type: "综合应用题", subject: "操作系统", start: 45, end: 46, count: 2, scorePerQuestion: 10 },
+    { type: "综合应用题", subject: "计算机网络", start: 47, end: 47, count: 1, scorePerQuestion: 9 },
   ],
 };
 
@@ -154,8 +162,16 @@ export const ENGLISH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[
     { type: "选择题", subject: "完形填空", start: 1, end: 20, count: 20, scorePerQuestion: 0.5 },
     { type: "选择题", subject: "传统阅读", start: 21, end: 40, count: 20, scorePerQuestion: 2.0 },
     { type: "选择题", subject: "新题型", start: 41, end: 45, count: 5, scorePerQuestion: 2.0 },
-    { type: "主观表达题", subject: "英译汉", start: 46, end: 50, count: 5 },
-    { type: "主观表达题", subject: "短文写作", start: 51, end: 52, count: 2 },
+    { type: "主观表达题", subject: "英译汉", start: 46, end: 50, count: 5, scorePerQuestion: 2.0 },
+    {
+      type: "主观表达题",
+      subject: "短文写作",
+      start: 51,
+      end: 52,
+      count: 2,
+      scorePerQuestion: 15,
+      questionScores: { 51: 10, 52: 20 },
+    },
   ],
 };
 
@@ -174,6 +190,7 @@ export type PaperRecord = {
   secondRoundAt?: string;
   notes?: string;
   questions?: Record<number, QuestionState>;
+  questionScores?: Record<number, number>;
 };
 
 export type StudyAppData = {
@@ -956,13 +973,27 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
     Object.entries(value.questions).forEach(([k, v]) => {
       const qNum = parseInt(k, 10);
       if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
-        if (v === "correct" || v === "wrong") {
+        if (v === "correct" || v === "partial" || v === "wrong") {
           qMap[qNum] = v;
         }
       }
     });
     if (Object.keys(qMap).length > 0) {
       questions = qMap;
+    }
+  }
+
+  let questionScores: Record<number, number> | undefined = undefined;
+  if (isRecord(value.questionScores)) {
+    const sMap: Record<number, number> = {};
+    Object.entries(value.questionScores).forEach(([k, v]) => {
+      const qNum = parseInt(k, 10);
+      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100 && typeof v === "number" && !Number.isNaN(v) && v >= 0 && v <= 100) {
+        sMap[qNum] = Math.round(v * 10) / 10;
+      }
+    });
+    if (Object.keys(sMap).length > 0) {
+      questionScores = sMap;
     }
   }
 
@@ -981,6 +1012,7 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
     secondRoundAt: secondRound ? secondRoundAt : "",
     notes,
     questions,
+    questionScores,
   };
 }
 
@@ -1024,6 +1056,9 @@ export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperR
       const questions = p.questions || existing.questions
         ? { ...(existing.questions ?? {}), ...(p.questions ?? {}) }
         : undefined;
+      const questionScores = p.questionScores || existing.questionScores
+        ? { ...(existing.questionScores ?? {}), ...(p.questionScores ?? {}) }
+        : undefined;
       map.set(p.id, {
         ...existing,
         ...p,
@@ -1034,6 +1069,7 @@ export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperR
         secondRound,
         secondRoundAt,
         questions,
+        questionScores,
       });
     }
   });

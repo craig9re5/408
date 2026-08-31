@@ -108,7 +108,7 @@ export type JournalEntry = {
 };
 
 export type PaperKind = "past" | "mock";
-export type QuestionState = "correct" | "wrong";
+export type QuestionState = "correct" | "partial" | "wrong";
 
 export type PaperRecord = {
   id: string;
@@ -125,6 +125,7 @@ export type PaperRecord = {
   secondRoundAt?: string;
   notes?: string;
   questions?: Record<number, QuestionState>;
+  questionScores?: Record<number, number>;
 };
 
 type AppStateRow = {
@@ -545,13 +546,28 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
     Object.entries(qObj).forEach(([k, v]) => {
       const qNum = parseInt(k, 10);
       if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
-        if (v === "correct" || v === "wrong") {
+        if (v === "correct" || v === "partial" || v === "wrong") {
           qMap[qNum] = v;
         }
       }
     });
     if (Object.keys(qMap).length > 0) {
       questions = qMap;
+    }
+  }
+
+  let questionScores: Record<number, number> | undefined = undefined;
+  if (candidate.questionScores && typeof candidate.questionScores === "object" && !Array.isArray(candidate.questionScores)) {
+    const sObj = candidate.questionScores as Record<string, unknown>;
+    const sMap: Record<number, number> = {};
+    Object.entries(sObj).forEach(([k, v]) => {
+      const qNum = parseInt(k, 10);
+      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100 && typeof v === "number" && !Number.isNaN(v) && v >= 0 && v <= 100) {
+        sMap[qNum] = Math.round(v * 10) / 10;
+      }
+    });
+    if (Object.keys(sMap).length > 0) {
+      questionScores = sMap;
     }
   }
 
@@ -570,6 +586,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
     secondRoundAt: secondRound ? secondRoundAt : "",
     notes,
     questions,
+    questionScores,
   };
 }
 

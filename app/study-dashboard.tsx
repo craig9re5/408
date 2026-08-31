@@ -1103,11 +1103,17 @@ export function StudyDashboard() {
       return null;
     }
     let correctCount = 0;
+    let partialCount = 0;
     let wrongCount = 0;
     let choiceCorrectCount = 0;
     let choiceWrongCount = 0;
     let choiceRecordedWeight = 0;
     let choiceCorrectWeight = 0;
+    let subjectiveTotal = 0;
+    let subjectiveRecorded = 0;
+    let subjectivePerfectCount = 0;
+    let subjectivePartialCount = 0;
+    let subjectiveWrongCount = 0;
 
     for (let i = 1; i <= totalQuestions; i++) {
       const qState = paper.questions[i];
@@ -1120,22 +1126,38 @@ export function StudyDashboard() {
           choiceCorrectCount++;
           choiceCorrectWeight += weight;
           choiceRecordedWeight += weight;
+        } else {
+          subjectiveRecorded++;
+          subjectivePerfectCount++;
+        }
+      } else if (qState === "partial") {
+        partialCount++;
+        if (!isChoice) {
+          subjectiveRecorded++;
+          subjectivePartialCount++;
         }
       } else if (qState === "wrong") {
         wrongCount++;
         if (isChoice) {
           choiceWrongCount++;
           choiceRecordedWeight += weight;
+        } else {
+          subjectiveRecorded++;
+          subjectiveWrongCount++;
         }
       }
+      if (!isChoice) {
+        subjectiveTotal++;
+      }
     }
-    const totalRecorded = correctCount + wrongCount;
+    const totalRecorded = correctCount + partialCount + wrongCount;
     const accuracyPercent = totalRecorded > 0 ? Math.round((correctCount / totalRecorded) * 100) : 0;
     const choiceRecorded = choiceCorrectCount + choiceWrongCount;
     const choiceAccuracyPercent = choiceRecordedWeight > 0 ? Math.round((choiceCorrectWeight / choiceRecordedWeight) * 100) : null;
     return {
       totalRecorded,
       correctCount,
+      partialCount,
       wrongCount,
       accuracyPercent,
       choiceCorrectCount,
@@ -1144,21 +1166,97 @@ export function StudyDashboard() {
       choiceAccuracyPercent,
       choiceCorrectWeight,
       choiceRecordedWeight,
+      subjectiveTotal,
+      subjectiveRecorded,
+      subjectivePerfectCount,
+      subjectivePartialCount,
+      subjectiveWrongCount,
       maxChoiceNum,
       totalQuestions,
     };
   }
 
-  function togglePaperQuestion(paperId: string, qNum: number) {
+  function togglePaperQuestion(paperId: string, qNum: number, isChoice: boolean) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
       const currentMap = p.questions ?? {};
       const currentState = currentMap[qNum];
-      const nextState: QuestionState = currentState === "wrong" ? "correct" : "wrong";
+      let nextState: QuestionState;
+
+      if (isChoice) {
+        // Choice questions: 1-click toggle between wrong and correct
+        nextState = currentState === "wrong" ? "correct" : "wrong";
+      } else {
+        // 408 & general Subjective: cycle partial -> correct -> wrong -> partial
+        if (!currentState || currentState === "wrong") {
+          nextState = "partial";
+        } else if (currentState === "partial") {
+          nextState = "correct";
+        } else {
+          nextState = "wrong";
+        }
+      }
+
       return {
         ...p,
         questions: {
           ...currentMap,
+          [qNum]: nextState,
+        },
+      };
+    }));
+  }
+
+  function setPaperQuestionSpecificState(paperId: string, qNum: number, nextState: QuestionState) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const currentMap = p.questions ?? {};
+      return {
+        ...p,
+        questions: {
+          ...currentMap,
+          [qNum]: nextState,
+        },
+      };
+    }));
+  }
+
+  function setPaperQuestionScore(paperId: string, qNum: number, rawVal: string, maxScore: number) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const currentScores = p.questionScores ?? {};
+      const currentQuestions = p.questions ?? {};
+
+      if (rawVal.trim() === "") {
+        const nextScores = { ...currentScores };
+        delete nextScores[qNum];
+        return {
+          ...p,
+          questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
+        };
+      }
+
+      const scoreNum = parseFloat(rawVal);
+      if (Number.isNaN(scoreNum) || scoreNum < 0) return p;
+      const boundedScore = Math.min(scoreNum, maxScore);
+
+      let nextState: QuestionState;
+      if (boundedScore >= maxScore) {
+        nextState = "correct";
+      } else if (boundedScore >= 0.5 * maxScore) {
+        nextState = "partial";
+      } else {
+        nextState = "wrong";
+      }
+
+      return {
+        ...p,
+        questionScores: {
+          ...currentScores,
+          [qNum]: boundedScore,
+        },
+        questions: {
+          ...currentQuestions,
           [qNum]: nextState,
         },
       };
@@ -1205,31 +1303,37 @@ export function StudyDashboard() {
       return {
         ...p,
         questions: undefined,
+        questionScores: undefined,
       };
     }));
     setFeedbackMessage("已清空该试卷做题记录");
   }
 
   function renderBentoHeatmap(paper: PaperRecord) {
+    const qSummary = getPaperQuestionSummary(paper);
     const hasRecorded = Boolean(paper.questions && Object.keys(paper.questions).length > 0);
-    let wrongCount = 0;
-    if (paper.questions) {
-      for (const val of Object.values(paper.questions)) {
-        if (val === "wrong") wrongCount++;
-      }
-    }
 
     if (paper.area === "408") {
-      const groups = [
+      const choiceGroups = [
         { name: "DS", start: 1, count: 11 },
         { name: "CO", start: 12, count: 11 },
         { name: "OS", start: 23, count: 10 },
         { name: "CN", start: 33, count: 8 },
       ];
+      const bigQuestions = [
+        { num: 41, subj: "DS", name: "数据结构" },
+        { num: 42, subj: "DS", name: "数据结构" },
+        { num: 43, subj: "CO", name: "组成原理" },
+        { num: 44, subj: "CO", name: "组成原理" },
+        { num: 45, subj: "OS", name: "操作系统" },
+        { num: 46, subj: "OS", name: "操作系统" },
+        { num: 47, subj: "CN", name: "计网" },
+      ];
+
       return (
         <div
           className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          title="点击打开答题卡录入或调整做题表现"
           onClick={() => {
             setActivePaperQuestionModalId(paper.id);
             setQuickWrongInput("");
@@ -1244,43 +1348,91 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (40题)</span>
-            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
-              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
-            </span>
+            <span className="mini-heatmap-title">做题热力 (40选择 + 7大题)</span>
+            <div className="mini-heatmap-tags">
+              {qSummary ? (
+                <>
+                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
+                    选择: {qSummary.choiceAccuracyPercent}%
+                  </span>
+                  {qSummary.subjectiveRecorded > 0 && (
+                    <span className="mini-heatmap-tag tag-subj">
+                      大题: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
+              )}
+            </div>
           </div>
-          <div className="mini-heatmap-groups">
-            {groups.map((grp) => (
-              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                <span className="mini-group-tag">{grp.name}</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: grp.count }, (_, i) => {
-                    const num = grp.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
+
+          {/* Row 1: Objective Choice Matrix */}
+          <div className="mini-heatmap-row mini-heatmap-row--choice">
+            <span className="mini-row-label">选择:</span>
+            <div className="mini-heatmap-groups">
+              {choiceGroups.map((grp) => (
+                <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                  <span className="mini-group-tag">{grp.name}</span>
+                  <div className="mini-group-dots">
+                    {Array.from({ length: grp.count }, (_, i) => {
+                      const num = grp.start + i;
+                      const st = paper.questions?.[num];
+                      return (
+                        <span
+                          key={num}
+                          className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                          title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2: Subjective Big Questions Matrix */}
+          <div className="mini-heatmap-row mini-heatmap-row--subj">
+            <span className="mini-row-label">大题:</span>
+            <div className="mini-subj-chips">
+              {bigQuestions.map((bq) => {
+                const st = paper.questions?.[bq.num];
+                const sc = paper.questionScores?.[bq.num];
+                return (
+                  <span
+                    key={bq.num}
+                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                  >
+                    {bq.num}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       );
     } else if (paper.area === "english") {
-      const groups = [
+      const choiceGroups = [
         { name: "CL", start: 1, count: 20 },
         { name: "RA", start: 21, count: 20 },
         { name: "RB", start: 41, count: 5 },
       ];
+      const bigQuestions = [
+        { num: 46, name: "英译汉 1" },
+        { num: 47, name: "英译汉 2" },
+        { num: 48, name: "英译汉 3" },
+        { num: 49, name: "英译汉 4" },
+        { num: 50, name: "英译汉 5" },
+        { num: 51, name: "小作文" },
+        { num: 52, name: "大作文" },
+      ];
+
       return (
         <div
           className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          title="点击打开答题卡录入或调整做题表现"
           onClick={() => {
             setActivePaperQuestionModalId(paper.id);
             setQuickWrongInput("");
@@ -1295,44 +1447,86 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (45题)</span>
-            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
-              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
-            </span>
+            <span className="mini-heatmap-title">做题热力 (45选择 + 7主观)</span>
+            <div className="mini-heatmap-tags">
+              {qSummary ? (
+                <>
+                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
+                    选择: {qSummary.choiceAccuracyPercent}%
+                  </span>
+                  {qSummary.subjectiveRecorded > 0 && (
+                    <span className="mini-heatmap-tag tag-subj">
+                      主观: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
+              )}
+            </div>
           </div>
-          <div className="mini-heatmap-groups">
-            {groups.map((grp) => (
-              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                <span className="mini-group-tag">{grp.name}</span>
-                <div className="mini-group-dots">
-                  {Array.from({ length: grp.count }, (_, i) => {
-                    const num = grp.start + i;
-                    const st = paper.questions?.[num];
-                    return (
-                      <span
-                        key={num}
-                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
-                      />
-                    );
-                  })}
+
+          <div className="mini-heatmap-row mini-heatmap-row--choice">
+            <span className="mini-row-label">客观:</span>
+            <div className="mini-heatmap-groups">
+              {choiceGroups.map((grp) => (
+                <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                  <span className="mini-group-tag">{grp.name}</span>
+                  <div className="mini-group-dots">
+                    {Array.from({ length: grp.count }, (_, i) => {
+                      const num = grp.start + i;
+                      const st = paper.questions?.[num];
+                      return (
+                        <span
+                          key={num}
+                          className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                          title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="mini-heatmap-row mini-heatmap-row--subj">
+            <span className="mini-row-label">主观:</span>
+            <div className="mini-subj-chips">
+              {bigQuestions.map((bq) => {
+                const st = paper.questions?.[bq.num];
+                const sc = paper.questionScores?.[bq.num];
+                return (
+                  <span
+                    key={bq.num}
+                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 🟢 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                  >
+                    {bq.num}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       );
     } else {
       // Math: 1~10 选择, 11~16 填空, 17~22 解答
-      const groups = [
-        { name: "单选", start: 1, count: 10 },
-        { name: "填空", start: 11, count: 6 },
-        { name: "解答", start: 17, count: 6 },
+      const choiceGroup = { name: "选择", start: 1, count: 10 };
+      const blankGroup = { name: "填空", start: 11, count: 6 };
+      const solvingGroup = [
+        { num: 17, max: 10 },
+        { num: 18, max: 12 },
+        { num: 19, max: 12 },
+        { num: 20, max: 12 },
+        { num: 21, max: 12 },
+        { num: 22, max: 12 },
       ];
+
       return (
         <div
           className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
-          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          title="点击打开答题卡录入或调整做题表现"
           onClick={() => {
             setActivePaperQuestionModalId(paper.id);
             setQuickWrongInput("");
@@ -1347,30 +1541,80 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (22题)</span>
-            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
-              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
-            </span>
+            <span className="mini-heatmap-title">做题热力 (10单选 + 6填空 + 6解答)</span>
+            <div className="mini-heatmap-tags">
+              {qSummary ? (
+                <>
+                  <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
+                    选择: {qSummary.choiceAccuracyPercent}%
+                  </span>
+                  {qSummary.subjectiveRecorded > 0 && (
+                    <span className="mini-heatmap-tag tag-subj">
+                      大题: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
+              )}
+            </div>
           </div>
-          <div className="mini-heatmap-groups">
-            {groups.map((grp) => (
-              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-                <span className="mini-group-tag">{grp.name}</span>
+
+          <div className="mini-heatmap-row mini-heatmap-row--choice">
+            <span className="mini-row-label">选填:</span>
+            <div className="mini-heatmap-groups">
+              <div className="mini-heatmap-group" title="第 1~10 题 单项选择">
+                <span className="mini-group-tag">单选</span>
                 <div className="mini-group-dots">
-                  {Array.from({ length: grp.count }, (_, i) => {
-                    const num = grp.start + i;
+                  {Array.from({ length: choiceGroup.count }, (_, i) => {
+                    const num = choiceGroup.start + i;
                     const st = paper.questions?.[num];
                     return (
                       <span
                         key={num}
                         className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                        title={`第 ${num} 题 [单选 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
                       />
                     );
                   })}
                 </div>
               </div>
-            ))}
+              <div className="mini-heatmap-group" title="第 11~16 题 填空题">
+                <span className="mini-group-tag">填空</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: blankGroup.count }, (_, i) => {
+                    const num = blankGroup.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [填空 · 5分]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mini-heatmap-row mini-heatmap-row--subj">
+            <span className="mini-row-label">解答:</span>
+            <div className="mini-subj-chips">
+              {solvingGroup.map((bq) => {
+                const st = paper.questions?.[bq.num];
+                const sc = paper.questionScores?.[bq.num];
+                return (
+                  <span
+                    key={bq.num}
+                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
+                    title={`第 ${bq.num} 题 [解答题 · ${bq.max}分]: ${st === "correct" ? `满分/优 🟢 (${sc ?? bq.max}分)` : st === "partial" ? `部分得分/良 🟡 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 🔴 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
+                  >
+                    {bq.num}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       );
@@ -4859,34 +5103,17 @@ export function StudyDashboard() {
               <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
               <div className="paper-q-header-right">
                 {(() => {
-                  const isEng = activeQuestionPaper.area === "english";
-                  const is408 = activeQuestionPaper.area === "408";
-                  const maxChoiceNum = isEng ? 45 : is408 ? 40 : 10;
-                  let correct = 0;
-                  let wrong = 0;
-                  let choiceRecordedWeight = 0;
-                  let choiceCorrectWeight = 0;
-
-                  for (let i = 1; i <= maxChoiceNum; i++) {
-                    const st = activeQuestionPaper.questions?.[i];
-                    const weight = isEng ? (i <= 20 ? 0.5 : 2.0) : 1.0;
-                    if (st === "correct") {
-                      correct++;
-                      choiceCorrectWeight += weight;
-                      choiceRecordedWeight += weight;
-                    } else if (st === "wrong") {
-                      wrong++;
-                      choiceRecordedWeight += weight;
-                    }
-                  }
-                  const rate = choiceRecordedWeight > 0 ? Math.round((choiceCorrectWeight / choiceRecordedWeight) * 100) : null;
+                  const qSummary = getPaperQuestionSummary(activeQuestionPaper);
                   return (
                     <div className="paper-q-header-metrics">
-                      <span className="q-header-pill q-pill--correct">🟢 正确 {correct}</span>
-                      <span className="q-header-pill q-pill--wrong">🔴 错题 {wrong}</span>
-                      {rate !== null && (
+                      <span className="q-header-pill q-pill--correct">🟢 满分/正确 {qSummary?.correctCount ?? 0}</span>
+                      {(qSummary?.partialCount ?? 0) > 0 && (
+                        <span className="q-header-pill q-pill--partial">🟡 部分得分 {qSummary?.partialCount}</span>
+                      )}
+                      <span className="q-header-pill q-pill--wrong">🔴 错题/低分 {qSummary?.wrongCount ?? 0}</span>
+                      {qSummary?.choiceAccuracyPercent !== null && qSummary?.choiceAccuracyPercent !== undefined && (
                         <span className="q-header-pill q-pill--rate">
-                          选择题{isEng ? "加权" : ""}正确率 {rate}%
+                          选择题正确率 {qSummary.choiceAccuracyPercent}%
                         </span>
                       )}
                     </div>
@@ -4951,43 +5178,156 @@ export function StudyDashboard() {
             {/* Question Heatmap Matrix */}
             <div className="paper-q-heatmap-matrix">
               {activeQuestionPaper.area === "math" ? (
-                /* Math: 1~10 选择, 11~16 填空, 17~22 解答 */
-                MATH_PAPER_STRUCTURE.groups.map((grp) => {
-                  const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                  return (
-                    <div className="q-heatmap-section" key={grp.type}>
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">{grp.type}</strong>
-                          <span className="q-label-range">{grp.start}~{grp.end}</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {numbers.map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题：点击切换正确 / 错误`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : activeQuestionPaper.area === "english" ? (
-                /* English: 1~45 选择 (完形 1~20, 传统阅读 21~40, 新题型 41~45), 46~52 主观 (翻译 46~50, 写作 51~52) */
-                <div className="q-408-container">
-                  {/* Part 1: 单项选择题 (1~45) */}
+                /* Math: 1~10 选择 (5分), 11~16 填空 (5分), 17~22 解答 (10~12分) */
+                <div className="q-subjective-container">
+                  {/* Part 1: 单项选择题 (1~10) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">单项选择题 (客观题)</span>
+                      <span className="q-type-title">单项选择题 (点选对错)</span>
+                      <span className="q-type-subtitle">第 1 ~ 10 题 · 每题 5 分 · 共 50 分</span>
+                    </div>
+                    <div className="q-heatmap-row">
+                      <div className="q-subject-label">
+                        <strong className="q-label-name">单选</strong>
+                        <span className="q-label-range">1~10</span>
+                      </div>
+                      <div className="q-heatmap-chips">
+                        {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
+                          const state = activeQuestionPaper.questions?.[num];
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              title={`第 ${num} 题 [单选 · 5分]：点击切换正确 / 错误`}
+                              onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                            >
+                              {num}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Part 2: 填空题 (11~16) */}
+                  <div className="q-type-block">
+                    <div className="q-type-header">
+                      <span className="q-type-title">填空题 (支持录入得分或点选)</span>
+                      <span className="q-type-subtitle">第 11 ~ 16 题 · 每题 5 分 · 共 30 分</span>
+                    </div>
+                    <div className="q-comp-grid q-comp-grid--blank">
+                      {Array.from({ length: 6 }, (_, i) => 11 + i).map((num) => {
+                        const state = activeQuestionPaper.questions?.[num];
+                        const score = activeQuestionPaper.questionScores?.[num];
+                        return (
+                          <div className="q-comp-card" key={num}>
+                            <div className="q-comp-card-top">
+                              <span className="q-comp-title">第 {num} 题</span>
+                              <span className="q-comp-max">5分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <button
+                                type="button"
+                                className={`q-state-cycle-btn ${state ? `state-${state}` : "state-unset"}`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, false)}
+                                title="点击轮转状态：🟢/🟡/🔴"
+                              >
+                                {state === "correct" ? "🟢 满分" : state === "partial" ? "🟡 部分" : state === "wrong" ? "🔴 错题" : "⚪ 未评"}
+                              </button>
+                              <div className="q-score-input-box">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={5}
+                                  step={0.5}
+                                  placeholder="得分"
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 5)}
+                                />
+                                <span>/5</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Part 3: 解答题 (17~22) */}
+                  <div className="q-type-block q-type-block--comprehensive">
+                    <div className="q-type-header">
+                      <span className="q-type-title">解答题 (支持键入具体分数与三色等级)</span>
+                      <span className="q-type-subtitle">第 17 ~ 22 题 · 共 70 分 (100% 🟢, ≥50% 🟡, &lt;50% 🔴)</span>
+                    </div>
+                    <div className="q-comp-grid q-comp-grid--solving">
+                      {[
+                        { num: 17, max: 10 },
+                        { num: 18, max: 12 },
+                        { num: 19, max: 12 },
+                        { num: 20, max: 12 },
+                        { num: 21, max: 12 },
+                        { num: 22, max: 12 },
+                      ].map((item) => {
+                        const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
+                        return (
+                          <div className="q-comp-card q-comp-card--large" key={item.num}>
+                            <div className="q-comp-card-top">
+                              <strong className="q-comp-title">第 {item.num} 题 解答题</strong>
+                              <span className="q-comp-max">满分 {item.max} 分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <div className="q-state-pills">
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-correct ${state === "correct" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                >
+                                  🟢 满分
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-partial ${state === "partial" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                >
+                                  🟡 部分对
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-wrong ${state === "wrong" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                >
+                                  🔴 低分/错
+                                </button>
+                              </div>
+                              <div className="q-score-input-box">
+                                <span className="q-score-label">实得:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={item.max}
+                                  step={0.5}
+                                  placeholder={`0~${item.max}`}
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, item.max)}
+                                />
+                                <span>/ {item.max}分</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : activeQuestionPaper.area === "english" ? (
+                /* English: 1~45 选择, 46~52 主观 */
+                <div className="q-subjective-container">
+                  {/* Part 1: 客观单项选择题 (1~45) */}
+                  <div className="q-type-block">
+                    <div className="q-type-header">
+                      <span className="q-type-title">单项选择题 (客观对错)</span>
                       <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分 (完形 0.5分/题，阅读与新题型 2分/题)</span>
                     </div>
                     <div className="q-type-rows">
@@ -5014,7 +5354,7 @@ export function StudyDashboard() {
                                     type="button"
                                     className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
                                     title={`第 ${num} 题 [${grp.subject} · ${grp.scorePerQuestion}分]：点击切换正确 / 错误`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                                   >
                                     {num}
                                   </button>
@@ -5030,49 +5370,161 @@ export function StudyDashboard() {
                   {/* Part 2: 主观表达题 (46~52) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
-                      <span className="q-type-title">主观表达题</span>
-                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分 (翻译 10~15分 + 大小作文 25~30分)</span>
+                      <span className="q-type-title">主观表达题 (支持键入分数与三色等级)</span>
+                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分 (100% 🟢, ≥50% 🟡, &lt;50% 🔴)</span>
                     </div>
-                    <div className="q-comprehensive-clusters">
-                      {ENGLISH_PAPER_STRUCTURE.groups.filter((g) => g.type === "主观表达题").map((grp) => {
-                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                        const abbrMap: Record<string, string> = {
-                          "英译汉": "TR",
-                          "短文写作": "WR",
-                        };
-                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
+                    <div className="q-comp-grid q-comp-grid--english-subj">
+                      {/* 46~50 英译汉 */}
+                      {Array.from({ length: 5 }, (_, i) => 46 + i).map((num) => {
+                        const state = activeQuestionPaper.questions?.[num];
+                        const score = activeQuestionPaper.questionScores?.[num];
                         return (
-                          <div className="q-comp-cluster" key={`subj-${grp.subject}`}>
-                            <span className="q-comp-subject">{subjectAbbr}</span>
-                            <div className="q-comp-chips">
-                              {numbers.map((num) => {
-                                const state = activeQuestionPaper.questions?.[num];
-                                return (
-                                  <button
-                                    key={num}
-                                    type="button"
-                                    className={`q-chip-btn q-chip-btn--lg ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject}]：点击切换掌握 / 扣分`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
-                                  >
-                                    {num}
-                                  </button>
-                                );
-                              })}
+                          <div className="q-comp-card" key={num}>
+                            <div className="q-comp-card-top">
+                              <span className="q-comp-title">英译汉 {num - 45}</span>
+                              <span className="q-comp-max">2分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <button
+                                type="button"
+                                className={`q-state-cycle-btn ${state ? `state-${state}` : "state-unset"}`}
+                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, false)}
+                                title="点击轮转状态：🟢/🟡/🔴"
+                              >
+                                {state === "correct" ? "🟢 满分" : state === "partial" ? "🟡 部分" : state === "wrong" ? "🔴 扣分" : "⚪ 未评"}
+                              </button>
+                              <div className="q-score-input-box">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={2}
+                                  step={0.5}
+                                  placeholder="得分"
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 2)}
+                                />
+                                <span>/2</span>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
+
+                      {/* 51 小作文 */}
+                      {(() => {
+                        const num = 51;
+                        const state = activeQuestionPaper.questions?.[num];
+                        const score = activeQuestionPaper.questionScores?.[num];
+                        return (
+                          <div className="q-comp-card q-comp-card--large" key={num}>
+                            <div className="q-comp-card-top">
+                              <strong className="q-comp-title">第 51 题 应用文/小作文</strong>
+                              <span className="q-comp-max">满分 10 分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <div className="q-state-pills">
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-correct ${state === "correct" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
+                                >
+                                  🟢 满分
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-partial ${state === "partial" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
+                                >
+                                  🟡 良好 (≥5)
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-wrong ${state === "wrong" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
+                                >
+                                  🔴 偏低 (&lt;5)
+                                </button>
+                              </div>
+                              <div className="q-score-input-box">
+                                <span className="q-score-label">实得:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10}
+                                  step={0.5}
+                                  placeholder="0~10"
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 10)}
+                                />
+                                <span>/ 10分</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 52 大作文 */}
+                      {(() => {
+                        const num = 52;
+                        const state = activeQuestionPaper.questions?.[num];
+                        const score = activeQuestionPaper.questionScores?.[num];
+                        return (
+                          <div className="q-comp-card q-comp-card--large" key={num}>
+                            <div className="q-comp-card-top">
+                              <strong className="q-comp-title">第 52 题 短文写作/大作文</strong>
+                              <span className="q-comp-max">满分 20 分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <div className="q-state-pills">
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-correct ${state === "correct" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
+                                >
+                                  🟢 满分
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-partial ${state === "partial" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
+                                >
+                                  🟡 良好 (≥10)
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-wrong ${state === "wrong" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
+                                >
+                                  🔴 偏低 (&lt;10)
+                                </button>
+                              </div>
+                              <div className="q-score-input-box">
+                                <span className="q-score-label">实得:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={20}
+                                  step={0.5}
+                                  placeholder="0~20"
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, num, e.target.value, 20)}
+                                />
+                                <span>/ 20分</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
               ) : (
-                /* 408: 1~40 单选 (分 DS, CO, OS, CN), 41~47 综合大题 (分 DS, CO, OS, CN) */
-                <div className="q-408-container">
+                /* 408: 1~40 单选, 41~47 综合大题 */
+                <div className="q-subjective-container">
                   {/* Part 1: 选择题 (1~40) */}
                   <div className="q-type-block">
                     <div className="q-type-header">
-                      <span className="q-type-title">单项选择题</span>
+                      <span className="q-type-title">单项选择题 (点选对错)</span>
                       <span className="q-type-subtitle">第 1 ~ 40 题 · 每题 2 分 · 共 80 分</span>
                     </div>
                     <div className="q-type-rows">
@@ -5100,7 +5552,7 @@ export function StudyDashboard() {
                                     type="button"
                                     className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
                                     title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
                                   >
                                     {num}
                                   </button>
@@ -5116,37 +5568,70 @@ export function StudyDashboard() {
                   {/* Part 2: 综合应用题 (41~47) */}
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
-                      <span className="q-type-title">综合应用题</span>
-                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分</span>
+                      <span className="q-type-title">综合应用大题 (默认黄色部分对 · 点击切换 🟡➔🟢➔🔴 或键入得分)</span>
+                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分 (DS 41~42, CO 43~44, OS 45~46, CN 47)</span>
                     </div>
-                    <div className="q-comprehensive-clusters">
-                      {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "综合应用题").map((grp) => {
-                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                        const abbrMap: Record<string, string> = {
-                          "数据结构": "DS",
-                          "计算机组成原理": "CO",
-                          "操作系统": "OS",
-                          "计算机网络": "CN",
-                        };
-                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
+                    <div className="q-comp-grid q-comp-grid--408">
+                      {[
+                        { num: 41, subj: "DS", title: "数据结构算法", defaultMax: 13 },
+                        { num: 42, subj: "DS", title: "数据结构应用", defaultMax: 10 },
+                        { num: 43, subj: "CO", title: "组成原理指令与流水", defaultMax: 13 },
+                        { num: 44, subj: "CO", title: "组成原理存储与总线", defaultMax: 10 },
+                        { num: 45, subj: "OS", title: "操作系统进程与同步", defaultMax: 8 },
+                        { num: 46, subj: "OS", title: "操作系统内存与文件", defaultMax: 7 },
+                        { num: 47, subj: "CN", title: "计算机网络协议综合", defaultMax: 9 },
+                      ].map((item) => {
+                        const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
                         return (
-                          <div className="q-comp-cluster" key={`comp-${grp.subject}`}>
-                            <span className="q-comp-subject">{subjectAbbr}</span>
-                            <div className="q-comp-chips">
-                              {numbers.map((num) => {
-                                const state = activeQuestionPaper.questions?.[num];
-                                return (
-                                  <button
-                                    key={num}
-                                    type="button"
-                                    className={`q-chip-btn q-chip-btn--lg ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject}]：点击切换正确 / 错误`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
-                                  >
-                                    {num}
-                                  </button>
-                                );
-                              })}
+                          <div className="q-comp-card q-comp-card--large" key={item.num}>
+                            <div className="q-comp-card-top">
+                              <div className="q-comp-title-group">
+                                <span className="q-comp-badge">{item.subj}</span>
+                                <strong className="q-comp-title">第 {item.num} 题 · {item.title}</strong>
+                              </div>
+                              <span className="q-comp-max">约 {item.defaultMax} 分</span>
+                            </div>
+                            <div className="q-comp-card-actions">
+                              <div className="q-state-pills">
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-partial ${state === "partial" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                  title="默认或部分得分 (良)"
+                                >
+                                  🟡 部分得分
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-correct ${state === "correct" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                  title="满分或全掌握 (优)"
+                                >
+                                  🟢 满分/优
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`q-state-pill pill-wrong ${state === "wrong" ? "active" : ""}`}
+                                  onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                  title="未得分或失分较多 (差)"
+                                >
+                                  🔴 失分较多
+                                </button>
+                              </div>
+                              <div className="q-score-input-box">
+                                <span className="q-score-label">录入得分:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={20}
+                                  step={0.5}
+                                  placeholder="得分"
+                                  value={score ?? ""}
+                                  onChange={(e) => setPaperQuestionScore(activeQuestionPaper.id, item.num, e.target.value, item.defaultMax)}
+                                />
+                                <span>/ {item.defaultMax}分</span>
+                              </div>
                             </div>
                           </div>
                         );
