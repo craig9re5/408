@@ -734,6 +734,14 @@ export function StudyDashboard() {
     }
   }, [activeArea, sprintTab]);
 
+  useEffect(() => {
+    if (!feedbackMessage) return;
+    const timer = window.setTimeout(() => {
+      setFeedbackMessage("");
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [feedbackMessage]);
+
   const performLogin = useCallback(async (codeToSubmit: string) => {
     if (codeToSubmit.length !== 6 || isSubmitting) return;
     setIsSubmitting(true);
