@@ -627,9 +627,19 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
       const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
       const secondRound = p.secondRound || existing.secondRound;
       const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
-      const questions = p.questions || existing.questions
-        ? { ...(existing.questions ?? {}), ...(p.questions ?? {}) }
-        : undefined;
+      let questions: Record<number, QuestionState> | undefined = undefined;
+      if (p.questions !== undefined && Object.keys(p.questions).length === 0) {
+        questions = {};
+      } else if (p.questions || existing.questions) {
+        questions = { ...(existing.questions ?? {}), ...(p.questions ?? {}) };
+      }
+
+      let questionScores: Record<number, number> | undefined = undefined;
+      if (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0) {
+        questionScores = {};
+      } else if (p.questionScores || existing.questionScores) {
+        questionScores = { ...(existing.questionScores ?? {}), ...(p.questionScores ?? {}) };
+      }
       map.set(p.id, {
         ...existing,
         ...p,
@@ -640,6 +650,7 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
         secondRound,
         secondRoundAt,
         questions,
+        questionScores,
       });
     }
   });

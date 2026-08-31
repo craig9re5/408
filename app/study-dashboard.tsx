@@ -689,7 +689,7 @@ export function StudyDashboard() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [authState, loaded, planHistory, progress, projectSettings, journals, repository]);
+  }, [authState, loaded, planHistory, progress, projectSettings, journals, papers, repository]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -2005,6 +2005,16 @@ export function StudyDashboard() {
     setBackups(repository().deleteBackup(id));
     setPendingDeleteBackup(null);
     setFeedbackMessage("已删除本地快照");
+  }
+
+  async function clearAllPaperRecords() {
+    if (!window.confirm("确定要清空全部套卷和题目的完成记录与打分吗？此操作将重置所有历年真题与模拟卷的做题状态。")) return;
+    const cleanPapers = defaultPastPapers();
+    setPapers(cleanPapers);
+    const cleanAppData = createAppData(progress, projectSettings, planHistory, journals, cleanPapers);
+    repository().save(cleanAppData);
+    await replaceCloudData(cleanAppData);
+    setFeedbackMessage("已清空全部套卷与题目的做题记录");
   }
 
   function updateExamStartDate(value: string) {
@@ -3892,6 +3902,9 @@ export function StudyDashboard() {
                         </button>
                         <button type="button" className="settings-btn settings-btn--secondary" onClick={() => importInputRef.current?.click()}>
                           导入 JSON
+                        </button>
+                        <button type="button" className="settings-btn settings-btn--danger" onClick={clearAllPaperRecords} title="清空全部历年真题与模拟卷的做题与打分记录">
+                          清空套卷记录
                         </button>
                       </div>
                       {storageLoadIssue && (

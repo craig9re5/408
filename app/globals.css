@@ -536,6 +536,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .settings-btn--primary:hover { background: var(--sidebar-soft); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(17,27,36,.14); }
 .settings-btn--secondary { border: 1px solid #d0d5d2; color: var(--ink-soft); background: #fff; box-shadow: 0 1px 3px rgba(35,42,44,.03); }
 .settings-btn--secondary:hover { border-color: #b0b8b3; color: var(--ink); transform: translateY(-1px); }
+.settings-btn--danger { border: 1px solid rgba(220, 53, 69, 0.28); color: #c9563f; background: rgba(220, 53, 69, 0.04); }
+.settings-btn--danger:hover { border-color: #dc2626; color: #fff; background: #dc2626; transform: translateY(-1px); }
 .backup-create { padding: 6px 12px; border: 1px solid #cfd4d0; border-radius: 7px; color: #43514c; background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .16s ease; }
 .backup-create:hover { border-color: #a4aea7; background: #fdfdfc; transform: translateY(-1px); }
 .recovery-export { margin-top: 10px; padding: 6px 0; color: #ae5f52; background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

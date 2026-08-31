@@ -743,3 +743,53 @@ test("Sprint 交互与真题排序 / 批量错题范围解析测试", () => {
   assert.ok(!wrongSet.has(4));
   assert.ok(!wrongSet.has(9));
 });
+
+test("Sprint: 清空全部套卷记录与题号状态深度校验", () => {
+  const base = defaultPastPapers();
+  // 模拟做题与打分
+  const modified = base.map((p) => {
+    if (p.id === "past-408-2026") {
+      return {
+        ...p,
+        completed: true,
+        completedAt: "2026-08-31",
+        score: 135,
+        secondRound: true,
+        secondRoundAt: "2026-08-31",
+        questions: { 1: "correct", 2: "wrong" },
+        questionScores: { 41: 12 },
+      };
+    }
+    return p;
+  });
+
+  const target = modified.find((p) => p.id === "past-408-2026");
+  assert.equal(target?.completed, true);
+  assert.equal(target?.score, 135);
+  assert.equal(target?.questions?.[1], "correct");
+
+  // 执行彻底清空重置
+  const cleaned = defaultPastPapers();
+  assert.equal(cleaned.every((p) => !p.completed && p.score === null && !p.secondRound && !p.questions && !p.questionScores), true);
+
+  // 验证合并空 questions 能够准确清理旧状态
+  const clearedPaper = [{
+    id: "past-408-2026",
+    kind: "past",
+    area: "408",
+    title: "2026年 408真题",
+    completed: false,
+    completedAt: "",
+    score: null,
+    durationMinutes: null,
+    secondRound: false,
+    secondRoundAt: "",
+    questions: {},
+    questionScores: {},
+  }];
+  const remerged = mergePapers(clearedPaper, modified);
+  const remerged2026 = remerged.find((p) => p.id === "past-408-2026");
+  assert.deepEqual(remerged2026?.questions, {});
+  assert.deepEqual(remerged2026?.questionScores, {});
+});
+
