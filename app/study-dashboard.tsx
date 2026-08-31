@@ -1324,6 +1324,33 @@ export function StudyDashboard() {
     const qSummary = getPaperQuestionSummary(paper);
     const hasRecorded = Boolean(paper.questions && Object.keys(paper.questions).length > 0);
 
+    if (!hasRecorded) {
+      return (
+        <div
+          className="bento-mini-heatmap bento-mini-heatmap--empty"
+          title="点击打开答题卡录入做题表现"
+          onClick={() => {
+            setActivePaperQuestionModalId(paper.id);
+            setQuickWrongInput("");
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setActivePaperQuestionModalId(paper.id);
+              setQuickWrongInput("");
+            }
+          }}
+        >
+          <div className="bento-empty-slot">
+            <span className="bento-empty-slot__icon">📝</span>
+            <span className="bento-empty-slot__text">点击录入做题情况</span>
+            <span className="bento-empty-slot__btn">+ 答题卡</span>
+          </div>
+        </div>
+      );
+    }
+
     if (paper.area === "408") {
       const choiceGroups = [
         { name: "DS", start: 1, count: 11 },
@@ -3247,13 +3274,16 @@ export function StudyDashboard() {
                                       min={0}
                                       max={activeArea === "english" ? 100 : 150}
                                       step={0.5}
-                                      placeholder="--"
+                                      placeholder="分数"
                                       value={paper.score ?? ""}
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
                                       }}
                                     />
+                                    {paper.score !== null && paper.score !== undefined && (
+                                      <span className="bento-score-unit">分</span>
+                                    )}
                                   </div>
 
                                   <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
@@ -3365,13 +3395,16 @@ export function StudyDashboard() {
                                         min={0}
                                         max={150}
                                         step={0.5}
-                                        placeholder="--"
+                                        placeholder="分数"
                                         value={paper.score ?? ""}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
                                         }}
                                       />
+                                      {paper.score !== null && paper.score !== undefined && (
+                                        <span className="bento-score-unit">分</span>
+                                      )}
                                     </div>
 
                                     <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
