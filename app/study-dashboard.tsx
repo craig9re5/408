@@ -541,6 +541,7 @@ export function StudyDashboard() {
   const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
   const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
+  const [sprintViewMode, setSprintViewMode] = useState<"split" | "bento">("split");
   const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
@@ -2647,6 +2648,25 @@ export function StudyDashboard() {
                 </div>
 
                 <div className="sprint-toolbar-right">
+                  <div className="sprint-view-switch" role="group" aria-label="排版视图切换">
+                    <button
+                      type="button"
+                      className={`view-switch-btn ${sprintViewMode === "split" ? "active" : ""}`}
+                      title="方案A：分屏表格 + 冲刺画像"
+                      onClick={() => setSprintViewMode("split")}
+                    >
+                      📑 分屏表格 (方案A)
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-switch-btn ${sprintViewMode === "bento" ? "active" : ""}`}
+                      title="方案C：模块化 Bento 卡片流网格"
+                      onClick={() => setSprintViewMode("bento")}
+                    >
+                      🍱 Bento卡片 (方案C)
+                    </button>
+                  </div>
+
                   <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
                     <button
                       type="button"
@@ -2673,158 +2693,149 @@ export function StudyDashboard() {
                 </div>
               </div>
 
-              <div className="sprint-layout-split">
-                {/* Left: Papers Table Flow */}
-                <div className="sprint-left-flow">
+              {sprintViewMode === "bento" ? (
+                <div className="sprint-bento-container">
                   {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
-                    <section className="sprint-section" aria-labelledby="past-papers-heading">
+                    <section className="sprint-section" aria-labelledby="past-bento-heading">
                       <div className="sprint-section-header">
-                        <h3 id="past-papers-heading">真题</h3>
+                        <h3 id="past-bento-heading">真题</h3>
                       </div>
-
-                      <div className="paper-table paper-table--compact">
-                        <div className="paper-table-head" aria-hidden="true">
-                          <span>年份</span>
-                          <span>打卡</span>
-                          <span>模考得分</span>
-                          <span>答题卡</span>
-                          <span>二刷</span>
-                          <span>复盘日志</span>
-                        </div>
-
+                      <div className="sprint-bento-grid">
                         {visiblePastPapers.map((paper) => {
                           const paperJournals = journalsByPaper[paper.id] ?? [];
                           const qSummary = getPaperQuestionSummary(paper);
                           return (
-                            <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                              <div className="paper-name paper-name--yearonly">
-                                <span className="paper-year-pill">{paper.year}</span>
+                            <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                              <div className="bento-card-top">
+                                <span className="bento-year-pill">{paper.year}</span>
+                                <div className="bento-check-wrap">
+                                  <label className="paper-check-label" aria-label={`${paper.year}年真题完成打卡`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={paper.completed}
+                                      onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
+                                    />
+                                    <span />
+                                  </label>
+                                  {paper.completed ? (
+                                    <EditableDate
+                                      value={paper.completedAt}
+                                      emptyLabel="未设置日期"
+                                      ariaLabel={`${paper.year}年真题完成日期`}
+                                      onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+                                    />
+                                  ) : (
+                                    <span className="bento-status-hint">未做</span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="paper-check-col">
-                                <label className="paper-check-label" aria-label={`${paper.year}年真题完成打卡`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={paper.completed}
-                                    onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
-                                  />
-                                  <span />
-                                </label>
-                                {paper.completed ? (
-                                  <EditableDate
-                                    value={paper.completedAt}
-                                    emptyLabel="未设置日期"
-                                    ariaLabel={`${paper.year}年真题完成日期`}
-                                    onChange={(val) => updatePaper(paper.id, { completedAt: val })}
-                                  />
-                                ) : (
-                                  <span className="paper-status-hint">未做</span>
-                                )}
+                              <div className="bento-card-metrics">
+                                <div className="bento-metric-box">
+                                  <span className="bento-metric-label">模考得分</span>
+                                  {paper.score !== null && paper.score !== undefined ? (
+                                    <button
+                                      type="button"
+                                      className="bento-score-val"
+                                      title="点击修改得分"
+                                      onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
+                                    >
+                                      <strong>{paper.score}</strong> <small>/ 150分</small>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="bento-btn-add"
+                                      onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
+                                    >
+                                      + 记录得分
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="bento-metric-box">
+                                  <span className="bento-metric-label">选择题正答率</span>
+                                  {qSummary && qSummary.choiceAccuracyPercent !== null ? (
+                                    <button
+                                      type="button"
+                                      className="bento-pill-q"
+                                      title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
+                                      onClick={() => {
+                                        setActivePaperQuestionModalId(paper.id);
+                                        setQuickWrongInput("");
+                                      }}
+                                    >
+                                      <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                                    </button>
+                                  ) : qSummary && qSummary.totalRecorded > 0 ? (
+                                    <button
+                                      type="button"
+                                      className="bento-pill-q"
+                                      title="已录入答题卡 · 点击打开"
+                                      onClick={() => {
+                                        setActivePaperQuestionModalId(paper.id);
+                                        setQuickWrongInput("");
+                                      }}
+                                    >
+                                      <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="bento-btn-add"
+                                      onClick={() => {
+                                        setActivePaperQuestionModalId(paper.id);
+                                        setQuickWrongInput("");
+                                      }}
+                                    >
+                                      + 答题卡
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="paper-score-col">
-                                {paper.score !== null && paper.score !== undefined ? (
-                                  <button
-                                    type="button"
-                                    className="paper-score-pill"
-                                    title="点击修改得分"
-                                    onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
-                                  >
-                                    <strong>{paper.score}</strong> <small>分</small>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="paper-btn-add-val"
-                                    onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
-                                  >
-                                    + 得分
-                                  </button>
-                                )}
-                              </div>
+                              <div className="bento-card-footer">
+                                <div className="bento-second-wrap">
+                                  <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(paper.secondRound)}
+                                      onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
+                                    />
+                                    <span />
+                                  </label>
+                                  <span className="bento-second-text">{paper.secondRound ? (paper.secondRoundAt ? formatDateShort(paper.secondRoundAt) : "已二刷") : "二刷"}</span>
+                                </div>
 
-                              <div className="paper-q-col">
-                                {qSummary && qSummary.choiceAccuracyPercent !== null ? (
+                                <div className="bento-actions-wrap">
+                                  {paperJournals.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="section-journal-badge"
+                                      title={`查看此真题的 ${paperJournals.length} 条复盘日志`}
+                                      onClick={() => {
+                                        setJournalSearchQuery(paper.title);
+                                        setActivePage("today");
+                                      }}
+                                    >
+                                      📝 <span>{paperJournals.length}</span>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    className="paper-q-pill"
-                                    title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
-                                    onClick={() => {
-                                      setActivePaperQuestionModalId(paper.id);
-                                      setQuickWrongInput("");
-                                    }}
+                                    className="section-record-btn"
+                                    title="写一条关于该真题的复盘日志"
+                                    onClick={() => openCreateJournal({
+                                      type: "paper",
+                                      area: activeArea,
+                                      paperId: paper.id,
+                                      paperTitle: paper.title,
+                                    })}
                                   >
-                                    <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                                    <span className="record-plus">+</span>
+                                    <span className="record-label">记</span>
                                   </button>
-                                ) : qSummary && qSummary.totalRecorded > 0 ? (
-                                  <button
-                                    type="button"
-                                    className="paper-q-pill"
-                                    title={`已录入答题卡 · 点击打开`}
-                                    onClick={() => {
-                                      setActivePaperQuestionModalId(paper.id);
-                                      setQuickWrongInput("");
-                                    }}
-                                  >
-                                    <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="paper-btn-add-val paper-btn-q-add"
-                                    title="录入每道题的做题对错情况"
-                                    onClick={() => {
-                                      setActivePaperQuestionModalId(paper.id);
-                                      setQuickWrongInput("");
-                                    }}
-                                  >
-                                    + 答题卡
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="paper-second-col">
-                                <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(paper.secondRound)}
-                                    onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
-                                  />
-                                  <span />
-                                </label>
-                                {paper.secondRound && (
-                                  <span className="paper-second-date">{formatDateShort(paper.secondRoundAt)}</span>
-                                )}
-                              </div>
-
-                              <div className="paper-actions-col">
-                                {paperJournals.length > 0 && (
-                                  <button
-                                    type="button"
-                                    className="section-journal-badge"
-                                    title={`查看此真题的 ${paperJournals.length} 条复盘日志`}
-                                    onClick={() => {
-                                      setJournalSearchQuery(paper.title);
-                                      setActivePage("today");
-                                    }}
-                                  >
-                                    📝 <span>{paperJournals.length}</span>
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  className="section-record-btn"
-                                  title="写一条关于该真题的复盘日志"
-                                  onClick={() => openCreateJournal({
-                                    type: "paper",
-                                    area: activeArea,
-                                    paperId: paper.id,
-                                    paperTitle: paper.title,
-                                  })}
-                                >
-                                  <span className="record-plus">+</span>
-                                  <span className="record-label">记</span>
-                                </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2834,9 +2845,9 @@ export function StudyDashboard() {
                   )}
 
                   {(sprintTab === "all" || sprintTab === "mock") && (
-                    <section className="sprint-section" aria-labelledby="mock-papers-heading">
+                    <section className="sprint-section" aria-labelledby="mock-bento-heading">
                       <div className="sprint-section-header">
-                        <h3 id="mock-papers-heading">模拟题</h3>
+                        <h3 id="mock-bento-heading">模拟题</h3>
                         <button
                           type="button"
                           className="btn-add-mock-paper"
@@ -2851,30 +2862,184 @@ export function StudyDashboard() {
                           <p>暂无模拟试卷</p>
                         </div>
                       ) : (
-                        <div className="paper-table paper-table--mock">
-                          <div className="paper-table-head paper-table-head--mock" aria-hidden="true">
-                            <span>模拟试卷</span>
-                            <span>打卡</span>
-                            <span>模考得分</span>
-                            <span>答题卡</span>
-                            <span>复盘日志</span>
-                            <span>操作</span>
-                          </div>
-
+                        <div className="sprint-bento-grid">
                           {visibleMockPapers.map((paper) => {
                             const paperJournals = journalsByPaper[paper.id] ?? [];
                             const qSummary = getPaperQuestionSummary(paper);
                             return (
-                              <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                                <div className="paper-name">
-                                  {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
-                                  <div className="paper-title-group">
-                                    <strong>{paper.title}</strong>
+                              <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                                <div className="bento-card-top">
+                                  <div className="bento-title-wrap">
+                                    {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
+                                    <strong className="bento-paper-title">{paper.title}</strong>
+                                  </div>
+                                  <div className="bento-top-actions">
+                                    <label className="paper-check-label" aria-label={`${paper.title} 完成打卡`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={paper.completed}
+                                        onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
+                                      />
+                                      <span />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      className="paper-btn-del"
+                                      title="删除该模拟卷"
+                                      onClick={() => setPendingDeletePaperId(paper.id)}
+                                    >
+                                      ✕
+                                    </button>
                                   </div>
                                 </div>
 
+                                <div className="bento-card-metrics">
+                                  <div className="bento-metric-box">
+                                    <span className="bento-metric-label">模考得分</span>
+                                    {paper.score !== null && paper.score !== undefined ? (
+                                      <button
+                                        type="button"
+                                        className="bento-score-val"
+                                        title="点击修改得分"
+                                        onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
+                                      >
+                                        <strong>{paper.score}</strong> <small>/ 150分</small>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="bento-btn-add"
+                                        onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
+                                      >
+                                        + 记录得分
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="bento-metric-box">
+                                    <span className="bento-metric-label">选择题正答率</span>
+                                    {qSummary && qSummary.choiceAccuracyPercent !== null ? (
+                                      <button
+                                        type="button"
+                                        className="bento-pill-q"
+                                        title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                                      </button>
+                                    ) : qSummary && qSummary.totalRecorded > 0 ? (
+                                      <button
+                                        type="button"
+                                        className="bento-pill-q"
+                                        title="已录入答题卡 · 点击打开"
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="bento-btn-add"
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        + 答题卡
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="bento-card-footer">
+                                  <div className="bento-date-wrap">
+                                    {paper.completed ? (
+                                      <EditableDate
+                                        value={paper.completedAt}
+                                        emptyLabel="未设置日期"
+                                        ariaLabel={`${paper.title} 完成日期`}
+                                        onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+                                      />
+                                    ) : (
+                                      <span className="bento-status-hint">未做</span>
+                                    )}
+                                  </div>
+
+                                  <div className="bento-actions-wrap">
+                                    {paperJournals.length > 0 && (
+                                      <button
+                                        type="button"
+                                        className="section-journal-badge"
+                                        title={`查看此模拟卷的 ${paperJournals.length} 条复盘日志`}
+                                        onClick={() => {
+                                          setJournalSearchQuery(paper.title);
+                                          setActivePage("today");
+                                        }}
+                                      >
+                                        📝 <span>{paperJournals.length}</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="section-record-btn"
+                                      title="写一条关于该模拟卷的复盘日志"
+                                      onClick={() => openCreateJournal({
+                                        type: "paper",
+                                        area: activeArea,
+                                        paperId: paper.id,
+                                        paperTitle: paper.title,
+                                      })}
+                                    >
+                                      <span className="record-plus">+</span>
+                                      <span className="record-label">记</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                </div>
+              ) : (
+                <div className="sprint-layout-split">
+                  {/* Left: Papers Table Flow */}
+                  <div className="sprint-left-flow">
+                    {(sprintTab === "all" || sprintTab === "past") && visiblePastPapers.length > 0 && (
+                      <section className="sprint-section" aria-labelledby="past-papers-heading">
+                        <div className="sprint-section-header">
+                          <h3 id="past-papers-heading">真题</h3>
+                        </div>
+
+                        <div className="paper-table paper-table--compact">
+                          <div className="paper-table-head" aria-hidden="true">
+                            <span>年份</span>
+                            <span>打卡</span>
+                            <span>模考得分</span>
+                            <span>答题卡</span>
+                            <span>二刷</span>
+                            <span>复盘日志</span>
+                          </div>
+
+                          {visiblePastPapers.map((paper) => {
+                            const paperJournals = journalsByPaper[paper.id] ?? [];
+                            const qSummary = getPaperQuestionSummary(paper);
+                            return (
+                              <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                                <div className="paper-name paper-name--yearonly">
+                                  <span className="paper-year-pill">{paper.year}</span>
+                                </div>
+
                                 <div className="paper-check-col">
-                                  <label className="paper-check-label" aria-label={`${paper.title} 完成打卡`}>
+                                  <label className="paper-check-label" aria-label={`${paper.year}年真题完成打卡`}>
                                     <input
                                       type="checkbox"
                                       checked={paper.completed}
@@ -2886,7 +3051,7 @@ export function StudyDashboard() {
                                     <EditableDate
                                       value={paper.completedAt}
                                       emptyLabel="未设置日期"
-                                      ariaLabel={`${paper.title} 完成日期`}
+                                      ariaLabel={`${paper.year}年真题完成日期`}
                                       onChange={(val) => updatePaper(paper.id, { completedAt: val })}
                                     />
                                   ) : (
@@ -2955,12 +3120,26 @@ export function StudyDashboard() {
                                   )}
                                 </div>
 
+                                <div className="paper-second-col">
+                                  <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(paper.secondRound)}
+                                      onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
+                                    />
+                                    <span />
+                                  </label>
+                                  {paper.secondRound && (
+                                    <span className="paper-second-date">{formatDateShort(paper.secondRoundAt)}</span>
+                                  )}
+                                </div>
+
                                 <div className="paper-actions-col">
                                   {paperJournals.length > 0 && (
                                     <button
                                       type="button"
                                       className="section-journal-badge"
-                                      title={`查看此模拟卷的 ${paperJournals.length} 条复盘日志`}
+                                      title={`查看此真题的 ${paperJournals.length} 条复盘日志`}
                                       onClick={() => {
                                         setJournalSearchQuery(paper.title);
                                         setActivePage("today");
@@ -2972,7 +3151,7 @@ export function StudyDashboard() {
                                   <button
                                     type="button"
                                     className="section-record-btn"
-                                    title="写一条关于该模拟卷的复盘日志"
+                                    title="写一条关于该真题的复盘日志"
                                     onClick={() => openCreateJournal({
                                       type: "paper",
                                       area: activeArea,
@@ -2984,159 +3163,318 @@ export function StudyDashboard() {
                                     <span className="record-label">记</span>
                                   </button>
                                 </div>
-
-                                <div className="paper-op-col">
-                                  <button
-                                    type="button"
-                                    className="paper-btn-del"
-                                    title="删除该模拟卷"
-                                    onClick={() => setPendingDeletePaperId(paper.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
                               </div>
                             );
                           })}
                         </div>
-                      )}
-                    </section>
-                  )}
-                </div>
+                      </section>
+                    )}
 
-                {/* Right: Sprint Insights & Weakness Diagnostics Card */}
-                <aside className="sprint-insights-sidebar" aria-label="冲刺学情画像">
-                  {/* Card 1: Subject Accuracy Diagnostics */}
-                  <div className="sprint-insight-card">
-                    <div className="insight-card-header">
-                      <span className="insight-card-icon">🎯</span>
-                      <h4 className="insight-card-title">{activeArea === "408" ? "四科选择题正答率诊断" : "各题型正答率诊断"}</h4>
-                    </div>
-                    <div className="insight-subject-list">
-                      {(() => {
-                        const diagnostics = (() => {
-                          if (activeArea === "408") {
-                            const list = [
-                              { key: "DS", name: "数据结构", range: "1~11 题", start: 1, end: 11, correct: 0, total: 0 },
-                              { key: "CO", name: "组成原理", range: "12~22 题", start: 12, end: 22, correct: 0, total: 0 },
-                              { key: "OS", name: "操作系统", range: "23~32 题", start: 23, end: 32, correct: 0, total: 0 },
-                              { key: "CN", name: "计算机网络", range: "33~40 题", start: 33, end: 40, correct: 0, total: 0 },
-                            ];
-                            for (const p of sprintAreaPapers) {
-                              if (!p.questions) continue;
-                              for (const item of list) {
-                                for (let q = item.start; q <= item.end; q++) {
-                                  const st = p.questions[q];
-                                  if (st === "correct") { item.correct++; item.total++; }
-                                  else if (st === "wrong") { item.total++; }
-                                }
-                              }
-                            }
-                            return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
-                          } else {
-                            const list = [
-                              { key: "选择题", name: "单项选择", range: "1~10 题", start: 1, end: 10, correct: 0, total: 0 },
-                              { key: "填空题", name: "填空题", range: "11~16 题", start: 11, end: 16, correct: 0, total: 0 },
-                              { key: "解答题", name: "解答题", range: "17~22 题", start: 17, end: 22, correct: 0, total: 0 },
-                            ];
-                            for (const p of sprintAreaPapers) {
-                              if (!p.questions) continue;
-                              for (const item of list) {
-                                for (let q = item.start; q <= item.end; q++) {
-                                  const st = p.questions[q];
-                                  if (st === "correct") { item.correct++; item.total++; }
-                                  else if (st === "wrong") { item.total++; }
-                                }
-                              }
-                            }
-                            return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
-                          }
-                        })();
+                    {(sprintTab === "all" || sprintTab === "mock") && (
+                      <section className="sprint-section" aria-labelledby="mock-papers-heading">
+                        <div className="sprint-section-header">
+                          <h3 id="mock-papers-heading">模拟题</h3>
+                          <button
+                            type="button"
+                            className="btn-add-mock-paper"
+                            onClick={() => setIsAddMockModalOpen(true)}
+                          >
+                            + 添加模拟卷
+                          </button>
+                        </div>
 
-                        return diagnostics.map((d) => (
-                          <div className="insight-subject-item" key={d.key}>
-                            <div className="insight-subj-meta">
-                              <div className="insight-subj-tag">
-                                <strong className="insight-badge">{d.key}</strong>
-                                <span className="insight-name">{d.name}</span>
-                              </div>
-                              <div className="insight-subj-stat">
-                                {d.rate !== null ? (
-                                  <span className={`insight-rate-pill ${d.rate >= 80 ? "rate-high" : d.rate >= 60 ? "rate-mid" : "rate-low"}`}>
-                                    {d.rate}% <small>({d.correct}/{d.total})</small>
-                                  </span>
-                                ) : (
-                                  <span className="insight-rate-empty">未录入</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="insight-subj-bar">
-                              <div
-                                className={`insight-subj-fill ${d.rate !== null && d.rate >= 80 ? "fill-high" : d.rate !== null && d.rate >= 60 ? "fill-mid" : "fill-low"}`}
-                                style={{ width: `${d.rate ?? 0}%` }}
-                              />
-                            </div>
+                        {visibleMockPapers.length === 0 ? (
+                          <div className="sprint-empty-card">
+                            <p>暂无模拟试卷</p>
                           </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
+                        ) : (
+                          <div className="paper-table paper-table--mock">
+                            <div className="paper-table-head paper-table-head--mock" aria-hidden="true">
+                              <span>模拟试卷</span>
+                              <span>打卡</span>
+                              <span>模考得分</span>
+                              <span>答题卡</span>
+                              <span>复盘日志</span>
+                              <span>操作</span>
+                            </div>
 
-                  {/* Card 2: Score Trend / Recent Performance */}
-                  <div className="sprint-insight-card">
-                    <div className="insight-card-header">
-                      <span className="insight-card-icon">📈</span>
-                      <h4 className="insight-card-title">近年模考得分走势</h4>
-                    </div>
-                    {(() => {
-                      const scored = sprintAreaPapers
-                        .filter((p) => p.score !== null && p.score !== undefined)
-                        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-                        .slice(0, 7);
-                      if (scored.length === 0) {
-                        return <p className="insight-empty-text">录入试卷模考得分后，此处将自动绘制成绩走势</p>;
-                      }
-                      const scores = scored.map((p) => p.score as number);
-                      const maxScore = Math.max(...scores);
-                      const minScore = Math.min(...scores);
-                      const avgScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
-                      return (
-                        <div className="insight-score-trend-wrap">
-                          <div className="insight-score-summary-grid">
-                            <div className="insight-score-kpi">
-                              <span>最高</span>
-                              <strong className="kpi-high">{maxScore}</strong>
-                            </div>
-                            <div className="insight-score-kpi">
-                              <span>平均</span>
-                              <strong className="kpi-avg">{avgScore}</strong>
-                            </div>
-                            <div className="insight-score-kpi">
-                              <span>最低</span>
-                              <strong className="kpi-low">{minScore}</strong>
-                            </div>
-                          </div>
-                          <div className="insight-score-bars">
-                            {scored.map((p) => {
-                              const sc = p.score as number;
-                              const heightPercent = Math.max(15, Math.round((sc / 150) * 100));
+                            {visibleMockPapers.map((paper) => {
+                              const paperJournals = journalsByPaper[paper.id] ?? [];
+                              const qSummary = getPaperQuestionSummary(paper);
                               return (
-                                <div className="insight-score-bar-col" key={p.id} title={`${p.title}: ${sc}分`}>
-                                  <span className="score-bar-val">{sc}</span>
-                                  <div className="score-bar-track">
-                                    <div className="score-bar-fill" style={{ height: `${heightPercent}%` }} />
+                                <div className={`paper-row ${paper.completed ? "completed" : ""}`} key={paper.id}>
+                                  <div className="paper-name">
+                                    {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
+                                    <div className="paper-title-group">
+                                      <strong>{paper.title}</strong>
+                                    </div>
                                   </div>
-                                  <span className="score-bar-label">{p.type === "past" ? `${p.year}` : p.title.slice(0, 4)}</span>
+
+                                  <div className="paper-check-col">
+                                    <label className="paper-check-label" aria-label={`${paper.title} 完成打卡`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={paper.completed}
+                                        onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
+                                      />
+                                      <span />
+                                    </label>
+                                    {paper.completed ? (
+                                      <EditableDate
+                                        value={paper.completedAt}
+                                        emptyLabel="未设置日期"
+                                        ariaLabel={`${paper.title} 完成日期`}
+                                        onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+                                      />
+                                    ) : (
+                                      <span className="paper-status-hint">未做</span>
+                                    )}
+                                  </div>
+
+                                  <div className="paper-score-col">
+                                    {paper.score !== null && paper.score !== undefined ? (
+                                      <button
+                                        type="button"
+                                        className="paper-score-pill"
+                                        title="点击修改得分"
+                                        onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
+                                      >
+                                        <strong>{paper.score}</strong> <small>分</small>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="paper-btn-add-val"
+                                        onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
+                                      >
+                                        + 得分
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="paper-q-col">
+                                    {qSummary && qSummary.choiceAccuracyPercent !== null ? (
+                                      <button
+                                        type="button"
+                                        className="paper-q-pill"
+                                        title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
+                                      </button>
+                                    ) : qSummary && qSummary.totalRecorded > 0 ? (
+                                      <button
+                                        type="button"
+                                        className="paper-q-pill"
+                                        title={`已录入答题卡 · 点击打开`}
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="paper-btn-add-val paper-btn-q-add"
+                                        title="录入每道题的做题对错情况"
+                                        onClick={() => {
+                                          setActivePaperQuestionModalId(paper.id);
+                                          setQuickWrongInput("");
+                                        }}
+                                      >
+                                        + 答题卡
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="paper-actions-col">
+                                    {paperJournals.length > 0 && (
+                                      <button
+                                        type="button"
+                                        className="section-journal-badge"
+                                        title={`查看此模拟卷的 ${paperJournals.length} 条复盘日志`}
+                                        onClick={() => {
+                                          setJournalSearchQuery(paper.title);
+                                          setActivePage("today");
+                                        }}
+                                      >
+                                        📝 <span>{paperJournals.length}</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="section-record-btn"
+                                      title="写一条关于该模拟卷的复盘日志"
+                                      onClick={() => openCreateJournal({
+                                        type: "paper",
+                                        area: activeArea,
+                                        paperId: paper.id,
+                                        paperTitle: paper.title,
+                                      })}
+                                    >
+                                      <span className="record-plus">+</span>
+                                      <span className="record-label">记</span>
+                                    </button>
+                                  </div>
+
+                                  <div className="paper-op-col">
+                                    <button
+                                      type="button"
+                                      className="paper-btn-del"
+                                      title="删除该模拟卷"
+                                      onClick={() => setPendingDeletePaperId(paper.id)}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
-                        </div>
-                      );
-                    })()}
+                        )}
+                      </section>
+                    )}
                   </div>
-                </aside>
-              </div>
+
+                  {/* Right: Sprint Insights & Weakness Diagnostics Card */}
+                  <aside className="sprint-insights-sidebar" aria-label="冲刺学情画像">
+                    {/* Card 1: Subject Accuracy Diagnostics */}
+                    <div className="sprint-insight-card">
+                      <div className="insight-card-header">
+                        <span className="insight-card-icon">🎯</span>
+                        <h4 className="insight-card-title">{activeArea === "408" ? "四科选择题正答率诊断" : "各题型正答率诊断"}</h4>
+                      </div>
+                      <div className="insight-subject-list">
+                        {(() => {
+                          const diagnostics = (() => {
+                            if (activeArea === "408") {
+                              const list = [
+                                { key: "DS", name: "数据结构", range: "1~11 题", start: 1, end: 11, correct: 0, total: 0 },
+                                { key: "CO", name: "组成原理", range: "12~22 题", start: 12, end: 22, correct: 0, total: 0 },
+                                { key: "OS", name: "操作系统", range: "23~32 题", start: 23, end: 32, correct: 0, total: 0 },
+                                { key: "CN", name: "计算机网络", range: "33~40 题", start: 33, end: 40, correct: 0, total: 0 },
+                              ];
+                              for (const p of sprintAreaPapers) {
+                                if (!p.questions) continue;
+                                for (const item of list) {
+                                  for (let q = item.start; q <= item.end; q++) {
+                                    const st = p.questions[q];
+                                    if (st === "correct") { item.correct++; item.total++; }
+                                    else if (st === "wrong") { item.total++; }
+                                  }
+                                }
+                              }
+                              return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
+                            } else {
+                              const list = [
+                                { key: "选择题", name: "单项选择", range: "1~10 题", start: 1, end: 10, correct: 0, total: 0 },
+                                { key: "填空题", name: "填空题", range: "11~16 题", start: 11, end: 16, correct: 0, total: 0 },
+                                { key: "解答题", name: "解答题", range: "17~22 题", start: 17, end: 22, correct: 0, total: 0 },
+                              ];
+                              for (const p of sprintAreaPapers) {
+                                if (!p.questions) continue;
+                                for (const item of list) {
+                                  for (let q = item.start; q <= item.end; q++) {
+                                    const st = p.questions[q];
+                                    if (st === "correct") { item.correct++; item.total++; }
+                                    else if (st === "wrong") { item.total++; }
+                                  }
+                                }
+                              }
+                              return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
+                            }
+                          })();
+
+                          return diagnostics.map((d) => (
+                            <div className="insight-subject-item" key={d.key}>
+                              <div className="insight-subj-meta">
+                                <div className="insight-subj-tag">
+                                  <strong className="insight-badge">{d.key}</strong>
+                                  <span className="insight-name">{d.name}</span>
+                                </div>
+                                <div className="insight-subj-stat">
+                                  {d.rate !== null ? (
+                                    <span className={`insight-rate-pill ${d.rate >= 80 ? "rate-high" : d.rate >= 60 ? "rate-mid" : "rate-low"}`}>
+                                      {d.rate}% <small>({d.correct}/{d.total})</small>
+                                    </span>
+                                  ) : (
+                                    <span className="insight-rate-empty">未录入</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="insight-subj-bar">
+                                <div
+                                  className={`insight-subj-fill ${d.rate !== null && d.rate >= 80 ? "fill-high" : d.rate !== null && d.rate >= 60 ? "fill-mid" : "fill-low"}`}
+                                  style={{ width: `${d.rate ?? 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Card 2: Score Trend / Recent Performance */}
+                    <div className="sprint-insight-card">
+                      <div className="insight-card-header">
+                        <span className="insight-card-icon">📈</span>
+                        <h4 className="insight-card-title">近年模考得分走势</h4>
+                      </div>
+                      {(() => {
+                        const scored = sprintAreaPapers
+                          .filter((p) => p.score !== null && p.score !== undefined)
+                          .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+                          .slice(0, 7);
+                        if (scored.length === 0) {
+                          return <p className="insight-empty-text">录入试卷模考得分后，此处将自动绘制成绩走势</p>;
+                        }
+                        const scores = scored.map((p) => p.score as number);
+                        const maxScore = Math.max(...scores);
+                        const minScore = Math.min(...scores);
+                        const avgScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+                        return (
+                          <div className="insight-score-trend-wrap">
+                            <div className="insight-score-summary-grid">
+                              <div className="insight-score-kpi">
+                                <span>最高</span>
+                                <strong className="kpi-high">{maxScore}</strong>
+                              </div>
+                              <div className="insight-score-kpi">
+                                <span>平均</span>
+                                <strong className="kpi-avg">{avgScore}</strong>
+                              </div>
+                              <div className="insight-score-kpi">
+                                <span>最低</span>
+                                <strong className="kpi-low">{minScore}</strong>
+                              </div>
+                            </div>
+                            <div className="insight-score-bars">
+                              {scored.map((p) => {
+                                const sc = p.score as number;
+                                const heightPercent = Math.max(15, Math.round((sc / 150) * 100));
+                                return (
+                                  <div className="insight-score-bar-col" key={p.id} title={`${p.title}: ${sc}分`}>
+                                    <span className="score-bar-val">{sc}</span>
+                                    <div className="score-bar-track">
+                                      <div className="score-bar-fill" style={{ height: `${heightPercent}%` }} />
+                                    </div>
+                                    <span className="score-bar-label">{p.type === "past" ? `${p.year}` : p.title.slice(0, 4)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </aside>
+                </div>
+              )}
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
