@@ -3048,15 +3048,11 @@ export function StudyDashboard() {
                   <div className="stat-card-main">
                     <div className="stat-card-head">
                       <span>历年统考真题</span>
-                      <strong>{sprintPastCompleted} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
+                      <strong>{sprintPastCompleted} <small className="stat-unit">套</small></strong>
                     </div>
                     <div className="stat-card-body">
                       <div className="stat-card-progress-bar">
                         <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
-                      </div>
-                      <div className="stat-card-footer">
-                        <small>一刷已做 {sprintPastCompleted} 套 ({sprintPastPercent}%)</small>
-                        <small>二刷已完成 {sprintPastSecondRound} 套</small>
                       </div>
                     </div>
                   </div>
@@ -3067,9 +3063,6 @@ export function StudyDashboard() {
                       <strong>{sprintPastAvgScore}</strong>
                       <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small>
                     </div>
-                    <span className="score-box-sub">
-                      {scoredPastPapers.length > 0 ? `已记录 ${scoredPastPapers.length} 套得分` : "暂无得分记录"}
-                    </span>
                   </div>
                 </article>
 
@@ -3079,7 +3072,7 @@ export function StudyDashboard() {
                     <div className="stat-card-main">
                       <div className="stat-card-head">
                         <span>英语选择题 (客观题)</span>
-                        <strong>{englishChoiceStats?.count ?? 0} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
+                        <strong>{englishChoiceStats?.count ?? 0} <small className="stat-unit">套</small></strong>
                       </div>
                       <div className="stat-card-body">
                         <div className="stat-card-progress-bar">
@@ -3090,10 +3083,6 @@ export function StudyDashboard() {
                             }}
                           />
                         </div>
-                        <div className="stat-card-footer">
-                          <small>完形 0.5分/题 · 阅读与新题型 2分/题</small>
-                          <small>共 45 题 · 满分 60分</small>
-                        </div>
                       </div>
                     </div>
 
@@ -3103,11 +3092,6 @@ export function StudyDashboard() {
                         <strong>{englishChoiceStats?.avgChoiceScore ?? "--"}</strong>
                         <small className="stat-unit">/ 60 分</small>
                       </div>
-                      <span className="score-box-sub">
-                        {englishChoiceStats?.avgChoiceRate !== null && englishChoiceStats?.avgChoiceRate !== undefined
-                          ? `综合加权正答率 ${englishChoiceStats.avgChoiceRate}%`
-                          : "录入答题卡后自动计算"}
-                      </span>
                     </div>
                   </article>
                 ) : (
@@ -3115,15 +3099,29 @@ export function StudyDashboard() {
                     <div className="stat-card-main">
                       <div className="stat-card-head">
                         <span>模拟试题</span>
-                        <strong>{sprintMockCompleted} / {sprintMockTotal} <small className="stat-unit">套</small></strong>
+                        <strong>{sprintMockCompleted} <small className="stat-unit">套</small></strong>
                       </div>
                       <div className="stat-card-body">
-                        <div className="stat-card-progress-bar">
-                          <div className="stat-card-progress-fill" style={{ width: `${sprintMockPercent}%` }} />
-                        </div>
-                        <div className="stat-card-footer">
-                          <small>{sprintMockTotal > 0 ? `已完成 ${sprintMockCompleted} 套 (${sprintMockPercent}%)` : "点击添加模拟卷"}</small>
-                          <small>共录入 {sprintMockTotal} 套</small>
+                        <div className="sprint-endless-track">
+                          <div className="endless-bar">
+                            <div
+                              className="endless-fill"
+                              style={{ width: `${Math.min(100, Math.round((sprintMockCompleted / 30) * 100))}%` }}
+                            />
+                          </div>
+                          <div className="endless-ticks">
+                            {[5, 10, 15, 20, 25, 30].map((step) => {
+                              const isReached = sprintMockCompleted >= step;
+                              return (
+                                <span
+                                  key={step}
+                                  className={`endless-tick ${isReached ? "is-reached" : ""}`}
+                                >
+                                  {step}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -3134,9 +3132,6 @@ export function StudyDashboard() {
                         <strong>{sprintMockAvgScore}</strong>
                         <small className="stat-unit">/ 150 分</small>
                       </div>
-                      <span className="score-box-sub">
-                        {scoredMockPapers.length > 0 ? `已记录 ${scoredMockPapers.length} 套得分` : "暂无得分记录"}
-                      </span>
                     </div>
                   </article>
                 )}
