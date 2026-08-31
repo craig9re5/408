@@ -59,30 +59,30 @@ type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
 type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
-type AppPage = "progress" | "today" | "sprint" | "analytics" | "settings";
-type NavigationIcon = "progress" | "today" | "sprint" | "analytics" | "settings";
+type AppPage = "progress" | "sprint" | "today" | "analytics" | "settings";
+type NavigationIcon = "progress" | "sprint" | "today" | "analytics" | "settings";
 type JournalFilter = "all" | "unlinked" | "linked" | "408" | "math" | "published";
 type EditorMode = "edit" | "split" | "preview";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
+  { page: "sprint", icon: "sprint", label: "套卷冲刺" },
   { page: "today", icon: "today", label: "今日" },
-  { page: "sprint", icon: "sprint", label: "真题模拟" },
   { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
 const pageTitles: Record<AppPage, string> = {
   progress: "学习进度",
+  sprint: "套卷冲刺",
   today: "今日",
-  sprint: "真题模拟",
   analytics: "数据分析",
   settings: "设置",
 };
 
 const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
   { page: "progress", mark: "进", label: "进度" },
+  { page: "sprint", mark: "冲", label: "冲刺" },
   { page: "today", mark: "今", label: "今日" },
-  { page: "sprint", mark: "卷", label: "冲刺" },
   { page: "analytics", mark: "析", label: "分析" },
   { page: "settings", mark: "设", label: "设置" },
 ];
@@ -539,7 +539,7 @@ export function StudyDashboard() {
   const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
-  const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string; duration: string } | null>(null);
+  const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -2455,15 +2455,15 @@ export function StudyDashboard() {
               <div className="sprint-macro-grid">
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
-                    <span>历年真题 (2010~2026)</span>
-                    <strong>{sprintPastCompleted}/{sprintPastTotal}</strong>
+                    <span>历年统考真题</span>
+                    <strong>{sprintPastCompleted} / {sprintPastTotal} <small className="stat-unit">套</small></strong>
                   </div>
                   <div className="stat-card-body">
                     <div className="stat-card-progress-bar">
                       <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
                     </div>
                     <div className="stat-card-footer">
-                      <small>完成度 {sprintPastPercent}%</small>
+                      <small>已完成 {sprintPastCompleted} 套</small>
                       <small>二刷已完成 {sprintPastSecondRound} 套</small>
                     </div>
                   </div>
@@ -2471,44 +2471,31 @@ export function StudyDashboard() {
 
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
-                    <span>模拟题集</span>
-                    <strong>{sprintMockCompleted}/{sprintMockTotal}</strong>
+                    <span>名师模拟题集</span>
+                    <strong>{sprintMockCompleted} / {sprintMockTotal} <small className="stat-unit">套</small></strong>
                   </div>
                   <div className="stat-card-body">
                     <div className="stat-card-progress-bar">
                       <div className="stat-card-progress-fill" style={{ width: `${sprintMockPercent}%` }} />
                     </div>
                     <div className="stat-card-footer">
-                      <small>{sprintMockTotal > 0 ? `完成度 ${sprintMockPercent}%` : "点击添加模拟卷"}</small>
-                      <small>共添加 {sprintMockTotal} 套</small>
+                      <small>{sprintMockTotal > 0 ? `已完成 ${sprintMockCompleted} 套` : "点击添加模拟卷"}</small>
+                      <small>共录入 {sprintMockTotal} 套</small>
                     </div>
                   </div>
                 </article>
 
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
-                    <span>模考平均得分</span>
-                    <strong>{sprintAvgScore} <span className="stat-unit">/ 150</span></strong>
+                    <span>模考平均成绩</span>
+                    <strong>{sprintAvgScore} <small className="stat-unit">/ 150 分</small></strong>
                   </div>
                   <div className="stat-card-body">
                     <p className="stat-desc">
-                      {scoredPapers.length > 0 ? `已记录 ${scoredPapers.length} 次模考成绩` : "暂无得分记录，点击试卷即可录入"}
+                      {scoredPapers.length > 0 ? `已记录 ${scoredPapers.length} 套试卷模考得分` : "暂无得分记录，点击试卷即可录入"}
                     </p>
                     <div className="stat-card-footer">
-                      <small>平均用时 {sprintAvgDuration} min</small>
-                    </div>
-                  </div>
-                </article>
-
-                <article className="sprint-stat-card">
-                  <div className="stat-card-head">
-                    <span>错题复盘日志</span>
-                    <strong>{sprintJournalsCount} <span className="stat-unit">篇</span></strong>
-                  </div>
-                  <div className="stat-card-body">
-                    <p className="stat-desc">针对试卷的错题归因与全真复盘</p>
-                    <div className="stat-card-footer">
-                      <small>关联【{activeArea === "408" ? "408" : "数学"}】试卷</small>
+                      <small>全真模拟成绩参考</small>
                     </div>
                   </div>
                 </article>
@@ -2582,7 +2569,7 @@ export function StudyDashboard() {
                 <section className="sprint-section" aria-labelledby="past-papers-heading">
                   <div className="sprint-section-header">
                     <h3 id="past-papers-heading">历年全国统考真题 (2010 ~ 2026)</h3>
-                    <span className="sprint-section-tag">全真模拟 · {sprintPastCompleted}/{sprintPastTotal} 已完成</span>
+                    <span className="sprint-section-tag">全真演练 · {sprintPastCompleted}/{sprintPastTotal} 已完成</span>
                   </div>
 
                   <div className="paper-table">
@@ -2590,7 +2577,6 @@ export function StudyDashboard() {
                       <span>年份 / 试卷</span>
                       <span>完成打卡</span>
                       <span>模考得分</span>
-                      <span>耗时</span>
                       <span>二刷</span>
                       <span>复盘日志</span>
                     </div>
@@ -2634,7 +2620,7 @@ export function StudyDashboard() {
                                 type="button"
                                 className="paper-score-pill"
                                 title="点击修改得分"
-                                onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score), duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
                               >
                                 <strong>{paper.score}</strong> <small>分</small>
                               </button>
@@ -2642,30 +2628,9 @@ export function StudyDashboard() {
                               <button
                                 type="button"
                                 className="paper-btn-add-val"
-                                onClick={() => setEditingScorePaper({ id: paper.id, score: "", duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
                               >
                                 + 记录得分
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="paper-duration-col">
-                            {paper.durationMinutes ? (
-                              <button
-                                type="button"
-                                className="paper-duration-pill"
-                                title="点击修改耗时"
-                                onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: String(paper.durationMinutes) })}
-                              >
-                                {paper.durationMinutes} min
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="paper-btn-add-val"
-                                onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: "" })}
-                              >
-                                + 耗时
                               </button>
                             )}
                           </div>
@@ -2740,7 +2705,6 @@ export function StudyDashboard() {
                         <span>模拟试卷</span>
                         <span>完成打卡</span>
                         <span>模考得分</span>
-                        <span>耗时</span>
                         <span>复盘日志</span>
                         <span>操作</span>
                       </div>
@@ -2783,7 +2747,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className="paper-score-pill"
                                   title="点击修改得分"
-                                  onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score), duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
                                 >
                                   <strong>{paper.score}</strong> <small>分</small>
                                 </button>
@@ -2791,30 +2755,9 @@ export function StudyDashboard() {
                                 <button
                                   type="button"
                                   className="paper-btn-add-val"
-                                  onClick={() => setEditingScorePaper({ id: paper.id, score: "", duration: paper.durationMinutes ? String(paper.durationMinutes) : "" })}
+                                  onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
                                 >
                                   + 记录得分
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="paper-duration-col">
-                              {paper.durationMinutes ? (
-                                <button
-                                  type="button"
-                                  className="paper-duration-pill"
-                                  title="点击修改耗时"
-                                  onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: String(paper.durationMinutes) })}
-                                >
-                                  {paper.durationMinutes} min
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="paper-btn-add-val"
-                                  onClick={() => setEditingScorePaper({ id: paper.id, score: paper.score !== null && paper.score !== undefined ? String(paper.score) : "", duration: "" })}
-                                >
-                                  + 耗时
                                 </button>
                               )}
                             </div>
@@ -2909,7 +2852,7 @@ export function StudyDashboard() {
 
               <div className="analytics-section-title">
                 <div className="section-dot" />
-                <h2>备考宏观罗盘与工期预测</h2>
+                <h2>备考进度概览</h2>
               </div>
 
               <div className="analytics-overview-grid">
@@ -2966,82 +2909,11 @@ export function StudyDashboard() {
                     </div>
                   </div>
                 </article>
-
-                <article className="analytics-card macro-card">
-                  <div className="macro-card__top">
-                    <span className="macro-card__label">近 14 天学力速率</span>
-                    <span className="macro-badge rate-badge">
-                      {forecast.dailyVelocity14d > 0 ? "学力活跃" : "积累中"}
-                    </span>
-                  </div>
-                  <div className="macro-card__val">
-                    <strong>{forecast.dailyVelocity14d > 0 ? forecast.dailyVelocity14d : (forecast.dailyVelocityAllTime > 0 ? forecast.dailyVelocityAllTime : "0.0")}</strong>
-                    <span className="macro-card__unit">节 / 天</span>
-                  </div>
-                  <div className="macro-card__meta-box">
-                    <div>近 14 天新学 <strong>{forecast.learnedLast14d}</strong> 节</div>
-                    <div>近 14 天复习 <strong>{forecast.reviewedLast14d}</strong> 节</div>
-                    {forecast.dailyVelocityAllTime > 0 && (
-                      <div className="meta-sub">历史全周期均速 {forecast.dailyVelocityAllTime} 节/天</div>
-                    )}
-                  </div>
-                </article>
-
-                <article className="analytics-card macro-card">
-                  <div className="macro-card__top">
-                    <span className="macro-card__label">工期预测与冲刺</span>
-                    <span className={`macro-badge health-${forecast.health}`}>
-                      {forecast.health === "completed" ? "基础完成" : forecast.health === "healthy" ? "冲刺充裕" : forecast.health === "steady" ? "节奏稳健" : forecast.health === "tight" ? "工期紧凑" : forecast.health === "behind" ? "需加速" : "数据积累中"}
-                    </span>
-                  </div>
-                  <div className="macro-card__val">
-                    {forecast.health === "completed" ? (
-                      <strong className="finish-text">基础全部完成</strong>
-                    ) : forecast.estimatedCompletionDate ? (
-                      <>
-                        <strong className="date-text">{formatDateShort(forecast.estimatedCompletionDate)}</strong>
-                        <span className="macro-card__unit">预计结课</span>
-                      </>
-                    ) : (
-                      <strong className="pending-text">数据积累中</strong>
-                    )}
-                  </div>
-                  <div className="macro-card__meta-box">
-                    {forecast.health === "completed" ? (
-                      <div>剩余 <strong>{forecast.daysUntilExam}</strong> 天全量用于强化冲刺与真题模拟</div>
-                    ) : forecast.sprintDays !== null ? (
-                      <div>
-                        预计留出 <strong className={forecast.sprintDays >= 30 ? "green-text" : "coral-text"}>{Math.max(0, forecast.sprintDays)}</strong> 天真题冲刺
-                      </div>
-                    ) : (
-                      <div>持续打卡后自动测算</div>
-                    )}
-                    <div className="meta-sub">剩余 <strong>{forecast.remainingSections}</strong> 节未新学</div>
-                  </div>
-                </article>
-              </div>
-
-              <div className="forecast-insight-banner">
-                <div className="insight-icon">💡</div>
-                <div className="insight-content">
-                  <strong>备考节奏诊断：</strong>
-                  {forecast.health === "completed" ? (
-                    <span>恭喜！所选范围的小节已全部完成基础阶段新学。建议把备考重心全面切换至历年真题模拟、错题重做和强化阶段复习。</span>
-                  ) : forecast.dailyVelocity14d > 0 && forecast.estimatedCompletionDate && forecast.sprintDays !== null ? (
-                    <span>
-                      按近 14 天日均 <strong>{forecast.dailyVelocity14d} 节</strong> 的推进节奏，剩余 <strong>{forecast.remainingSections} 节</strong> 预计将于 <strong>{formatDateChinese(forecast.estimatedCompletionDate)}</strong> 完成基础阶段新学。届时距离 <strong>{analyticsExamDate}</strong> 考试仍有 <strong>{forecast.sprintDays} 天</strong> 充裕期，非常有利于展开真题模考与强化复习。
-                    </span>
-                  ) : (
-                    <span>
-                      目前所选范围仍有 <strong>{forecast.remainingSections} 节</strong> 待完成基础阶段新学。保持规律学习并在今日或进度页面勾选新学/复习，系统将自动根据真实速率推算结课节点与冲刺窗口。
-                    </span>
-                  )}
-                </div>
               </div>
 
               <div className="analytics-section-title">
                 <div className="section-dot" />
-                <h2>学习动量与沉淀热力</h2>
+                <h2>打卡记录与周度趋势</h2>
               </div>
 
               <div className="analytics-activity-grid">
@@ -3877,13 +3749,13 @@ export function StudyDashboard() {
         </div>
       )}
 
-      {/* Paper Score & Duration Modal */}
+      {/* Paper Score Modal */}
       {editingScorePaper && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true">
             <span className="dialog-kicker">全真模拟考记录</span>
-            <h2>模考成绩与耗时</h2>
-            <p className="paper-score-sub">记录本套试卷的真实得分（0~150分）与模拟用时（分钟）</p>
+            <h2>模考成绩录入</h2>
+            <p className="paper-score-sub">记录本套试卷的真实得分（0~150 分）</p>
             <div className="paper-modal-form">
               <label className="publish-form-field">
                 <span className="field-label">得分 (0~150 分)</span>
@@ -3898,17 +3770,6 @@ export function StudyDashboard() {
                   autoFocus
                 />
               </label>
-              <label className="publish-form-field">
-                <span className="field-label">全真模拟耗时 (分钟)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={600}
-                  placeholder="如：180"
-                  value={editingScorePaper.duration}
-                  onChange={(e) => setEditingScorePaper({ ...editingScorePaper, duration: e.target.value })}
-                />
-              </label>
             </div>
             <div className="confirm-actions">
               <button type="button" className="btn-cancel" onClick={() => setEditingScorePaper(null)}>取消</button>
@@ -3917,10 +3778,8 @@ export function StudyDashboard() {
                 className="btn-confirm"
                 onClick={() => {
                   const scoreVal = editingScorePaper.score.trim() === "" ? null : parseFloat(editingScorePaper.score);
-                  const durVal = editingScorePaper.duration.trim() === "" ? null : parseInt(editingScorePaper.duration, 10);
                   updatePaper(editingScorePaper.id, {
                     score: Number.isNaN(scoreVal) ? null : scoreVal,
-                    durationMinutes: Number.isNaN(durVal) ? null : durVal,
                   });
                   setEditingScorePaper(null);
                   setFeedbackMessage("已保存模考成绩");

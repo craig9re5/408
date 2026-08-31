@@ -730,7 +730,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 /* Macro Cards Grid */
 .analytics-overview-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
@@ -990,7 +990,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .card-header-row h3 {
@@ -1027,21 +1027,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .heatmap-viewport {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   overflow: visible;
-  padding: 6px 4px;
+  padding: 4px 0;
+  flex: 1;
 }
 
 .heatmap-labels-col {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 .heatmap-labels-col span {
   aspect-ratio: 1 / 1;
+  max-width: 24px;
+  max-height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1062,6 +1065,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   flex-direction: column;
   gap: 5px;
   flex: 1;
+  max-width: 24px;
 }
 
 .heatmap-cell {
@@ -1096,7 +1100,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .heatmap-hover-info {
-  margin-top: auto;
+  margin-top: 14px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--canvas);
@@ -1137,7 +1141,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   border-radius: 10px;
   background: var(--canvas);
   border: 1px solid rgba(210, 207, 198, 0.5);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .trend-summary-item {
@@ -1185,15 +1189,19 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .trend-chart-wrap {
   position: relative;
-  margin-top: 10px;
+  margin-top: 4px;
   padding-left: 28px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .trend-grid-lines {
   position: absolute;
   top: 0;
   right: 0;
-  bottom: 24px;
+  bottom: 22px;
   left: 0;
   display: flex;
   flex-direction: column;
@@ -1220,7 +1228,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .trend-bars-container {
   display: flex;
   gap: 10px;
-  height: 150px;
+  height: 130px;
   align-items: flex-end;
   border-bottom: 1px solid var(--line);
   padding: 0 4px 4px 4px;
@@ -1249,7 +1257,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .trend-col-track {
   width: 100%;
   max-width: 26px;
-  height: 120px;
+  height: 100px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1317,7 +1325,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .trend-hover-info {
-  margin-top: auto;
+  margin-top: 14px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--canvas);
@@ -2731,7 +2739,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .sprint-macro-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
@@ -2906,7 +2914,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .paper-table-head {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) 110px 90px 85px 80px 100px;
+  grid-template-columns: minmax(0, 1.8fr) 110px 100px 80px 90px;
   gap: 12px;
   padding: 8px 12px;
   font-size: 11.5px;
@@ -2917,12 +2925,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 
 .paper-table-head--mock {
-  grid-template-columns: minmax(0, 2fr) 110px 90px 85px 100px 50px;
+  grid-template-columns: minmax(0, 2fr) 110px 100px 90px 45px;
 }
 
 .paper-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) 110px 90px 85px 80px 100px;
+  grid-template-columns: minmax(0, 1.8fr) 110px 100px 80px 90px;
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -2930,6 +2938,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #fafbfb;
   border: 1px solid #edf1f3;
   transition: all 0.15s ease;
+}
+
+.paper-table-head--mock ~ .paper-row {
+  grid-template-columns: minmax(0, 2fr) 110px 100px 90px 45px;
 }
 
 .paper-row:hover {
@@ -3165,9 +3177,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     grid-template-columns: repeat(2, 1fr);
   }
   .paper-table-head, .paper-row {
-    grid-template-columns: minmax(0, 1.5fr) 95px 75px 65px 65px 75px;
+    grid-template-columns: minmax(0, 1.5fr) 95px 85px 65px 75px;
     gap: 6px;
     padding: 8px;
+  }
+  .paper-table-head--mock ~ .paper-row {
+    grid-template-columns: minmax(0, 1.6fr) 95px 85px 75px 40px;
   }
 }
 
