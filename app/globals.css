@@ -3514,6 +3514,119 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   gap: 6px;
 }
 
+/* Bento Mini Heatmap Strip (Plan 3) */
+.bento-mini-heatmap {
+  background: #f8fafc;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bento-mini-heatmap:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+}
+
+.mini-heatmap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mini-heatmap-title {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.mini-heatmap-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.mini-heatmap-tag.tag-wrong {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.mini-heatmap-tag.tag-perfect {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.mini-heatmap-tag.tag-empty {
+  background: #ffffff;
+  color: #3b82f6;
+  border: 1px dashed #93c5fd;
+}
+
+.mini-heatmap-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+}
+
+.mini-heatmap-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mini-group-tag {
+  font-size: 9px;
+  font-weight: 800;
+  color: #94a3b8;
+  font-family: Consolas, Monaco, monospace;
+  min-width: 14px;
+}
+
+.mini-group-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5px;
+}
+
+.mini-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transition: transform 0.12s ease;
+  flex-shrink: 0;
+}
+
+.mini-dot:hover {
+  transform: scale(1.6);
+}
+
+.mini-dot.dot-correct {
+  background: #10b981;
+  box-shadow: 0 0 2px rgba(16, 185, 129, 0.4);
+}
+
+.mini-dot.dot-wrong {
+  background: #ef4444;
+  box-shadow: 0 0 3px rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+}
+
+.mini-dot.dot-unset {
+  background: #cbd5e1;
+  opacity: 0.6;
+}
+
 .paper-name {
   display: flex;
   align-items: center;

@@ -1,7 +1,7 @@
 import type { StudyArea } from "./data/books";
 
 export const SCHEMA_VERSION = 2;
-export const APP_VERSION = "1.8.0";
+export const APP_VERSION = "2.0.0";
 export const MAX_BACKUPS = 15;
 
 const APP_DATA_KEY = "study-app-data-v1";

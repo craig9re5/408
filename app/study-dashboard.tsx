@@ -1210,6 +1210,173 @@ export function StudyDashboard() {
     setFeedbackMessage("已清空该试卷做题记录");
   }
 
+  function renderBentoHeatmap(paper: PaperRecord) {
+    const hasRecorded = Boolean(paper.questions && Object.keys(paper.questions).length > 0);
+    let wrongCount = 0;
+    if (paper.questions) {
+      for (const val of Object.values(paper.questions)) {
+        if (val === "wrong") wrongCount++;
+      }
+    }
+
+    if (paper.area === "408") {
+      const groups = [
+        { name: "DS", start: 1, count: 11 },
+        { name: "CO", start: 12, count: 11 },
+        { name: "OS", start: 23, count: 10 },
+        { name: "CN", start: 33, count: 8 },
+      ];
+      return (
+        <div
+          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
+          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          onClick={() => {
+            setActivePaperQuestionModalId(paper.id);
+            setQuickWrongInput("");
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setActivePaperQuestionModalId(paper.id);
+              setQuickWrongInput("");
+            }
+          }}
+        >
+          <div className="mini-heatmap-head">
+            <span className="mini-heatmap-title">做题热力 (40题)</span>
+            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
+              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
+            </span>
+          </div>
+          <div className="mini-heatmap-groups">
+            {groups.map((grp) => (
+              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                <span className="mini-group-tag">{grp.name}</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: grp.count }, (_, i) => {
+                    const num = grp.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    } else if (paper.area === "english") {
+      const groups = [
+        { name: "CL", start: 1, count: 20 },
+        { name: "RA", start: 21, count: 20 },
+        { name: "RB", start: 41, count: 5 },
+      ];
+      return (
+        <div
+          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
+          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          onClick={() => {
+            setActivePaperQuestionModalId(paper.id);
+            setQuickWrongInput("");
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setActivePaperQuestionModalId(paper.id);
+              setQuickWrongInput("");
+            }
+          }}
+        >
+          <div className="mini-heatmap-head">
+            <span className="mini-heatmap-title">做题热力 (45题)</span>
+            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
+              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
+            </span>
+          </div>
+          <div className="mini-heatmap-groups">
+            {groups.map((grp) => (
+              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                <span className="mini-group-tag">{grp.name}</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: grp.count }, (_, i) => {
+                    const num = grp.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    } else {
+      // Math: 1~10 选择, 11~16 填空, 17~22 解答
+      const groups = [
+        { name: "单选", start: 1, count: 10 },
+        { name: "填空", start: 11, count: 6 },
+        { name: "解答", start: 17, count: 6 },
+      ];
+      return (
+        <div
+          className={`bento-mini-heatmap ${hasRecorded ? "has-data" : "is-empty"}`}
+          title={hasRecorded ? `已记录答题卡（${wrongCount > 0 ? `错题 ${wrongCount} 道` : "全对 🟢"}）· 点击打开完整答题卡` : "点击录入答题卡，生成错题热力条"}
+          onClick={() => {
+            setActivePaperQuestionModalId(paper.id);
+            setQuickWrongInput("");
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setActivePaperQuestionModalId(paper.id);
+              setQuickWrongInput("");
+            }
+          }}
+        >
+          <div className="mini-heatmap-head">
+            <span className="mini-heatmap-title">做题热力 (22题)</span>
+            <span className={`mini-heatmap-tag ${wrongCount > 0 ? "tag-wrong" : hasRecorded ? "tag-perfect" : "tag-empty"}`}>
+              {wrongCount > 0 ? `错 ${wrongCount} 题` : hasRecorded ? "全对 🟢" : "+ 答题卡"}
+            </span>
+          </div>
+          <div className="mini-heatmap-groups">
+            {groups.map((grp) => (
+              <div className="mini-heatmap-group" key={grp.name} title={`[${grp.name}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
+                <span className="mini-group-tag">{grp.name}</span>
+                <div className="mini-group-dots">
+                  {Array.from({ length: grp.count }, (_, i) => {
+                    const num = grp.start + i;
+                    const st = paper.questions?.[num];
+                    return (
+                      <span
+                        key={num}
+                        className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
+                        title={`第 ${num} 题 [${grp.name}]: ${st === "correct" ? "正确 🟢" : st === "wrong" ? "错题 🔴" : "未答"}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+  }
+
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
     setProgress((current) => {
       const previous = current[sectionId];
@@ -2911,6 +3078,8 @@ export function StudyDashboard() {
                                 </div>
                               </div>
 
+                              {renderBentoHeatmap(paper)}
+
                               <div className="bento-card-footer">
                                 <div className="bento-second-wrap">
                                   <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
@@ -3073,6 +3242,8 @@ export function StudyDashboard() {
                                     )}
                                   </div>
                                 </div>
+
+                                {renderBentoHeatmap(paper)}
 
                                 <div className="bento-card-footer">
                                   <div className="bento-date-wrap">
@@ -4042,7 +4213,7 @@ export function StudyDashboard() {
                   <div className="blog-settings-content">
                     <div className="blog-info-item">
                       <span>版本号</span>
-                      <strong>V1.9</strong>
+                      <strong>V2.0</strong>
                     </div>
                     <div className="blog-info-item">
                       <span>个人博客站点</span>
@@ -4416,7 +4587,7 @@ export function StudyDashboard() {
       {blogPublishJournal && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog confirm-dialog--wide blog-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="blog-publish-title">
-            <span className="dialog-kicker">GitHub Blog 一键发布 (V1.9)</span>
+            <span className="dialog-kicker">GitHub Blog 一键发布</span>
             <h2 id="blog-publish-title">发布到个人博客</h2>
             <p className="blog-publish-subtitle">
               发布稿与原日志独立解耦，发布前的润色或标题调整不会自动改写原学习日志。
