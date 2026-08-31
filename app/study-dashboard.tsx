@@ -1347,7 +1347,6 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (40选择 + 7大题)</span>
             <div className="mini-heatmap-tags">
               {qSummary ? (
                 <>
@@ -1446,7 +1445,6 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (45选择 + 7主观)</span>
             <div className="mini-heatmap-tags">
               {qSummary ? (
                 <>
@@ -1540,12 +1538,11 @@ export function StudyDashboard() {
           }}
         >
           <div className="mini-heatmap-head">
-            <span className="mini-heatmap-title">做题热力 (10单选 + 6填空 + 6解答)</span>
             <div className="mini-heatmap-tags">
               {qSummary ? (
                 <>
                   <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
-                    选择: {qSummary.choiceAccuracyPercent}%
+                    选填: {qSummary.choiceAccuracyPercent}%
                   </span>
                   {qSummary.subjectiveRecorded > 0 && (
                     <span className="mini-heatmap-tag tag-subj">
@@ -3205,110 +3202,61 @@ export function StudyDashboard() {
                       <div className="sprint-bento-grid">
                         {visiblePastPapers.map((paper) => {
                           const paperJournals = journalsByPaper[paper.id] ?? [];
-                          const qSummary = getPaperQuestionSummary(paper);
                           return (
                             <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
                               <div className="bento-card-top">
                                 <span className="bento-year-pill">{paper.year}</span>
-                                <div className="bento-check-wrap">
-                                  <label className="paper-check-label" aria-label={`${paper.year}年真题完成打卡`}>
+                                <div className="bento-top-controls">
+                                  <div className="bento-score-inline" title="输入试卷分数">
+                                    <input
+                                      type="number"
+                                      className="bento-score-input"
+                                      min={0}
+                                      max={activeArea === "english" ? 100 : 150}
+                                      step={0.5}
+                                      placeholder="--"
+                                      value={paper.score ?? ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
+                                      }}
+                                    />
+                                  </div>
+
+                                  <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
                                     <input
                                       type="checkbox"
                                       checked={paper.completed}
                                       onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
                                     />
-                                    <span />
+                                    <span className="bento-check-box" />
+                                    <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
                                   </label>
-                                  {paper.completed ? (
-                                    <EditableDate
-                                      value={paper.completedAt}
-                                      emptyLabel="未设置日期"
-                                      ariaLabel={`${paper.year}年真题完成日期`}
-                                      onChange={(val) => updatePaper(paper.id, { completedAt: val })}
+
+                                  <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : "标记二刷"}>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(paper.secondRound)}
+                                      onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
                                     />
-                                  ) : (
-                                    <span className="bento-status-hint">未做</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="bento-card-metrics">
-                                <div className="bento-metric-box">
-                                  <span className="bento-metric-label">得分</span>
-                                  {paper.score !== null && paper.score !== undefined ? (
-                                    <button
-                                      type="button"
-                                      className="bento-score-val"
-                                      title="点击修改得分"
-                                      onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
-                                    >
-                                      <strong>{paper.score}</strong> <small>/ {activeArea === "english" ? "100分" : "150分"}</small>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="bento-btn-add"
-                                      onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
-                                    >
-                                      + 记录得分
-                                    </button>
-                                  )}
-                                </div>
-
-                                <div className="bento-metric-box">
-                                  <span className="bento-metric-label">选择题正答率</span>
-                                  {qSummary && qSummary.choiceAccuracyPercent !== null ? (
-                                    <button
-                                      type="button"
-                                      className="bento-pill-q"
-                                      title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
-                                      onClick={() => {
-                                        setActivePaperQuestionModalId(paper.id);
-                                        setQuickWrongInput("");
-                                      }}
-                                    >
-                                      <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
-                                    </button>
-                                  ) : qSummary && qSummary.totalRecorded > 0 ? (
-                                    <button
-                                      type="button"
-                                      className="bento-pill-q"
-                                      title="已录入答题卡 · 点击打开"
-                                      onClick={() => {
-                                        setActivePaperQuestionModalId(paper.id);
-                                        setQuickWrongInput("");
-                                      }}
-                                    >
-                                      <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="bento-btn-add"
-                                      onClick={() => {
-                                        setActivePaperQuestionModalId(paper.id);
-                                        setQuickWrongInput("");
-                                      }}
-                                    >
-                                      + 答题卡
-                                    </button>
-                                  )}
+                                    <span className="bento-check-box" />
+                                    <span className="bento-check-text">二刷</span>
+                                  </label>
                                 </div>
                               </div>
 
                               {renderBentoHeatmap(paper)}
 
                               <div className="bento-card-footer">
-                                <div className="bento-second-wrap">
-                                  <label className="paper-check-label" aria-label={`${paper.year}年真题二刷打卡`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(paper.secondRound)}
-                                      onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
+                                <div className="bento-footer-left">
+                                  {paper.completed ? (
+                                    <EditableDate
+                                      value={paper.completedAt}
+                                      emptyLabel="设置日期"
+                                      ariaLabel={`${paper.year}年真题完成日期`}
+                                      onChange={(val) => updatePaper(paper.id, { completedAt: val })}
                                     />
-                                    <span />
-                                  </label>
-                                  <span className="bento-second-text">{paper.secondRound ? (paper.secondRoundAt ? formatDateShort(paper.secondRoundAt) : "已二刷") : "二刷"}</span>
+                                  ) : null}
                                 </div>
 
                                 <div className="bento-actions-wrap">
@@ -3369,7 +3317,6 @@ export function StudyDashboard() {
                         <div className="sprint-bento-grid">
                           {visibleMockPapers.map((paper) => {
                             const paperJournals = journalsByPaper[paper.id] ?? [];
-                            const qSummary = getPaperQuestionSummary(paper);
                             return (
                               <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
                                 <div className="bento-card-top">
@@ -3377,15 +3324,43 @@ export function StudyDashboard() {
                                     {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
                                     <strong className="bento-paper-title">{paper.title}</strong>
                                   </div>
-                                  <div className="bento-top-actions">
-                                    <label className="paper-check-label" aria-label={`${paper.title} 完成打卡`}>
+                                  <div className="bento-top-controls">
+                                    <div className="bento-score-inline" title="输入试卷分数">
+                                      <input
+                                        type="number"
+                                        className="bento-score-input"
+                                        min={0}
+                                        max={150}
+                                        step={0.5}
+                                        placeholder="--"
+                                        value={paper.score ?? ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
+                                        }}
+                                      />
+                                    </div>
+
+                                    <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
                                       <input
                                         type="checkbox"
                                         checked={paper.completed}
                                         onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
                                       />
-                                      <span />
+                                      <span className="bento-check-box" />
+                                      <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
                                     </label>
+
+                                    <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : "标记二刷"}>
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(paper.secondRound)}
+                                        onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
+                                      />
+                                      <span className="bento-check-box" />
+                                      <span className="bento-check-text">二刷</span>
+                                    </label>
+
                                     <button
                                       type="button"
                                       className="paper-btn-del"
@@ -3397,84 +3372,18 @@ export function StudyDashboard() {
                                   </div>
                                 </div>
 
-                                <div className="bento-card-metrics">
-                                  <div className="bento-metric-box">
-                                    <span className="bento-metric-label">得分</span>
-                                    {paper.score !== null && paper.score !== undefined ? (
-                                      <button
-                                        type="button"
-                                        className="bento-score-val"
-                                        title="点击修改得分"
-                                        onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
-                                      >
-                                        <strong>{paper.score}</strong> <small>/ 150分</small>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="bento-btn-add"
-                                        onClick={() => setEditingScorePaper({ id: paper.id, score: "" })}
-                                      >
-                                        + 记录得分
-                                      </button>
-                                    )}
-                                  </div>
-
-                                  <div className="bento-metric-box">
-                                    <span className="bento-metric-label">选择题正答率</span>
-                                    {qSummary && qSummary.choiceAccuracyPercent !== null ? (
-                                      <button
-                                        type="button"
-                                        className="bento-pill-q"
-                                        title={`选择题正答率 ${qSummary.choiceAccuracyPercent}% (正确 ${qSummary.choiceCorrectCount} / 错题 ${qSummary.choiceWrongCount}) · 点击打开答题卡`}
-                                        onClick={() => {
-                                          setActivePaperQuestionModalId(paper.id);
-                                          setQuickWrongInput("");
-                                        }}
-                                      >
-                                        <span className="q-tag-choice-rate">{qSummary.choiceAccuracyPercent}%</span>
-                                      </button>
-                                    ) : qSummary && qSummary.totalRecorded > 0 ? (
-                                      <button
-                                        type="button"
-                                        className="bento-pill-q"
-                                        title="已录入答题卡 · 点击打开"
-                                        onClick={() => {
-                                          setActivePaperQuestionModalId(paper.id);
-                                          setQuickWrongInput("");
-                                        }}
-                                      >
-                                        <span className="q-tag-choice-rate">{qSummary.accuracyPercent}%</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="bento-btn-add"
-                                        onClick={() => {
-                                          setActivePaperQuestionModalId(paper.id);
-                                          setQuickWrongInput("");
-                                        }}
-                                      >
-                                        + 答题卡
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
                                 {renderBentoHeatmap(paper)}
 
                                 <div className="bento-card-footer">
-                                  <div className="bento-date-wrap">
+                                  <div className="bento-footer-left">
                                     {paper.completed ? (
                                       <EditableDate
                                         value={paper.completedAt}
-                                        emptyLabel="未设置日期"
+                                        emptyLabel="设置日期"
                                         ariaLabel={`${paper.title} 完成日期`}
                                         onChange={(val) => updatePaper(paper.id, { completedAt: val })}
                                       />
-                                    ) : (
-                                      <span className="bento-status-hint">未做</span>
-                                    )}
+                                    ) : null}
                                   </div>
 
                                   <div className="bento-actions-wrap">
