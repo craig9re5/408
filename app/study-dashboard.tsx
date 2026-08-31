@@ -1373,11 +1373,17 @@ export function StudyDashboard() {
       if (p.id !== paperId) return p;
       return {
         ...p,
-        questions: {},
-        questionScores: {},
+        completed: false,
+        completedAt: "",
+        score: null,
+        durationMinutes: null,
+        secondRound: false,
+        secondRoundAt: "",
+        questions: undefined,
+        questionScores: undefined,
       };
     }));
-    setFeedbackMessage("已清空该试卷做题记录");
+    setFeedbackMessage("已清空本卷所有做题记录与得分");
   }
 
   function renderBentoHeatmap(paper: PaperRecord) {
@@ -3520,23 +3526,33 @@ export function StudyDashboard() {
                         <h3 id="past-bento-heading">真题</h3>
                         <span className="sprint-count-badge">{visiblePastPapers.length} 套</span>
                       </div>
-                      <div className="sprint-sort-filters" role="group" aria-label="真题年份排序">
+                      <div className="sprint-header-actions">
                         <button
                           type="button"
-                          className={`sprint-sort-btn ${pastPaperSortOrder === "desc" ? "active" : ""}`}
-                          onClick={() => setPastPaperSortOrder("desc")}
-                          title="按年份倒序排列 (2026 ➔ 2010)"
+                          className="sprint-btn-reset-all"
+                          onClick={clearAllPaperRecords}
+                          title="一键清空全部学科所有套卷与题目的完成记录与打分"
                         >
-                          倒序 ↓
+                          清空全部完成记录 🔄
                         </button>
-                        <button
-                          type="button"
-                          className={`sprint-sort-btn ${pastPaperSortOrder === "asc" ? "active" : ""}`}
-                          onClick={() => setPastPaperSortOrder("asc")}
-                          title="按年份正序排列 (2010 ➔ 2026)"
-                        >
-                          正序 ↑
-                        </button>
+                        <div className="sprint-sort-filters" role="group" aria-label="真题年份排序">
+                          <button
+                            type="button"
+                            className={`sprint-sort-btn ${pastPaperSortOrder === "desc" ? "active" : ""}`}
+                            onClick={() => setPastPaperSortOrder("desc")}
+                            title="按年份倒序排列 (2026 ➔ 2010)"
+                          >
+                            倒序 ↓
+                          </button>
+                          <button
+                            type="button"
+                            className={`sprint-sort-btn ${pastPaperSortOrder === "asc" ? "active" : ""}`}
+                            onClick={() => setPastPaperSortOrder("asc")}
+                            title="按年份正序排列 (2010 ➔ 2026)"
+                          >
+                            正序 ↑
+                          </button>
+                        </div>
                       </div>
                     </div>
                       <div className="sprint-bento-grid">

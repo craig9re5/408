@@ -612,7 +612,10 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
   defaults.forEach((p) => map.set(p.id, p));
 
   remote.forEach((p) => {
-    if (p && p.id) map.set(p.id, p);
+    if (p && p.id) {
+      const existing = map.get(p.id);
+      map.set(p.id, existing ? { ...existing, ...p } : p);
+    }
   });
 
   local.forEach((p) => {
@@ -621,34 +624,55 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
     if (!existing) {
       map.set(p.id, p);
     } else {
-      const completed = p.completed || existing.completed;
-      const completedAt = p.completedAt || existing.completedAt;
-      const score = p.score !== undefined && p.score !== null ? p.score : (existing.score ?? null);
-      const durationMinutes = p.durationMinutes !== undefined && p.durationMinutes !== null ? p.durationMinutes : (existing.durationMinutes ?? null);
-      const secondRound = p.secondRound || existing.secondRound;
-      const secondRoundAt = p.secondRoundAt || existing.secondRoundAt;
-      let questions: Record<number, QuestionState> | undefined = undefined;
+      const localExplicitClear = (
+        (p.questions !== undefined && Object.keys(p.questions).length === 0) ||
+        (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0)
+      );
+
+      const localHasData = Boolean(
+        p.completed ||
+        p.score !== null ||
+        p.durationMinutes !== null ||
+        p.secondRound ||
+        (p.questions && Object.keys(p.questions).length > 0) ||
+        (p.questionScores && Object.keys(p.questionScores).length > 0)
+      );
+      const remoteHasData = Boolean(
+        existing.completed ||
+        existing.score !== null ||
+        existing.durationMinutes !== null ||
+        existing.secondRound ||
+        (existing.questions && Object.keys(existing.questions).length > 0) ||
+        (existing.questionScores && Object.keys(existing.questionScores).length > 0)
+      );
+
+      if (!localHasData && remoteHasData && !localExplicitClear) {
+        return;
+      }
+
+      let questions = p.questions;
       if (p.questions !== undefined && Object.keys(p.questions).length === 0) {
         questions = {};
-      } else if (p.questions || existing.questions) {
+      } else if (existing.questions || p.questions) {
         questions = { ...(existing.questions ?? {}), ...(p.questions ?? {}) };
       }
 
-      let questionScores: Record<number, number> | undefined = undefined;
+      let questionScores = p.questionScores;
       if (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0) {
         questionScores = {};
-      } else if (p.questionScores || existing.questionScores) {
+      } else if (existing.questionScores || p.questionScores) {
         questionScores = { ...(existing.questionScores ?? {}), ...(p.questionScores ?? {}) };
       }
+
       map.set(p.id, {
         ...existing,
         ...p,
-        completed,
-        completedAt,
-        score,
-        durationMinutes,
-        secondRound,
-        secondRoundAt,
+        completed: localExplicitClear ? (p.completed ?? false) : (p.completed || existing.completed),
+        completedAt: localExplicitClear ? (p.completedAt ?? "") : (p.completedAt || existing.completedAt),
+        score: localExplicitClear ? p.score : (p.score ?? existing.score ?? null),
+        durationMinutes: localExplicitClear ? p.durationMinutes : (p.durationMinutes ?? existing.durationMinutes ?? null),
+        secondRound: localExplicitClear ? (p.secondRound ?? false) : (p.secondRound || existing.secondRound),
+        secondRoundAt: localExplicitClear ? (p.secondRoundAt ?? "") : (p.secondRoundAt || existing.secondRoundAt),
         questions,
         questionScores,
       });
