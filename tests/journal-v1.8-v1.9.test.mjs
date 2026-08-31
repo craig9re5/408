@@ -557,13 +557,32 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   assert.equal(MATH_PAPER_STRUCTURE.groups[2].start, 17);
   assert.equal(MATH_PAPER_STRUCTURE.groups[2].end, 22);
 
-  // 2. 验证 408 题型与学科结构
+  // 2. 验证 408 题型与学科结构 (数构1-11, 组原12-22, 系统23-32, 网络33-40)
   assert.equal(CS408_PAPER_STRUCTURE.total, 47);
   assert.equal(CS408_PAPER_STRUCTURE.groups.length, 8);
   const dsChoices = CS408_PAPER_STRUCTURE.groups[0];
   assert.equal(dsChoices.subject, "数据结构");
   assert.equal(dsChoices.start, 1);
-  assert.equal(dsChoices.end, 10);
+  assert.equal(dsChoices.end, 11);
+  assert.equal(dsChoices.count, 11);
+
+  const coChoices = CS408_PAPER_STRUCTURE.groups[1];
+  assert.equal(coChoices.subject, "计算机组成原理");
+  assert.equal(coChoices.start, 12);
+  assert.equal(coChoices.end, 22);
+  assert.equal(coChoices.count, 11);
+
+  const osChoices = CS408_PAPER_STRUCTURE.groups[2];
+  assert.equal(osChoices.subject, "操作系统");
+  assert.equal(osChoices.start, 23);
+  assert.equal(osChoices.end, 32);
+  assert.equal(osChoices.count, 10);
+
+  const netChoices = CS408_PAPER_STRUCTURE.groups[3];
+  assert.equal(netChoices.subject, "计算机网络");
+  assert.equal(netChoices.start, 33);
+  assert.equal(netChoices.end, 40);
+  assert.equal(netChoices.count, 8);
 
   const netBig = CS408_PAPER_STRUCTURE.groups[7];
   assert.equal(netBig.subject, "计算机网络");

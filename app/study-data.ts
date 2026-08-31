@@ -136,10 +136,10 @@ export const MATH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] }
 export const CS408_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
   total: 47,
   groups: [
-    { type: "选择题", subject: "数据结构", start: 1, end: 10, count: 10 },
-    { type: "选择题", subject: "计算机组成原理", start: 11, end: 20, count: 10 },
-    { type: "选择题", subject: "操作系统", start: 21, end: 30, count: 10 },
-    { type: "选择题", subject: "计算机网络", start: 31, end: 40, count: 10 },
+    { type: "选择题", subject: "数据结构", start: 1, end: 11, count: 11 },
+    { type: "选择题", subject: "计算机组成原理", start: 12, end: 22, count: 11 },
+    { type: "选择题", subject: "操作系统", start: 23, end: 32, count: 10 },
+    { type: "选择题", subject: "计算机网络", start: 33, end: 40, count: 8 },
     { type: "综合应用题", subject: "数据结构", start: 41, end: 42, count: 2 },
     { type: "综合应用题", subject: "计算机组成原理", start: 43, end: 44, count: 2 },
     { type: "综合应用题", subject: "操作系统", start: 45, end: 46, count: 2 },
