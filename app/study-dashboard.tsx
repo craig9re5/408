@@ -3981,11 +3981,9 @@ export function StudyDashboard() {
       {isAddMockModalOpen && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true">
-            <span className="dialog-kicker">冲刺阶段 · 模拟题集</span>
-            <h2>添加模拟试卷</h2>
-            <p className="paper-score-sub">为【{activeArea === "408" ? "408" : "数学"}】添加名师押题或模考套卷</p>
+            <h2>添加 {activeArea === "408" ? "408" : "数学"} 模拟试卷</h2>
             <div className="paper-modal-form">
-              <label className="publish-form-field">
+              <label className="paper-form-field">
                 <span className="field-label">试卷名称 <strong>*</strong></span>
                 <input
                   type="text"
@@ -3995,7 +3993,7 @@ export function StudyDashboard() {
                   autoFocus
                 />
               </label>
-              <label className="publish-form-field">
+              <label className="paper-form-field">
                 <span className="field-label">系列 / 押题名师 (可选)</span>
                 <input
                   type="text"

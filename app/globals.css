@@ -3179,6 +3179,58 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   margin-bottom: 16px;
 }
 
+.confirm-dialog.paper-mock-dialog,
+.confirm-dialog.paper-score-dialog {
+  width: min(440px, 92vw);
+  box-sizing: border-box;
+}
+
+.confirm-dialog.paper-mock-dialog > .paper-modal-form,
+.confirm-dialog.paper-score-dialog > .paper-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0 20px;
+  width: 100%;
+}
+
+.paper-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.paper-form-field .field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft, #475569);
+}
+
+.paper-form-field .field-label strong {
+  color: #e53e3e;
+}
+
+.paper-form-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+  background: var(--canvas, #f8fafc);
+  border: 1px solid var(--line, #cbd5e1);
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.paper-form-field input:focus {
+  background: #ffffff;
+  border-color: var(--sidebar, #1e293b);
+  box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.08);
+}
+
 .paper-q-col {
   display: flex;
   align-items: center;
