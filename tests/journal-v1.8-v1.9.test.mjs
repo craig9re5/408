@@ -225,6 +225,7 @@ test("Journal 数据标准化: 校验并填充默认结构与发布状态", () =
   assert.equal(normalized[0].context, null);
   assert.equal(normalized[0].publish.status, "local");
   assert.equal(normalized[0].publish.publishedAt, null);
+  assert.equal(normalized[0].important, false);
 
   // 第二条保持完整上下文与发布状态
   assert.equal(normalized[1].id, "20260814002");
@@ -235,6 +236,49 @@ test("Journal 数据标准化: 校验并填充默认结构与发布状态", () =
   }
   assert.equal(normalized[1].publish.status, "published");
   assert.equal(normalized[1].publish.blogPostId, "20260814002");
+  assert.equal(normalized[1].important, false);
+});
+
+test("Journal 重点标记与筛选: 支持 important 标志位标准化、数据合并与过滤", () => {
+  const journals = [
+    {
+      id: "20260814001",
+      createdAt: "2026-08-14T10:00:00Z",
+      updatedAt: "2026-08-14T10:00:00Z",
+      title: "普通日志",
+      content: "内容1",
+      context: null,
+      publish: { status: "local", publishedAt: null, blogUrl: null, blogPostId: null },
+      important: false,
+    },
+    {
+      id: "20260814002",
+      createdAt: "2026-08-14T11:00:00Z",
+      updatedAt: "2026-08-14T11:00:00Z",
+      title: "重要日志",
+      content: "内容2",
+      context: null,
+      publish: { status: "local", publishedAt: null, blogUrl: null, blogPostId: null },
+      important: true,
+    },
+  ];
+
+  const normalized = normalizeJournals(journals);
+  assert.equal(normalized[0].important, false);
+  assert.equal(normalized[1].important, true);
+
+  // 重点筛选
+  const importantOnly = normalized.filter((item) => item.important);
+  assert.equal(importantOnly.length, 1);
+  assert.equal(importantOnly[0].id, "20260814002");
+  assert.equal(importantOnly[0].title, "重要日志");
+
+  // 多端合并保留 important 状态
+  const merged = mergeJournals(
+    [normalized[0]],
+    [{ ...normalized[0], important: true, updatedAt: "2026-08-14T12:00:00Z" }]
+  );
+  assert.equal(merged[0].important, true);
 });
 
 test("Schema 自动升级: V1 数据无缝迁移为 V2 并带有 journals 数组", () => {

@@ -3134,6 +3134,7 @@ export function StudyDashboard() {
                   <div className="journal-filter-pills" role="tablist" aria-label="日志筛选">
                     {([
                       ["all", "全部"],
+                      ["important", "⭐ 重点"],
                       ["unlinked", "无关联"],
                       ["linked", "有关联"],
                       ["408", "408"],
@@ -3186,9 +3187,14 @@ export function StudyDashboard() {
                               : entry.content;
 
                             return (
-                              <article className="journal-card" key={entry.id}>
+                              <article className={`journal-card ${entry.important ? "journal-card--important" : ""}`} key={entry.id}>
                                 <div className="journal-card-meta">
                                   <div className="journal-card-badges">
+                                    {entry.important && (
+                                      <span className="journal-important-badge" title="重点日志，需经常复盘">
+                                        ⭐ 重点
+                                      </span>
+                                    )}
                                     <span className="journal-time-tag">{formatTimeShort(entry.createdAt)}</span>
                                     {entry.context && (() => {
                                       const sections = extractJournalSections(entry.context);
@@ -3259,6 +3265,14 @@ export function StudyDashboard() {
                                   </div>
 
                                   <div className="journal-card-actions">
+                                    <button
+                                      type="button"
+                                      className={`journal-btn-tool journal-btn-tool--star ${entry.important ? "is-active" : ""}`}
+                                      onClick={() => toggleJournalImportant(entry.id)}
+                                      title={entry.important ? "取消重点标记" : "标记为重点日志"}
+                                    >
+                                      {entry.important ? "★ 重点" : "☆ 设为重点"}
+                                    </button>
                                     <button
                                       type="button"
                                       className="journal-btn-tool"
@@ -4413,6 +4427,17 @@ export function StudyDashboard() {
                   </button>
                 )}
               </div>
+
+              <div className="journal-important-field">
+                <button
+                  type="button"
+                  className={`journal-important-toggle-btn ${editorImportant ? "is-important" : ""}`}
+                  onClick={() => setEditorImportant((prev) => !prev)}
+                  title={editorImportant ? "点击取消重点标记" : "标记为重点日志，便于后续重点筛选复习"}
+                >
+                  {editorImportant ? "★ 重点日志" : "☆ 设为重点"}
+                </button>
+              </div>
             </div>
 
             <div className="journal-editor-body mode-split">
@@ -4739,10 +4764,25 @@ export function StudyDashboard() {
               {journalsBySection[activeDrawerSection.section.id]?.length ? (
                 <div className="drawer-journals-list">
                   {journalsBySection[activeDrawerSection.section.id].map((entry) => (
-                    <article className="drawer-journal-card" key={entry.id}>
+                    <article className={`drawer-journal-card ${entry.important ? "drawer-journal-card--important" : ""}`} key={entry.id}>
                       <div className="drawer-card-meta">
-                        <span className="drawer-date-tag">{formatDateChinese(entry.createdAt.slice(0, 10))} {formatTimeShort(entry.createdAt)}</span>
+                        <div className="drawer-meta-left">
+                          {entry.important && (
+                            <span className="journal-important-badge" title="重点日志">
+                              ⭐ 重点
+                            </span>
+                          )}
+                          <span className="drawer-date-tag">{formatDateChinese(entry.createdAt.slice(0, 10))} {formatTimeShort(entry.createdAt)}</span>
+                        </div>
                         <div className="drawer-card-tools">
+                          <button
+                            type="button"
+                            className={entry.important ? "drawer-tool--starred" : ""}
+                            onClick={() => toggleJournalImportant(entry.id)}
+                            title={entry.important ? "取消重点标记" : "标为重点"}
+                          >
+                            {entry.important ? "★ 重点" : "☆ 设为重点"}
+                          </button>
                           <button type="button" onClick={() => openEditJournal(entry)}>编辑</button>
                           <button type="button" onClick={() => openBlogPublishModal(entry)}>发布</button>
                           <button type="button" className="text-danger" onClick={() => handleDeleteJournal(entry)}>删除</button>
