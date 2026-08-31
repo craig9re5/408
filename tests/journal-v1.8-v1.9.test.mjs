@@ -13,6 +13,7 @@ import {
   mergePapers,
   MATH_PAPER_STRUCTURE,
   CS408_PAPER_STRUCTURE,
+  ENGLISH_PAPER_STRUCTURE,
   SCHEMA_VERSION,
   createAppData,
 } from "../app/study-data.ts";
@@ -433,8 +434,8 @@ test("createAppData: 打包导出数据包含 journals 与最新 schema", () => 
 
 test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日期", () => {
   const papers = defaultPastPapers();
-  // 408 有 17 套 (2010~2026)，数学有 17 套 (2010~2026)，共 34 套
-  assert.equal(papers.length, 34);
+  // 408 有 17 套 (2010~2026)，数学有 17 套 (2010~2026)，英语有 17 套 (2010~2026)，共 51 套
+  assert.equal(papers.length, 51);
 
   const past408 = papers.filter((p) => p.area === "408" && p.kind === "past");
   assert.equal(past408.length, 17);
@@ -447,6 +448,10 @@ test("Sprint Papers: defaultPastPapers 生成 2010~2026 年真题且无计划日
 
   const pastMath = papers.filter((p) => p.area === "math" && p.kind === "past");
   assert.equal(pastMath.length, 17);
+
+  const pastEnglish = papers.filter((p) => p.area === "english" && p.kind === "past");
+  assert.equal(pastEnglish.length, 17);
+  assert.equal(pastEnglish[0].title, "2026年 英语真题");
 });
 
 test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管理", () => {
@@ -512,8 +517,8 @@ test("Sprint Papers: normalizePapers 与 mergePapers 多端合并与模拟卷管
 
   const merged = mergePapers(deviceA_papers, deviceB_papers);
 
-  // 34 套真题 + 2 套模拟题 = 36 套
-  assert.equal(merged.length, 36);
+  // 51 套真题 + 2 套模拟题 = 53 套
+  assert.equal(merged.length, 53);
 
   const paper2025 = merged.find((p) => p.id === "past-408-2025");
   assert.equal(paper2025?.completed, true);
@@ -588,6 +593,37 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   assert.equal(netBig.subject, "计算机网络");
   assert.equal(netBig.start, 47);
   assert.equal(netBig.end, 47);
+
+  // 2.1 验证英语题型与权重结构 (完形1-20/0.5分, 传统阅读21-40/2分, 新题型41-45/2分, 翻译46-50, 作文51-52)
+  assert.equal(ENGLISH_PAPER_STRUCTURE.total, 52);
+  assert.equal(ENGLISH_PAPER_STRUCTURE.groups.length, 5);
+  const cloze = ENGLISH_PAPER_STRUCTURE.groups[0];
+  assert.equal(cloze.subject, "完形填空");
+  assert.equal(cloze.start, 1);
+  assert.equal(cloze.end, 20);
+  assert.equal(cloze.scorePerQuestion, 0.5);
+
+  const reading = ENGLISH_PAPER_STRUCTURE.groups[1];
+  assert.equal(reading.subject, "传统阅读");
+  assert.equal(reading.start, 21);
+  assert.equal(reading.end, 40);
+  assert.equal(reading.scorePerQuestion, 2.0);
+
+  const newType = ENGLISH_PAPER_STRUCTURE.groups[2];
+  assert.equal(newType.subject, "新题型");
+  assert.equal(newType.start, 41);
+  assert.equal(newType.end, 45);
+  assert.equal(newType.scorePerQuestion, 2.0);
+
+  const trans = ENGLISH_PAPER_STRUCTURE.groups[3];
+  assert.equal(trans.subject, "英译汉");
+  assert.equal(trans.start, 46);
+  assert.equal(trans.end, 50);
+
+  const writing = ENGLISH_PAPER_STRUCTURE.groups[4];
+  assert.equal(writing.subject, "短文写作");
+  assert.equal(writing.start, 51);
+  assert.equal(writing.end, 52);
 
   // 3. 验证 normalizePaperRecord 与题目状态
   const rawPaper = {

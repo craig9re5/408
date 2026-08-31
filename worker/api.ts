@@ -37,22 +37,23 @@ type PlanHistoryEntry = {
 type ProjectSettings = {
   "408": { examDate: string };
   math: { examDate: string };
+  english: { examDate: string };
 };
 
 export type JournalProjectContext = {
   type: "project";
-  area: "408" | "math";
+  area: "408" | "math" | "english";
 };
 
 export type JournalSubjectContext = {
   type: "subject";
-  area: "408" | "math";
+  area: "408" | "math" | "english";
   bookId: string;
   bookTitle?: string;
 };
 
 export type JournalSectionItem = {
-  area: "408" | "math";
+  area: "408" | "math" | "english";
   bookId: string;
   sectionId: string;
   bookTitle?: string;
@@ -62,7 +63,7 @@ export type JournalSectionItem = {
 
 export type JournalSectionContext = {
   type: "section";
-  area: "408" | "math";
+  area: "408" | "math" | "english";
   bookId: string;
   sectionId: string;
   bookTitle?: string;
@@ -77,7 +78,7 @@ export type JournalSectionsContext = {
 
 export type JournalPaperContext = {
   type: "paper";
-  area: "408" | "math";
+  area: "408" | "math" | "english";
   paperId: string;
   paperTitle: string;
 };
@@ -99,7 +100,7 @@ export type JournalPublish = {
 export type JournalEntry = {
   id: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   title: string | null;
   content: string;
   context: JournalContext | null;
@@ -112,7 +113,7 @@ export type QuestionState = "correct" | "wrong";
 export type PaperRecord = {
   id: string;
   kind: PaperKind;
-  area: "408" | "math";
+  area: "408" | "math" | "english";
   title: string;
   groupName?: string;
   year?: number;
@@ -146,6 +147,7 @@ type AppData = {
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },
+  english: { examDate: "2026-12-19" },
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -323,7 +325,7 @@ function normalizeProjectSettings(value: unknown): ProjectSettings {
   const normalized = structuredClone(DEFAULT_PROJECT_SETTINGS);
   if (!value || typeof value !== "object" || Array.isArray(value)) return normalized;
   const settings = value as Record<string, unknown>;
-  (["408", "math"] as const).forEach((area) => {
+  (["408", "math", "english"] as const).forEach((area) => {
     const candidate = settings[area];
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
       const examDate = (candidate as Record<string, unknown>).examDate;
@@ -367,7 +369,7 @@ function normalizeJournalContext(value: unknown): JournalContext | null {
     candidate.sections.forEach((item) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return;
       const secCandidate = item as Record<string, unknown>;
-      const area = secCandidate.area === "math" ? "math" : secCandidate.area === "408" ? "408" : null;
+      const area = secCandidate.area === "math" ? "math" : secCandidate.area === "english" ? "english" : secCandidate.area === "408" ? "408" : null;
       if (!area) return;
       if (typeof secCandidate.bookId !== "string" || !secCandidate.bookId.trim()) return;
       if (typeof secCandidate.sectionId !== "string" || !secCandidate.sectionId.trim()) return;
@@ -392,7 +394,7 @@ function normalizeJournalContext(value: unknown): JournalContext | null {
     };
   }
 
-  const area = candidate.area === "math" ? "math" : candidate.area === "408" ? "408" : null;
+  const area = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : candidate.area === "408" ? "408" : null;
   if (!area) return null;
 
   if (candidate.type === "project") {
@@ -492,13 +494,13 @@ const PAST_PAPER_YEARS = [
 
 function defaultPastPapers(): PaperRecord[] {
   const list: PaperRecord[] = [];
-  (["408", "math"] as ("408" | "math")[]).forEach((area) => {
+  (["408", "math", "english"] as const).forEach((area) => {
     PAST_PAPER_YEARS.forEach((year) => {
       list.push({
         id: `past-${area}-${year}`,
         kind: "past",
         area,
-        title: `${year}年 ${area === "408" ? "408真题" : "数学真题"}`,
+        title: `${year}年 ${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
         groupName: "历年真题",
         year,
         completed: false,
@@ -518,7 +520,7 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.id !== "string" || !candidate.id.trim()) return null;
   const kind: PaperKind = candidate.kind === "mock" ? "mock" : "past";
-  const area: "408" | "math" = candidate.area === "math" ? "math" : "408";
+  const area: "408" | "math" | "english" = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : "408";
   const title = typeof candidate.title === "string" && candidate.title.trim()
     ? candidate.title.trim().slice(0, 150)
     : (kind === "past" ? `${candidate.year ?? ""} 真题` : "模拟卷");

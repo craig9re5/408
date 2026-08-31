@@ -5,7 +5,7 @@ export type Section = {
   plannedAt?: string;
 };
 
-export type StudyArea = "408" | "math";
+export type StudyArea = "408" | "math" | "english";
 
 export type Chapter = {
   id: string;

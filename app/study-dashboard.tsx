@@ -34,6 +34,7 @@ import {
   mergePapers,
   MATH_PAPER_STRUCTURE,
   CS408_PAPER_STRUCTURE,
+  ENGLISH_PAPER_STRUCTURE,
   type DisciplineStats,
   type ForecastHealth,
   type HeatmapDay,
@@ -484,6 +485,7 @@ export function StudyDashboard() {
   const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>({
     "408": "operating-system",
     math: "advanced-math",
+    english: "",
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
@@ -800,9 +802,9 @@ export function StudyDashboard() {
     setPlanHistory([]);
   }
 
-  const areaBooks = useMemo(() => books.filter((book) => book.area === activeArea), [activeArea]);
+  const areaBooks = useMemo(() => books.filter((book) => book.area === (activeArea === "english" ? "408" : activeArea)), [activeArea]);
   const selectedBookId = selectedBookByArea[activeArea];
-  const selectedBook = areaBooks.find((book) => book.id === selectedBookId) ?? areaBooks[0];
+  const selectedBook = areaBooks.find((book) => book.id === selectedBookId) ?? areaBooks[0] ?? books[0];
   const selectedSections = useMemo(() => allSections(selectedBook), [selectedBook]);
   const learnedCount = selectedSections.filter((section) => progress[section.id]?.learned).length;
   const reviewedCount = selectedSections.filter((section) => progress[section.id]?.reviewed).length;
@@ -885,8 +887,8 @@ export function StudyDashboard() {
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
 
-  const nearestExamDate = [projectSettings["408"].examDate, projectSettings.math.examDate].sort()[0];
-  const examDate = activePage === "progress" ? projectSettings[activeArea].examDate : nearestExamDate;
+  const nearestExamDate = [projectSettings["408"].examDate, projectSettings.math.examDate, projectSettings.english?.examDate ?? "2026-12-19"].sort()[0];
+  const examDate = (activePage === "progress" || activePage === "sprint") ? (projectSettings[activeArea]?.examDate ?? nearestExamDate) : nearestExamDate;
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
   const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
   const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
@@ -1051,8 +1053,8 @@ export function StudyDashboard() {
   }
 
   function getPaperQuestionSummary(paper: PaperRecord) {
-    const totalQuestions = paper.area === "math" ? 22 : 47;
-    const maxChoiceNum = paper.area === "math" ? 10 : 40;
+    const totalQuestions = paper.area === "math" ? 22 : paper.area === "english" ? 52 : 47;
+    const maxChoiceNum = paper.area === "math" ? 10 : paper.area === "english" ? 45 : 40;
     if (!paper.questions || Object.keys(paper.questions).length === 0) {
       return null;
     }
@@ -1060,20 +1062,33 @@ export function StudyDashboard() {
     let wrongCount = 0;
     let choiceCorrectCount = 0;
     let choiceWrongCount = 0;
+    let choiceRecordedWeight = 0;
+    let choiceCorrectWeight = 0;
+
     for (let i = 1; i <= totalQuestions; i++) {
       const qState = paper.questions[i];
+      const isChoice = i <= maxChoiceNum;
+      const weight = paper.area === "english" && isChoice ? (i <= 20 ? 0.5 : 2.0) : 1.0;
+
       if (qState === "correct") {
         correctCount++;
-        if (i <= maxChoiceNum) choiceCorrectCount++;
+        if (isChoice) {
+          choiceCorrectCount++;
+          choiceCorrectWeight += weight;
+          choiceRecordedWeight += weight;
+        }
       } else if (qState === "wrong") {
         wrongCount++;
-        if (i <= maxChoiceNum) choiceWrongCount++;
+        if (isChoice) {
+          choiceWrongCount++;
+          choiceRecordedWeight += weight;
+        }
       }
     }
     const totalRecorded = correctCount + wrongCount;
     const accuracyPercent = totalRecorded > 0 ? Math.round((correctCount / totalRecorded) * 100) : 0;
     const choiceRecorded = choiceCorrectCount + choiceWrongCount;
-    const choiceAccuracyPercent = choiceRecorded > 0 ? Math.round((choiceCorrectCount / choiceRecorded) * 100) : null;
+    const choiceAccuracyPercent = choiceRecordedWeight > 0 ? Math.round((choiceCorrectWeight / choiceRecordedWeight) * 100) : null;
     return {
       totalRecorded,
       correctCount,
@@ -1083,6 +1098,8 @@ export function StudyDashboard() {
       choiceWrongCount,
       choiceRecorded,
       choiceAccuracyPercent,
+      choiceCorrectWeight,
+      choiceRecordedWeight,
       maxChoiceNum,
       totalQuestions,
     };
@@ -1107,7 +1124,7 @@ export function StudyDashboard() {
   function markAllPaperQuestions(paperId: string, state: "correct" | "wrong") {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
-      const total = p.area === "math" ? 22 : 47;
+      const total = p.area === "math" ? 22 : p.area === "english" ? 52 : 47;
       const nextMap: Record<number, QuestionState> = {};
       for (let i = 1; i <= total; i++) {
         nextMap[i] = state;
@@ -1123,7 +1140,7 @@ export function StudyDashboard() {
   function batchSetWrongQuestions(paperId: string, rawInput: string) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
-      const total = p.area === "math" ? 22 : 47;
+      const total = p.area === "math" ? 22 : p.area === "english" ? 52 : 47;
       const tokens = rawInput.split(/[,，\s、]+/).map((t) => parseInt(t.trim(), 10)).filter((n) => !Number.isNaN(n) && n >= 1 && n <= total);
       const wrongSet = new Set(tokens);
       const nextMap: Record<number, QuestionState> = {};
@@ -1986,7 +2003,7 @@ export function StudyDashboard() {
             </div>}
             {activePage === "sprint" && <div className="study-switchers sprint-top-switchers">
               <div className="area-switcher" role="group" aria-label="切换冲刺科目">
-                {(["408", "math"] as StudyArea[]).map((area) => (
+                {(["408", "math", "english"] as StudyArea[]).map((area) => (
                   <button
                     className={activeArea === area ? "active" : ""}
                     type="button"
@@ -1994,7 +2011,7 @@ export function StudyDashboard() {
                     aria-pressed={activeArea === area}
                     onClick={() => setActiveArea(area)}
                   >
-                    {area === "408" ? "408" : "数学"}
+                    {area === "408" ? "408" : area === "math" ? "数学" : "英语"}
                   </button>
                 ))}
               </div>
@@ -2589,16 +2606,30 @@ export function StudyDashboard() {
 
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
-                    <span>模拟试题</span>
-                    <strong>{sprintMockCompleted} / {sprintMockTotal} <small className="stat-unit">套</small></strong>
+                    <span>{activeArea === "english" ? "英语研读" : "模拟试题"}</span>
+                    <strong>
+                      {activeArea === "english"
+                        ? `${sprintPastCompleted} / ${sprintPastTotal} `
+                        : `${sprintMockCompleted} / ${sprintMockTotal} `}
+                      <small className="stat-unit">套</small>
+                    </strong>
                   </div>
                   <div className="stat-card-body">
                     <div className="stat-card-progress-bar">
-                      <div className="stat-card-progress-fill" style={{ width: `${sprintMockPercent}%` }} />
+                      <div
+                        className="stat-card-progress-fill"
+                        style={{ width: `${activeArea === "english" ? sprintPastPercent : sprintMockPercent}%` }}
+                      />
                     </div>
                     <div className="stat-card-footer">
-                      <small>{sprintMockTotal > 0 ? `已完成 ${sprintMockCompleted} 套` : "点击添加模拟卷"}</small>
-                      <small>共录入 {sprintMockTotal} 套</small>
+                      <small>
+                        {activeArea === "english"
+                          ? "覆盖 2010~2026 全部真题"
+                          : sprintMockTotal > 0
+                          ? `已完成 ${sprintMockCompleted} 套`
+                          : "点击添加模拟卷"}
+                      </small>
+                      <small>{activeArea === "english" ? "不含模拟题" : `共录入 ${sprintMockTotal} 套`}</small>
                     </div>
                   </div>
                 </article>
@@ -2606,7 +2637,7 @@ export function StudyDashboard() {
                 <article className="sprint-stat-card">
                   <div className="stat-card-head">
                     <span>模考平均成绩</span>
-                    <strong>{sprintAvgScore} <small className="stat-unit">/ 150 分</small></strong>
+                    <strong>{sprintAvgScore} <small className="stat-unit">/ {activeArea === "english" ? 100 : 150} 分</small></strong>
                   </div>
                   <div className="stat-card-body">
                     <p className="stat-desc">
@@ -2636,15 +2667,17 @@ export function StudyDashboard() {
                   >
                     历年真题 ({sprintPastTotal})
                   </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={sprintTab === "mock"}
-                    className={sprintTab === "mock" ? "active" : ""}
-                    onClick={() => setSprintTab("mock")}
-                  >
-                    模拟试题 ({sprintMockTotal})
-                  </button>
+                  {activeArea !== "english" && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sprintTab === "mock"}
+                      className={sprintTab === "mock" ? "active" : ""}
+                      onClick={() => setSprintTab("mock")}
+                    >
+                      模拟试题 ({sprintMockTotal})
+                    </button>
+                  )}
                 </div>
 
                 <div className="sprint-toolbar-right">
@@ -2740,7 +2773,7 @@ export function StudyDashboard() {
                                       title="点击修改得分"
                                       onClick={() => setEditingScorePaper({ id: paper.id, score: String(paper.score) })}
                                     >
-                                      <strong>{paper.score}</strong> <small>/ 150分</small>
+                                      <strong>{paper.score}</strong> <small>/ {activeArea === "english" ? "100分" : "150分"}</small>
                                     </button>
                                   ) : (
                                     <button
@@ -2844,7 +2877,7 @@ export function StudyDashboard() {
                     </section>
                   )}
 
-                  {(sprintTab === "all" || sprintTab === "mock") && (
+                  {(sprintTab === "all" || sprintTab === "mock") && activeArea !== "english" && (
                     <section className="sprint-section" aria-labelledby="mock-bento-heading">
                       <div className="sprint-section-header">
                         <h3 id="mock-bento-heading">模拟题</h3>
@@ -3170,7 +3203,7 @@ export function StudyDashboard() {
                       </section>
                     )}
 
-                    {(sprintTab === "all" || sprintTab === "mock") && (
+                    {(sprintTab === "all" || sprintTab === "mock") && activeArea !== "english" && (
                       <section className="sprint-section" aria-labelledby="mock-papers-heading">
                         <div className="sprint-section-header">
                           <h3 id="mock-papers-heading">模拟题</h3>
@@ -3347,7 +3380,7 @@ export function StudyDashboard() {
                     <div className="sprint-insight-card">
                       <div className="insight-card-header">
                         <span className="insight-card-icon">🎯</span>
-                        <h4 className="insight-card-title">{activeArea === "408" ? "四科选择题正答率诊断" : "各题型正答率诊断"}</h4>
+                        <h4 className="insight-card-title">{activeArea === "408" ? "四科选择题正答率诊断" : activeArea === "english" ? "英语各题型选择题正答率" : "各题型正答率诊断"}</h4>
                       </div>
                       <div className="insight-subject-list">
                         {(() => {
@@ -3369,7 +3402,36 @@ export function StudyDashboard() {
                                   }
                                 }
                               }
-                              return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
+                              return list.map((i) => ({
+                                ...i,
+                                rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null,
+                                statText: `${i.correct}/${i.total}`,
+                              }));
+                            } else if (activeArea === "english") {
+                              const list = [
+                                { key: "CL", name: "完形填空", range: "1~20 题 · 10分", start: 1, end: 20, weight: 0.5, correctWeight: 0, totalWeight: 0 },
+                                { key: "RA", name: "传统阅读", range: "21~40 题 · 40分", start: 21, end: 40, weight: 2.0, correctWeight: 0, totalWeight: 0 },
+                                { key: "RB", name: "新题型", range: "41~45 题 · 10分", start: 41, end: 45, weight: 2.0, correctWeight: 0, totalWeight: 0 },
+                              ];
+                              for (const p of sprintAreaPapers) {
+                                if (!p.questions) continue;
+                                for (const item of list) {
+                                  for (let q = item.start; q <= item.end; q++) {
+                                    const st = p.questions[q];
+                                    if (st === "correct") {
+                                      item.correctWeight += item.weight;
+                                      item.totalWeight += item.weight;
+                                    } else if (st === "wrong") {
+                                      item.totalWeight += item.weight;
+                                    }
+                                  }
+                                }
+                              }
+                              return list.map((i) => ({
+                                ...i,
+                                rate: i.totalWeight > 0 ? Math.round((i.correctWeight / i.totalWeight) * 100) : null,
+                                statText: `${i.correctWeight}/${i.totalWeight}分`,
+                              }));
                             } else {
                               const list = [
                                 { key: "选择题", name: "单项选择", range: "1~10 题", start: 1, end: 10, correct: 0, total: 0 },
@@ -3386,7 +3448,11 @@ export function StudyDashboard() {
                                   }
                                 }
                               }
-                              return list.map((i) => ({ ...i, rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null }));
+                              return list.map((i) => ({
+                                ...i,
+                                rate: i.total > 0 ? Math.round((i.correct / i.total) * 100) : null,
+                                statText: `${i.correct}/${i.total}`,
+                              }));
                             }
                           })();
 
@@ -3400,7 +3466,7 @@ export function StudyDashboard() {
                                 <div className="insight-subj-stat">
                                   {d.rate !== null ? (
                                     <span className={`insight-rate-pill ${d.rate >= 80 ? "rate-high" : d.rate >= 60 ? "rate-mid" : "rate-low"}`}>
-                                      {d.rate}% <small>({d.correct}/{d.total})</small>
+                                      {d.rate}% <small>({d.statText})</small>
                                     </span>
                                   ) : (
                                     <span className="insight-rate-empty">未录入</span>
@@ -3437,6 +3503,7 @@ export function StudyDashboard() {
                         const maxScore = Math.max(...scores);
                         const minScore = Math.min(...scores);
                         const avgScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+                        const maxSprintScore = activeArea === "english" ? 100 : 150;
                         return (
                           <div className="insight-score-trend-wrap">
                             <div className="insight-score-summary-grid">
@@ -3456,14 +3523,14 @@ export function StudyDashboard() {
                             <div className="insight-score-bars">
                               {scored.map((p) => {
                                 const sc = p.score as number;
-                                const heightPercent = Math.max(15, Math.round((sc / 150) * 100));
+                                const heightPercent = Math.max(15, Math.round((sc / maxSprintScore) * 100));
                                 return (
                                   <div className="insight-score-bar-col" key={p.id} title={`${p.title}: ${sc}分`}>
                                     <span className="score-bar-val">{sc}</span>
                                     <div className="score-bar-track">
                                       <div className="score-bar-fill" style={{ height: `${heightPercent}%` }} />
                                     </div>
-                                    <span className="score-bar-label">{p.type === "past" ? `${p.year}` : p.title.slice(0, 4)}</span>
+                                    <span className="score-bar-label">{p.kind === "past" ? `${p.year}` : p.title.slice(0, 4)}</span>
                                   </div>
                                 );
                               })}
@@ -4435,47 +4502,51 @@ export function StudyDashboard() {
       )}
 
       {/* Paper Score Modal */}
-      {editingScorePaper && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true">
-            <span className="dialog-kicker">全真模拟考记录</span>
-            <h2>模考成绩录入</h2>
-            <p className="paper-score-sub">记录本套试卷的真实得分（0~150 分）</p>
-            <div className="paper-modal-form">
-              <label className="publish-form-field">
-                <span className="field-label">得分 (0~150 分)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={150}
-                  step={0.5}
-                  placeholder="如：118.5"
-                  value={editingScorePaper.score}
-                  onChange={(e) => setEditingScorePaper({ ...editingScorePaper, score: e.target.value })}
-                  autoFocus
-                />
-              </label>
-            </div>
-            <div className="confirm-actions">
-              <button type="button" className="btn-cancel" onClick={() => setEditingScorePaper(null)}>取消</button>
-              <button
-                type="button"
-                className="btn-confirm"
-                onClick={() => {
-                  const scoreVal = editingScorePaper.score.trim() === "" ? null : parseFloat(editingScorePaper.score);
-                  updatePaper(editingScorePaper.id, {
-                    score: Number.isNaN(scoreVal) ? null : scoreVal,
-                  });
-                  setEditingScorePaper(null);
-                  setFeedbackMessage("已保存模考成绩");
-                }}
-              >
-                保存成绩
-              </button>
+      {editingScorePaper && (() => {
+        const currentPaper = papers.find((p) => p.id === editingScorePaper.id);
+        const maxScoreLimit = currentPaper?.area === "english" ? 100 : 150;
+        return (
+          <div className="confirm-overlay" role="presentation">
+            <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true">
+              <span className="dialog-kicker">全真模拟考记录</span>
+              <h2>模考成绩录入</h2>
+              <p className="paper-score-sub">记录本套试卷的真实得分（0~{maxScoreLimit} 分）</p>
+              <div className="paper-modal-form">
+                <label className="publish-form-field">
+                  <span className="field-label">得分 (0~{maxScoreLimit} 分)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={maxScoreLimit}
+                    step={0.5}
+                    placeholder="如：78.5"
+                    value={editingScorePaper.score}
+                    onChange={(e) => setEditingScorePaper({ ...editingScorePaper, score: e.target.value })}
+                    autoFocus
+                  />
+                </label>
+              </div>
+              <div className="confirm-actions">
+                <button type="button" className="btn-cancel" onClick={() => setEditingScorePaper(null)}>取消</button>
+                <button
+                  type="button"
+                  className="btn-confirm"
+                  onClick={() => {
+                    const scoreVal = editingScorePaper.score.trim() === "" ? null : parseFloat(editingScorePaper.score);
+                    updatePaper(editingScorePaper.id, {
+                      score: Number.isNaN(scoreVal) ? null : scoreVal,
+                    });
+                    setEditingScorePaper(null);
+                    setFeedbackMessage("已保存模考成绩");
+                  }}
+                >
+                  保存成绩
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Add Mock Paper Modal */}
       {isAddMockModalOpen && (
@@ -4542,23 +4613,35 @@ export function StudyDashboard() {
               <h2 id="q-modal-title">{activeQuestionPaper.title}</h2>
               <div className="paper-q-header-right">
                 {(() => {
+                  const isEng = activeQuestionPaper.area === "english";
                   const is408 = activeQuestionPaper.area === "408";
-                  const maxChoiceNum = is408 ? 40 : 10;
+                  const maxChoiceNum = isEng ? 45 : is408 ? 40 : 10;
                   let correct = 0;
                   let wrong = 0;
+                  let choiceRecordedWeight = 0;
+                  let choiceCorrectWeight = 0;
+
                   for (let i = 1; i <= maxChoiceNum; i++) {
                     const st = activeQuestionPaper.questions?.[i];
-                    if (st === "correct") correct++;
-                    else if (st === "wrong") wrong++;
+                    const weight = isEng ? (i <= 20 ? 0.5 : 2.0) : 1.0;
+                    if (st === "correct") {
+                      correct++;
+                      choiceCorrectWeight += weight;
+                      choiceRecordedWeight += weight;
+                    } else if (st === "wrong") {
+                      wrong++;
+                      choiceRecordedWeight += weight;
+                    }
                   }
-                  const total = correct + wrong;
-                  const rate = total > 0 ? Math.round((correct / total) * 100) : null;
+                  const rate = choiceRecordedWeight > 0 ? Math.round((choiceCorrectWeight / choiceRecordedWeight) * 100) : null;
                   return (
                     <div className="paper-q-header-metrics">
                       <span className="q-header-pill q-pill--correct">🟢 正确 {correct}</span>
                       <span className="q-header-pill q-pill--wrong">🔴 错题 {wrong}</span>
                       {rate !== null && (
-                        <span className="q-header-pill q-pill--rate">选择题正确率 {rate}%</span>
+                        <span className="q-header-pill q-pill--rate">
+                          选择题{isEng ? "加权" : ""}正确率 {rate}%
+                        </span>
                       )}
                     </div>
                   );
@@ -4645,6 +4728,91 @@ export function StudyDashboard() {
                     </div>
                   );
                 })
+              ) : activeQuestionPaper.area === "english" ? (
+                /* English: 1~45 选择 (完形 1~20, 传统阅读 21~40, 新题型 41~45), 46~52 主观 (翻译 46~50, 写作 51~52) */
+                <div className="q-408-container">
+                  {/* Part 1: 单项选择题 (1~45) */}
+                  <div className="q-type-block">
+                    <div className="q-type-header">
+                      <span className="q-type-title">单项选择题 (客观题)</span>
+                      <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分 (完形 0.5分/题，阅读与新题型 2分/题)</span>
+                    </div>
+                    <div className="q-type-rows">
+                      {ENGLISH_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
+                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        const abbrMap: Record<string, string> = {
+                          "完形填空": "CL",
+                          "传统阅读": "RA",
+                          "新题型": "RB",
+                        };
+                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
+                        return (
+                          <div className="q-heatmap-row" key={`choice-${grp.subject}`}>
+                            <div className="q-subject-label">
+                              <strong className="q-label-name">{subjectAbbr}</strong>
+                              <span className="q-label-range">{grp.start}~{grp.end}</span>
+                            </div>
+                            <div className="q-heatmap-chips">
+                              {numbers.map((num) => {
+                                const state = activeQuestionPaper.questions?.[num];
+                                return (
+                                  <button
+                                    key={num}
+                                    type="button"
+                                    className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                    title={`第 ${num} 题 [${grp.subject} · ${grp.scorePerQuestion}分]：点击切换正确 / 错误`}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                  >
+                                    {num}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Part 2: 主观表达题 (46~52) */}
+                  <div className="q-type-block q-type-block--comprehensive">
+                    <div className="q-type-header">
+                      <span className="q-type-title">主观表达题</span>
+                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分 (翻译 10~15分 + 大小作文 25~30分)</span>
+                    </div>
+                    <div className="q-comprehensive-clusters">
+                      {ENGLISH_PAPER_STRUCTURE.groups.filter((g) => g.type === "主观表达题").map((grp) => {
+                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
+                        const abbrMap: Record<string, string> = {
+                          "英译汉": "TR",
+                          "短文写作": "WR",
+                        };
+                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
+                        return (
+                          <div className="q-comp-cluster" key={`subj-${grp.subject}`}>
+                            <span className="q-comp-subject">{subjectAbbr}</span>
+                            <div className="q-comp-chips">
+                              {numbers.map((num) => {
+                                const state = activeQuestionPaper.questions?.[num];
+                                return (
+                                  <button
+                                    key={num}
+                                    type="button"
+                                    className={`q-chip-btn q-chip-btn--lg ${state ? `state-${state}` : "state-unset"}`}
+                                    title={`第 ${num} 题 [${grp.subject}]：点击切换掌握 / 扣分`}
+                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num)}
+                                  >
+                                    {num}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 /* 408: 1~40 单选 (分 DS, CO, OS, CN), 41~47 综合大题 (分 DS, CO, OS, CN) */
                 <div className="q-408-container">

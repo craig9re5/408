@@ -117,11 +117,12 @@ export type PaperKind = "past" | "mock";
 export type QuestionState = "correct" | "wrong";
 
 export type QuestionGroupDef = {
-  type: "选择题" | "填空题" | "解答题" | "综合应用题";
+  type: "选择题" | "填空题" | "解答题" | "综合应用题" | "主观表达题";
   subject?: string;
   start: number;
   end: number;
   count: number;
+  scorePerQuestion?: number;
 };
 
 export const MATH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
@@ -144,6 +145,17 @@ export const CS408_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] 
     { type: "综合应用题", subject: "计算机组成原理", start: 43, end: 44, count: 2 },
     { type: "综合应用题", subject: "操作系统", start: 45, end: 46, count: 2 },
     { type: "综合应用题", subject: "计算机网络", start: 47, end: 47, count: 1 },
+  ],
+};
+
+export const ENGLISH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
+  total: 52,
+  groups: [
+    { type: "选择题", subject: "完形填空", start: 1, end: 20, count: 20, scorePerQuestion: 0.5 },
+    { type: "选择题", subject: "传统阅读", start: 21, end: 40, count: 20, scorePerQuestion: 2.0 },
+    { type: "选择题", subject: "新题型", start: 41, end: 45, count: 5, scorePerQuestion: 2.0 },
+    { type: "主观表达题", subject: "英译汉", start: 46, end: 50, count: 5 },
+    { type: "主观表达题", subject: "短文写作", start: 51, end: 52, count: 2 },
   ],
 };
 
@@ -577,6 +589,7 @@ export function calculateDisciplineStats(
 export const defaultProjectSettings = (): ProjectSettings => ({
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },
+  english: { examDate: "2026-12-19" },
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -684,7 +697,7 @@ function normalizeProgressMap(value: unknown, fallback: ProgressMap): ProgressMa
 function normalizeProjectSettings(value: unknown): ProjectSettings {
   const defaults = defaultProjectSettings();
   if (!isRecord(value)) return defaults;
-  (["408", "math"] as StudyArea[]).forEach((area) => {
+  (["408", "math", "english"] as StudyArea[]).forEach((area) => {
     const setting = value[area];
     if (isRecord(setting) && isDate(setting.examDate)) defaults[area] = { examDate: setting.examDate };
   });
@@ -894,13 +907,13 @@ export const PAST_PAPER_YEARS = [
 
 export function defaultPastPapers(): PaperRecord[] {
   const list: PaperRecord[] = [];
-  (["408", "math"] as StudyArea[]).forEach((area) => {
+  (["408", "math", "english"] as StudyArea[]).forEach((area) => {
     PAST_PAPER_YEARS.forEach((year) => {
       list.push({
         id: `past-${area}-${year}`,
         kind: "past",
         area,
-        title: `${year}年 ${area === "408" ? "408真题" : "数学真题"}`,
+        title: `${year}年 ${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
         groupName: "历年真题",
         year,
         completed: false,
@@ -919,7 +932,7 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || !value.id.trim()) return null;
   const kind: PaperKind = value.kind === "mock" ? "mock" : "past";
-  const area: StudyArea = value.area === "math" ? "math" : "408";
+  const area: StudyArea = value.area === "math" ? "math" : value.area === "english" ? "english" : "408";
   const title = typeof value.title === "string" && value.title.trim()
     ? value.title.trim()
     : (kind === "past" ? `${value.year ?? ""} 真题` : "模拟卷");
