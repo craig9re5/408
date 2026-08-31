@@ -1428,19 +1428,19 @@ export function StudyDashboard() {
 
     if (paper.area === "408") {
       choiceGroups = [
-        { name: "数构", start: 1, count: 11, label: "数构" },
-        { name: "计组", start: 12, count: 11, label: "计组" },
-        { name: "系统", start: 23, count: 10, label: "系统" },
-        { name: "计网", start: 33, count: 8, label: "计网" },
+        { name: "DS", start: 1, count: 11, label: "数据结构" },
+        { name: "CO", start: 12, count: 11, label: "组成原理" },
+        { name: "OS", start: 23, count: 10, label: "操作系统" },
+        { name: "CN", start: 33, count: 8, label: "计算机网络" },
       ];
       bigQuestions = [
-        { num: 41, name: "数构" },
-        { num: 42, name: "数构" },
-        { num: 43, name: "计组" },
-        { num: 44, name: "计组" },
-        { num: 45, name: "系统" },
-        { num: 46, name: "系统" },
-        { num: 47, name: "计网" },
+        { num: 41, name: "DS" },
+        { num: 42, name: "DS" },
+        { num: 43, name: "CO" },
+        { num: 44, name: "CO" },
+        { num: 45, name: "OS" },
+        { num: 46, name: "OS" },
+        { num: 47, name: "CN" },
       ];
       choiceTagLabel = "选择";
       subjTagLabel = "大题";
@@ -5242,10 +5242,10 @@ export function StudyDashboard() {
                       {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
                         const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
                         const abbrMap: Record<string, string> = {
-                          "数据结构": "数构",
-                          "计算机组成原理": "计组",
-                          "操作系统": "系统",
-                          "计算机网络": "计网",
+                          "数据结构": "DS",
+                          "计算机组成原理": "CO",
+                          "操作系统": "OS",
+                          "计算机网络": "CN",
                         };
                         const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
                         return (
@@ -5284,13 +5284,13 @@ export function StudyDashboard() {
                     </div>
                     <div className="q-rating-grid">
                       {[
-                        { num: 41, subj: "数构", max: 13 },
-                        { num: 42, subj: "数构", max: 13 },
-                        { num: 43, subj: "计组", max: 13 },
-                        { num: 44, subj: "计组", max: 13 },
-                        { num: 45, subj: "系统", max: 12 },
-                        { num: 46, subj: "系统", max: 12 },
-                        { num: 47, subj: "计网", max: 11 },
+                        { num: 41, subj: "DS", max: 13 },
+                        { num: 42, subj: "DS", max: 13 },
+                        { num: 43, subj: "CO", max: 13 },
+                        { num: 44, subj: "CO", max: 13 },
+                        { num: 45, subj: "OS", max: 12 },
+                        { num: 46, subj: "OS", max: 12 },
+                        { num: 47, subj: "CN", max: 11 },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
                         const score = activeQuestionPaper.questionScores?.[item.num];
