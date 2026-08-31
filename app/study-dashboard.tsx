@@ -4683,6 +4683,13 @@ export function StudyDashboard() {
                 >
                   一键全对 🟢
                 </button>
+                <button
+                  type="button"
+                  className="btn-clear-questions"
+                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
+                >
+                  一键清零 🔄
+                </button>
               </div>
             </div>
 

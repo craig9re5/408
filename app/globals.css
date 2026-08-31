@@ -3781,20 +3781,25 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   padding: 20px 24px;
 }
 
+.confirm-dialog.paper-q-modal-dialog > .paper-q-modal-header,
 .paper-q-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding-bottom: 12px;
   border-bottom: 1px solid #eef2f5;
 }
 
+.confirm-dialog.paper-q-modal-dialog > .paper-q-modal-header h2,
 .paper-q-modal-header h2 {
   margin: 0;
+  margin-right: auto;
   font-size: 17px;
   font-weight: 700;
   color: #1e293b;
+  text-align: left;
 }
 
 .paper-q-header-right {
@@ -3802,6 +3807,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .paper-q-header-metrics {
@@ -3940,6 +3946,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: #ecfdf5;
   border-color: #10b981;
   color: #047857;
+}
+
+.btn-clear-questions {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #64748b;
+}
+
+.btn-clear-questions:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 /* Heatmap Matrix */
