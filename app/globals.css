@@ -4492,11 +4492,11 @@ input[type="number"] {
   gap: 12px;
 }
 
-/* Modern Subjective Rating Grid (Compact, Crisp, Semantic) */
+/* Modern Subjective Item: 3 small circular dots (优/良/差) + Score Input (简洁直观) */
 .q-rating-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 8px 10px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px 12px;
 }
 
 .q-rating-item {
@@ -4507,7 +4507,7 @@ input[type="number"] {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   transition: all 0.15s ease;
 }
 
@@ -4537,10 +4537,11 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .q-rating-badge {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   font-family: Consolas, Monaco, monospace;
   background: #eff6ff;
@@ -4552,63 +4553,119 @@ input[type="number"] {
 }
 
 .q-rating-title {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
 }
 
-.q-rating-seg-group {
+/* Three Small Circular Dots (三个小圆点: 优 / 良 / 差) */
+.q-state-dots {
   display: inline-flex;
   align-items: center;
-  background: #f1f5f9;
+  gap: 5px;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
+  border-radius: 20px;
+  padding: 2.5px 6px;
 }
 
-.q-rating-seg-btn {
-  padding: 2.5px 7px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  background: transparent;
+.q-state-dot-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
   cursor: pointer;
-  transition: all 0.12s ease;
-  user-select: none;
-  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  padding: 0;
+  background: transparent;
+}
+
+.q-state-dot-btn .dot-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+/* Unselected Dots (Clear, gentle colors) */
+.q-state-dot-btn.dot-btn--correct .dot-circle {
+  background: #a7f3d0;
+  border: 1.5px solid #10b981;
+}
+
+.q-state-dot-btn.dot-btn--partial .dot-circle {
+  background: #fde68a;
+  border: 1.5px solid #f59e0b;
+}
+
+.q-state-dot-btn.dot-btn--wrong .dot-circle {
+  background: #fecaca;
+  border: 1.5px solid #ef4444;
+}
+
+.q-state-dot-btn:hover {
+  transform: scale(1.18);
+}
+
+/* Active Selected Dots (Solid, vibrant glow) */
+.q-state-dot-btn.active.dot-btn--correct .dot-circle {
+  background: #10b981;
+  border-color: #047857;
+  transform: scale(1.25);
+  box-shadow: 0 0 5px rgba(16, 185, 129, 0.55);
+}
+
+.q-state-dot-btn.active.dot-btn--partial .dot-circle {
+  background: #f59e0b;
+  border-color: #b45309;
+  transform: scale(1.25);
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.55);
+}
+
+.q-state-dot-btn.active.dot-btn--wrong .dot-circle {
+  background: #ef4444;
+  border-color: #b91c1c;
+  transform: scale(1.25);
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.55);
+}
+
+/* Score Input Box (简洁直观) */
+.q-score-input-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  line-height: 1.2;
+  gap: 3px;
+  flex-shrink: 0;
 }
 
-.q-rating-seg-btn:hover {
+.q-score-input-wrap input {
+  width: 40px;
+  height: 25px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: Consolas, Monaco, monospace;
+  text-align: center;
   color: #1e293b;
-  background: rgba(255, 255, 255, 0.8);
+  padding: 0 2px;
+  outline: none;
+  transition: all 0.15s ease;
 }
 
-.q-rating-seg-btn.active.seg-btn--correct {
-  background: #10b981;
-  color: #ffffff;
-  border-color: #059669;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.35);
+.q-score-input-wrap input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.q-rating-seg-btn.active.seg-btn--partial {
-  background: #f59e0b;
-  color: #ffffff;
-  border-color: #d97706;
-  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.35);
-}
-
-.q-rating-seg-btn.active.seg-btn--wrong {
-  background: #ef4444;
-  color: #ffffff;
-  border-color: #dc2626;
-  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.35);
+.q-score-unit {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .paper-q-modal-footer {

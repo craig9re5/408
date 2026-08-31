@@ -1237,44 +1237,70 @@ export function StudyDashboard() {
     }));
   }
 
-  function setPaperQuestionSpecificState(paperId: string, qNum: number, targetState: QuestionState) {
+  function handleSubjectiveRating(paperId: string, qNum: number, targetState: QuestionState, maxScore: number) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
       const currentMap = p.questions ?? {};
+      const currentScores = p.questionScores ?? {};
       const currentState = currentMap[qNum];
-      const nextState = currentState === targetState ? undefined : targetState;
+
       const nextMap = { ...currentMap };
-      const currentScores = { ...(p.questionScores ?? {}) };
+      const nextScores = { ...currentScores };
 
-      if (nextState) {
-        nextMap[qNum] = nextState;
-
-        // Implicit score derivation for subjective questions
-        let max = 10;
-        if (p.area === "math") {
-          max = qNum === 17 ? 10 : 12;
-        } else if (p.area === "english") {
-          max = qNum <= 50 ? 2 : qNum === 51 ? 10 : 20;
-        } else {
-          max = [45, 46].includes(qNum) ? 12 : qNum === 47 ? 11 : 13;
-        }
-
-        if (nextState === "correct") {
-          currentScores[qNum] = max;
-        } else if (nextState === "partial") {
-          currentScores[qNum] = Math.round(max * 0.6);
-        } else if (nextState === "wrong") {
-          currentScores[qNum] = 0;
-        }
-      } else {
+      if (currentState === targetState) {
+        // Toggle off
         delete nextMap[qNum];
-        delete currentScores[qNum];
+        delete nextScores[qNum];
+      } else {
+        nextMap[qNum] = targetState;
+        if (targetState === "correct") {
+          nextScores[qNum] = maxScore;
+        } else if (targetState === "partial") {
+          nextScores[qNum] = Math.round(maxScore * 0.6);
+        } else if (targetState === "wrong") {
+          nextScores[qNum] = 0;
+        }
       }
 
       return {
         ...p,
         questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
-        questionScores: Object.keys(currentScores).length > 0 ? currentScores : undefined,
+        questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
+      };
+    }));
+  }
+
+  function handleSubjectiveScoreInput(paperId: string, qNum: number, rawVal: string, maxScore: number) {
+    setPapers((current) => current.map((p) => {
+      if (p.id !== paperId) return p;
+      const currentMap = p.questions ?? {};
+      const currentScores = p.questionScores ?? {};
+
+      const nextMap = { ...currentMap };
+      const nextScores = { ...currentScores };
+
+      if (rawVal.trim() === "") {
+        delete nextMap[qNum];
+        delete nextScores[qNum];
+      } else {
+        const scoreNum = parseFloat(rawVal);
+        if (Number.isNaN(scoreNum) || scoreNum < 0) return p;
+        const boundedScore = Math.min(scoreNum, maxScore);
+        nextScores[qNum] = boundedScore;
+
+        if (boundedScore >= maxScore) {
+          nextMap[qNum] = "correct";
+        } else if (boundedScore <= 0) {
+          nextMap[qNum] = "wrong";
+        } else {
+          nextMap[qNum] = "partial";
+        }
+      }
+
+      return {
+        ...p,
+        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+        questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
       };
     }));
   }
@@ -5047,42 +5073,62 @@ export function StudyDashboard() {
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">解答题</span>
-                      <span className="q-type-subtitle">第 17 ~ 22 题 · 评级即自动记录表现</span>
+                      <span className="q-type-subtitle">第 17 ~ 22 题 · 共 70 分</span>
                     </div>
                     <div className="q-rating-grid">
-                      {[17, 18, 19, 20, 21, 22].map((num) => {
-                        const state = activeQuestionPaper.questions?.[num];
+                      {[
+                        { num: 17, max: 10 },
+                        { num: 18, max: 12 },
+                        { num: 19, max: 12 },
+                        { num: 20, max: 12 },
+                        { num: 21, max: 12 },
+                        { num: 22, max: 12 },
+                      ].map((item) => {
+                        const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
                         return (
-                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={num}>
+                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
                             <div className="q-rating-label">
                               <span className="q-rating-badge">解答</span>
-                              <strong className="q-rating-title">第 {num} 题</strong>
+                              <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${num} 题评级`}>
+                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "correct")}
+                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
                                 title="优 (满分 🟢)"
                               >
-                                🟢 优
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "partial")}
+                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
                                 title="良 (部分分 🟡)"
                               >
-                                🟡 良
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, num, "wrong")}
+                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
                                 title="差 (失分 🔴)"
                               >
-                                🔴 差
+                                <span className="dot-circle" />
                               </button>
+                            </div>
+                            <div className="q-score-input-wrap">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.max}
+                                step={0.5}
+                                placeholder="0"
+                                value={score ?? ""}
+                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
+                              />
+                              <span className="q-score-unit">分</span>
                             </div>
                           </div>
                         );
@@ -5183,50 +5229,63 @@ export function StudyDashboard() {
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">主观题（英译汉 & 写作）</span>
-                      <span className="q-type-subtitle">第 46 ~ 52 题 · 评级即自动记录表现</span>
+                      <span className="q-type-subtitle">第 46 ~ 52 题 · 共 40 分</span>
                     </div>
                     <div className="q-rating-grid">
                       {[
-                        { num: 46, label: "翻译 1" },
-                        { num: 47, label: "翻译 2" },
-                        { num: 48, label: "翻译 3" },
-                        { num: 49, label: "翻译 4" },
-                        { num: 50, label: "翻译 5" },
-                        { num: 51, label: "小作文" },
-                        { num: 52, label: "大作文" },
+                        { num: 46, label: "翻译 1", max: 2 },
+                        { num: 47, label: "翻译 2", max: 2 },
+                        { num: 48, label: "翻译 3", max: 2 },
+                        { num: 49, label: "翻译 4", max: 2 },
+                        { num: 50, label: "翻译 5", max: 2 },
+                        { num: 51, label: "小作文", max: 10 },
+                        { num: 52, label: "大作文", max: 20 },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
                         return (
                           <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
                             <div className="q-rating-label">
                               <span className="q-rating-badge">{item.label}</span>
                               <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
                                 title="优 (满分 🟢)"
                               >
-                                🟢 优
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
                                 title="良 (部分分 🟡)"
                               >
-                                🟡 良
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
                                 title="差 (失分 🔴)"
                               >
-                                🔴 差
+                                <span className="dot-circle" />
                               </button>
+                            </div>
+                            <div className="q-score-input-wrap">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.max}
+                                step={0.5}
+                                placeholder="0"
+                                value={score ?? ""}
+                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
+                              />
+                              <span className="q-score-unit">分</span>
                             </div>
                           </div>
                         );
@@ -5295,50 +5354,63 @@ export function StudyDashboard() {
                   <div className="q-type-block q-type-block--comprehensive">
                     <div className="q-type-header">
                       <span className="q-type-title">综合应用题</span>
-                      <span className="q-type-subtitle">第 41 ~ 47 题 · 评级即自动记录表现</span>
+                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分</span>
                     </div>
                     <div className="q-rating-grid">
                       {[
-                        { num: 41, subj: "DS" },
-                        { num: 42, subj: "DS" },
-                        { num: 43, subj: "CO" },
-                        { num: 44, subj: "CO" },
-                        { num: 45, subj: "OS" },
-                        { num: 46, subj: "OS" },
-                        { num: 47, subj: "CN" },
+                        { num: 41, subj: "DS", max: 13 },
+                        { num: 42, subj: "DS", max: 13 },
+                        { num: 43, subj: "CO", max: 13 },
+                        { num: 44, subj: "CO", max: 13 },
+                        { num: 45, subj: "OS", max: 12 },
+                        { num: 46, subj: "OS", max: 12 },
+                        { num: 47, subj: "CN", max: 11 },
                       ].map((item) => {
                         const state = activeQuestionPaper.questions?.[item.num];
+                        const score = activeQuestionPaper.questionScores?.[item.num];
                         return (
                           <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
                             <div className="q-rating-label">
                               <span className="q-rating-badge">{item.subj}</span>
                               <strong className="q-rating-title">第 {item.num} 题</strong>
                             </div>
-                            <div className="q-rating-seg-group" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
+                            <div className="q-state-dots" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "correct")}
+                                className={`q-state-dot-btn dot-btn--correct ${state === "correct" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
                                 title="优 (满分 🟢)"
                               >
-                                🟢 优
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "partial")}
+                                className={`q-state-dot-btn dot-btn--partial ${state === "partial" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
                                 title="良 (部分分 🟡)"
                               >
-                                🟡 良
+                                <span className="dot-circle" />
                               </button>
                               <button
                                 type="button"
-                                className={`q-rating-seg-btn seg-btn--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => setPaperQuestionSpecificState(activeQuestionPaper.id, item.num, "wrong")}
+                                className={`q-state-dot-btn dot-btn--wrong ${state === "wrong" ? "active" : ""}`}
+                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
                                 title="差 (失分 🔴)"
                               >
-                                🔴 差
+                                <span className="dot-circle" />
                               </button>
+                            </div>
+                            <div className="q-score-input-wrap">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.max}
+                                step={0.5}
+                                placeholder="0"
+                                value={score ?? ""}
+                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
+                              />
+                              <span className="q-score-unit">分</span>
                             </div>
                           </div>
                         );
