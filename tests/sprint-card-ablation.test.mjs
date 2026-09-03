@@ -11,12 +11,29 @@ import {
 test("消融测试 1: CSS 布局与基线规范消融 (Layout & Baseline Invariants)", async () => {
   const css = await readFile("app/globals.css", "utf8");
 
-  // 1.1 验证外层卡片头部统一为水平中心对齐 (避免 flex-start 造成的高低错落)
+  // 1.1 验证外层卡片头部统一为水平中心对齐且严禁换行 (flex-wrap: nowrap)
   const bentoCardTopMatch = css.match(/\.bento-card-top\s*\{([^}]+)\}/);
   assert.ok(bentoCardTopMatch, "必须包含 .bento-card-top 规则");
   assert.match(bentoCardTopMatch[1], /align-items:\s*center/, "卡片头部必须为垂直居中对齐 align-items: center");
+  assert.match(bentoCardTopMatch[1], /flex-wrap:\s*nowrap/, "卡片头部必须严禁折行 flex-wrap: nowrap");
+  assert.match(bentoCardTopMatch[1], /position:\s*relative/, "卡片头部必须具有 position: relative 作为右上角按钮的锚点");
 
-  // 1.2 验证分数输入容器和复选框标签高度标准化为 22px
+  // 1.2 验证模拟卷头部预留右上角按钮空间 (padding-right: 24px)
+  const mockCardTopMatch = css.match(/\.bento-card-top--mock\s*\{([^}]+)\}/);
+  assert.ok(mockCardTopMatch, "必须包含 .bento-card-top--mock 规则");
+  assert.match(mockCardTopMatch[1], /padding-right:\s*24px/, "模拟卷头部必须保留右上角删除按钮区域 padding-right: 24px");
+
+  // 1.3 验证标题容器与控制项防换行规则
+  const titleWrapMatch = css.match(/\.bento-title-wrap\s*\{([^}]+)\}/);
+  assert.ok(titleWrapMatch, "必须包含 .bento-title-wrap 规则");
+  assert.match(titleWrapMatch[1], /flex:\s*1\s+1\s+auto/, "标题自适应收缩 flex: 1 1 auto");
+
+  const topControlsMatch = css.match(/\.bento-top-controls\s*\{([^}]+)\}/);
+  assert.ok(topControlsMatch, "必须包含 .bento-top-controls 规则");
+  assert.match(topControlsMatch[1], /flex-wrap:\s*nowrap/, "控制区严禁换行 flex-wrap: nowrap");
+  assert.match(topControlsMatch[1], /flex-shrink:\s*0/, "控制区禁止压缩 flex-shrink: 0");
+
+  // 1.4 验证分数输入容器和复选框标签高度标准化为 22px
   const scoreInlineMatch = css.match(/\.bento-score-inline\s*\{([^}]+)\}/);
   assert.ok(scoreInlineMatch, "必须包含 .bento-score-inline 规则");
   assert.match(scoreInlineMatch[1], /height:\s*22px/, "分数框高度必须标准为 22px");
@@ -26,7 +43,7 @@ test("消融测试 1: CSS 布局与基线规范消融 (Layout & Baseline Invaria
   assert.ok(checkLabelMatch, "必须包含 .bento-check-label 规则");
   assert.match(checkLabelMatch[1], /height:\s*22px/, "复选框标签高度必须标准为 22px");
 
-  // 1.3 验证文字与占位符行高精准对齐
+  // 1.5 验证文字与占位符行高精准对齐
   const scoreInputMatch = css.match(/\.bento-score-input\s*\{([^}]+)\}/);
   assert.ok(scoreInputMatch, "必须包含 .bento-score-input 规则");
   assert.match(scoreInputMatch[1], /line-height:\s*18px/, "分数输入框 line-height 必须对齐为 18px");
@@ -40,21 +57,22 @@ test("消融测试 1: CSS 布局与基线规范消融 (Layout & Baseline Invaria
   assert.ok(checkTextMatch, "必须包含 .bento-check-text 规则");
   assert.match(checkTextMatch[1], /display:\s*inline-flex/, "复选框文字必须为 inline-flex 确保文字垂直居中");
 
-  // 1.4 验证旧的双行规则已完全清除 (消除布局污染与死代码)
-  assert.doesNotMatch(css, /\.bento-card-top--mock/, "废弃的 .bento-card-top--mock 双行类必须彻底移除");
+  // 1.6 验证旧的排版冲突类名已完全清除
   assert.doesNotMatch(css, /\.bento-title-row/, "废弃的 .bento-title-row 类必须彻底移除");
   assert.doesNotMatch(css, /\.bento-card-actions/, "废弃的 .bento-card-actions 类必须彻底移除");
 });
 
-test("消融测试 2: 删除按钮悬浮显隐与无障碍消融 (Hover & A11y Invariants)", async () => {
+test("消融测试 2: 删除按钮右上角绝对定位与悬浮无障碍消融 (Hover & A11y Invariants)", async () => {
   const css = await readFile("app/globals.css", "utf8");
 
-  // 2.1 默认非悬浮态：完全隐藏且禁用鼠标响应，绝不产生误触
+  // 2.1 右上角绝对定位：不占 flex 流宽度，从根源避免挤出第二行
   const delBtnMatch = css.match(/\.paper-btn-del\s*\{([^}]+)\}/);
   assert.ok(delBtnMatch, "必须包含 .paper-btn-del 规则");
+  assert.match(delBtnMatch[1], /position:\s*absolute/, "删除按钮必须采用绝对定位 position: absolute");
+  assert.match(delBtnMatch[1], /right:\s*0/, "删除按钮必须锚定在右上角 right: 0");
   assert.match(delBtnMatch[1], /opacity:\s*0/, "删除按钮默认状态必须透明隐藏 opacity: 0");
   assert.match(delBtnMatch[1], /pointer-events:\s*none/, "删除按钮默认状态必须禁用鼠标交互 pointer-events: none");
-  assert.match(delBtnMatch[1], /width:\s*20px/, "删除按钮必须保留标准宽度 20px 避免布局抖动");
+  assert.match(delBtnMatch[1], /width:\s*20px/, "删除按钮必须保留标准宽度 20px");
 
   // 2.2 悬浮态与键盘聚焦态：平滑显示并开启鼠标交互
   const hoverDelMatch = css.match(/\.sprint-bento-card:hover\s+\.paper-btn-del/);
@@ -72,17 +90,17 @@ test("消融测试 2: 删除按钮悬浮显隐与无障碍消融 (Hover & A11y I
   assert.match(css, /@media\s*\(\s*hover:\s*none\s*\)/, "必须包含针对移动触屏的 @media (hover: none) 降级适配");
 });
 
-test("消融测试 3: 模拟卷与真题头部结构统一性消融 (Component Markup Invariants)", async () => {
+test("消融测试 3: 模拟卷头部单行结构统一性消融 (Component Markup Invariants)", async () => {
   const tsx = await readFile("app/study-dashboard.tsx", "utf8");
 
-  // 3.1 模拟卷必须与真题使用一致的 bento-card-top 与 bento-top-controls
+  // 3.1 模拟卷必须与真题共享单行结构且包含 bento-card-top--mock
   assert.match(
     tsx,
-    /<div className="bento-card-top">\s*<div className="bento-title-wrap"/,
-    "模拟卷必须使用标准单行 bento-card-top 结构",
+    /<div className="bento-card-top bento-card-top--mock">\s*<div className="bento-title-wrap"/,
+    "模拟卷必须使用单行 bento-card-top bento-card-top--mock 结构",
   );
 
-  // 3.2 模拟卷删除按钮必须置于 bento-top-controls 内部并拥有完整可访问性标签
+  // 3.2 模拟卷删除按钮必须置于右上角且拥有完整无障碍标签
   assert.match(
     tsx,
     /<button[^>]*className="paper-btn-del"[^>]*title="删除该模拟卷"[^>]*aria-label=/,

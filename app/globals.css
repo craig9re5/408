@@ -3526,14 +3526,19 @@ input[type="number"] {
 }
 
 .bento-card-top {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  row-gap: 8px;
+  flex-wrap: nowrap;
   column-gap: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line-soft);
+  min-width: 0;
+}
+
+.bento-card-top--mock {
+  padding-right: 24px;
 }
 
 .bento-year-pill {
@@ -3551,6 +3556,7 @@ input[type="number"] {
   display: inline-flex;
   align-items: center;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .sprint-bento-card.completed .bento-year-pill {
@@ -3581,7 +3587,7 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 120px;
+  flex: 1 1 auto;
   overflow: hidden;
   height: 22px;
 }
@@ -3594,17 +3600,18 @@ input[type="number"] {
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 22px;
+  min-width: 0;
 }
 
 .bento-top-controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  row-gap: 6px;
-  column-gap: 8px;
+  column-gap: 6px;
   margin-left: auto;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 /* Inline score field: digits and unit are one running-text group —
@@ -3975,6 +3982,9 @@ input[type="number"] {
 }
 
 .paper-btn-del {
+  position: absolute;
+  top: 1px;
+  right: 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -3983,15 +3993,14 @@ input[type="number"] {
   height: 20px;
   padding: 0;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease, color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-  margin-left: 2px;
+  z-index: 5;
 }
 
 .sprint-bento-card:hover .paper-btn-del,

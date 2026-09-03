@@ -3650,7 +3650,7 @@ export function StudyDashboard() {
                             const paperJournals = journalsByPaper[paper.id] ?? [];
                             return (
                               <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                                <div className="bento-card-top">
+                                <div className="bento-card-top bento-card-top--mock">
                                   <div className="bento-title-wrap" title={paper.title}>
                                     {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
                                     <strong className="bento-paper-title">{paper.title}</strong>
@@ -3697,17 +3697,17 @@ export function StudyDashboard() {
                                       <span className="bento-check-box" />
                                       <span className="bento-check-text">二刷</span>
                                     </label>
-
-                                    <button
-                                      type="button"
-                                      className="paper-btn-del"
-                                      title="删除该模拟卷"
-                                      aria-label={`删除模拟卷 ${paper.title}`}
-                                      onClick={() => setPendingDeletePaperId(paper.id)}
-                                    >
-                                      ✕
-                                    </button>
                                   </div>
+
+                                  <button
+                                    type="button"
+                                    className="paper-btn-del"
+                                    title="删除该模拟卷"
+                                    aria-label={`删除模拟卷 ${paper.title}`}
+                                    onClick={() => setPendingDeletePaperId(paper.id)}
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
 
                                 {renderBentoHeatmap(paper)}
