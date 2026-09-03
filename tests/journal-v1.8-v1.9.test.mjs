@@ -707,7 +707,8 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   assert.equal(normalized?.questionScores?.[43], 4);
   assert.equal(normalized?.questionScores?.[999], undefined);
 
-  // 4. 验证 mergePapers 题目做题状态与得分合并
+  // 4. 验证 mergePapers 题目做题状态与得分合并（本地优先：本地内存态已含此前远端数据，
+  //    远端是旧快照；并集合约无法表达“删除”，会导致取消的题目在下次同步后复活）
   const devA = [{
     id: "past-408-2025",
     kind: "past",
@@ -732,10 +733,30 @@ test("Visual Question Board: 数学22题与408 47题结构与题目状态标准�
   const p2025 = merged.find((p) => p.id === "past-408-2025");
   assert.equal(p2025?.questions?.[1], "correct");
   assert.equal(p2025?.questions?.[3], "wrong");
-  assert.equal(p2025?.questions?.[41], "partial");
-  assert.equal(p2025?.questions?.[43], "wrong");
+  assert.equal(p2025?.questions?.[41], undefined);
+  assert.equal(p2025?.questions?.[43], undefined);
   assert.equal(p2025?.questionScores?.[41], 9);
-  assert.equal(p2025?.questionScores?.[43], 5);
+  assert.equal(p2025?.questionScores?.[43], undefined);
+
+  // 4b. 本地未触碰（undefined）时保留远端；显式清空（{}）时清空获胜
+  const untouchedLocal = [{
+    id: "past-408-2025",
+    kind: "past",
+    area: "408",
+    title: "2025年408真题",
+    completed: true,
+    completedAt: "2026-10-15",
+  }];
+  const kept = mergePapers(untouchedLocal, devB);
+  assert.equal(kept.find((p) => p.id === "past-408-2025")?.questions?.[41], "partial");
+  const clearedLocal = [{
+    ...untouchedLocal[0],
+    questions: {},
+    questionScores: {},
+  }];
+  const cleared = mergePapers(clearedLocal, devB);
+  assert.deepEqual(cleared.find((p) => p.id === "past-408-2025")?.questions, {});
+  assert.deepEqual(cleared.find((p) => p.id === "past-408-2025")?.questionScores, {});
 });
 
 test("Sprint 交互与真题排序 / 批量错题范围解析测试", () => {

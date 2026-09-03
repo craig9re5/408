@@ -106,6 +106,7 @@ export type JournalEntry = {
   content: string;
   context: JournalContext | null;
   publish: JournalPublish;
+  important?: boolean;
 };
 
 export type PaperKind = "past" | "mock";
@@ -470,6 +471,7 @@ function normalizeJournalEntry(value: unknown): JournalEntry | null {
   const title = typeof candidate.title === "string" && candidate.title.trim() ? candidate.title.trim().slice(0, 200) : null;
   const context = normalizeJournalContext(candidate.context);
   const publish = normalizeJournalPublish(candidate.publish);
+  const important = candidate.important === true;
 
   return {
     id: candidate.id,
@@ -479,6 +481,7 @@ function normalizeJournalEntry(value: unknown): JournalEntry | null {
     content: candidate.content.slice(0, 200000),
     context,
     publish,
+    important,
   };
 }
 
@@ -762,17 +765,18 @@ async function writeAppData(
     .filter(([sectionId]) => isSafeSectionId(sectionId))
     .forEach(([sectionId, value]) => {
       statements.push(env.DB.prepare(
-        `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, is_current, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, reviewed_planned_at, is_current, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(workspace_id, section_id) DO UPDATE SET
            learned = excluded.learned,
            learned_at = excluded.learned_at,
            reviewed = excluded.reviewed,
            reviewed_at = excluded.reviewed_at,
            planned_at = excluded.planned_at,
+           reviewed_planned_at = excluded.reviewed_planned_at,
            is_current = excluded.is_current,
            updated_at = CURRENT_TIMESTAMP`,
-      ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
+      ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
     });
 
   let finalJournals = data.journals;

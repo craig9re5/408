@@ -176,6 +176,126 @@ export const ENGLISH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[
   ],
 };
 
+export const POLITICS_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
+  total: 33,
+  groups: [
+    { type: "选择题", subject: "单选", start: 1, end: 16, count: 16, scorePerQuestion: 1.0 },
+    { type: "选择题", subject: "多选", start: 17, end: 33, count: 17, scorePerQuestion: 2.0 },
+  ],
+};
+
+// 客观题（含填空）满分合计：英/政第二卡“选择均分”分母的统一口径。
+export function choiceFullScore(area: StudyArea): number {
+  return paperStructure(area).groups
+    .filter((group) => group.type === "选择题" || group.type === "填空题")
+    .reduce((sum, group) => sum + (group.scorePerQuestion ?? 0) * group.count, 0);
+}
+
+// 模拟卷目标量：冲刺页 endless-track 的满格刻度，可按备考规划调整。
+export const MOCK_MILESTONE_TARGET = 30;
+export const MOCK_MILESTONES = [5, 10, 15, 20, 25, 30];
+
+export function paperStructure(area: StudyArea): { total: number; groups: QuestionGroupDef[] } {
+  if (area === "math") return MATH_PAPER_STRUCTURE;
+  if (area === "english") return ENGLISH_PAPER_STRUCTURE;
+  if (area === "politics") return POLITICS_PAPER_STRUCTURE;
+  return CS408_PAPER_STRUCTURE;
+}
+
+export function paperTotalQuestions(area: StudyArea): number {
+  return paperStructure(area).total;
+}
+
+// 客观题（含填空）题号上界：选择正确率、批量录入、一键全对的统一口径。
+export function paperMaxChoiceNum(area: StudyArea): number {
+  let max = 0;
+  for (const group of paperStructure(area).groups) {
+    if (group.type === "选择题" || group.type === "填空题") {
+      max = Math.max(max, group.end);
+    }
+  }
+  return max;
+}
+
+// 客观题单题分值（加权正确率用）；非客观题返回 1（仅参与计数，不参与加权）。
+export function choiceQuestionWeight(area: StudyArea, qNum: number): number {
+  for (const group of paperStructure(area).groups) {
+    if ((group.type === "选择题" || group.type === "填空题")
+      && typeof group.scorePerQuestion === "number"
+      && qNum >= group.start && qNum <= group.end) {
+      return group.scorePerQuestion;
+    }
+  }
+  return 1;
+}
+
+export type BentoChoiceGroup = { name: string; start: number; count: number; label: string };
+
+const SUBJECT_ABBR: Record<string, string> = {
+  "数据结构": "DS",
+  "计算机组成原理": "CO",
+  "操作系统": "OS",
+  "计算机网络": "CN",
+};
+
+// 套卷卡片点阵的客观题分组（起止与数量派生自试卷结构，展示名保持现有文案）。
+export function bentoChoiceGroups(area: StudyArea): BentoChoiceGroup[] {
+  if (area === "408") {
+    return paperStructure(area).groups
+      .filter((group) => group.type === "选择题")
+      .map((group) => ({
+        name: SUBJECT_ABBR[group.subject ?? ""] ?? group.subject ?? "",
+        start: group.start,
+        count: group.count,
+        label: group.subject ?? "",
+      }));
+  }
+  if (area === "math") {
+    return [
+      { name: "单选", start: 1, count: 10, label: "单选 · 5分" },
+      { name: "填空", start: 11, count: 6, label: "填空 · 5分" },
+    ];
+  }
+  if (area === "english") {
+    return [
+      { name: "完形", start: 1, count: 20, label: "完形" },
+      { name: "阅读A", start: 21, count: 20, label: "阅读A" },
+      { name: "阅读B", start: 41, count: 5, label: "阅读B" },
+    ];
+  }
+  return [
+    { name: "单选", start: 1, count: 16, label: "单选 · 1分" },
+    { name: "多选", start: 17, count: 17, label: "多选 · 2分" },
+  ];
+}
+
+export type ModalChoiceGroup = { name: string; start: number; count: number; scoreLabel: string };
+
+// 答题卡弹窗客观题分行（起止与数量与 *_PAPER_STRUCTURE 对齐，展示名保持现有文案；
+// 408 在弹窗内直接使用 CS408_PAPER_STRUCTURE，此处返回空）。
+export function modalChoiceGroups(area: StudyArea): ModalChoiceGroup[] {
+  if (area === "math") {
+    return [
+      { name: "单选", start: 1, count: 10, scoreLabel: "单选 · 5分" },
+      { name: "填空", start: 11, count: 6, scoreLabel: "填空 · 5分" },
+    ];
+  }
+  if (area === "english") {
+    return [
+      { name: "完形", start: 1, count: 20, scoreLabel: "完形 · 0.5分" },
+      { name: "阅读A", start: 21, count: 20, scoreLabel: "阅读A · 2分" },
+      { name: "阅读B", start: 41, count: 5, scoreLabel: "阅读B新题型 · 2分" },
+    ];
+  }
+  if (area === "politics") {
+    return [
+      { name: "单选", start: 1, count: 16, scoreLabel: "单选 · 1分" },
+      { name: "多选", start: 17, count: 17, scoreLabel: "多选 · 2分" },
+    ];
+  }
+  return [];
+}
+
 export type PaperRecord = {
   id: string;
   kind: PaperKind;
@@ -1268,7 +1388,11 @@ export class StorageRepository {
   }
 
   save(data: StudyAppData): void {
-    this.storage.setItem(APP_DATA_KEY, JSON.stringify(data));
+    try {
+      this.storage.setItem(APP_DATA_KEY, JSON.stringify(data));
+    } catch {
+      // 配额满时不抛错，云端仍是真源，调用方会提示用户导出文件清理。
+    }
   }
 
   backups(): LocalBackup[] {
@@ -1291,20 +1415,36 @@ export class StorageRepository {
   }
 
   createBackup(data: StudyAppData, kind: BackupKind): LocalBackup[] {
+    const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `backup-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const backup: LocalBackup = {
-      id: crypto.randomUUID(),
+      id: randomId,
       createdAt: new Date().toISOString(),
       kind,
       data,
     };
-    const next = [backup, ...this.backups()].slice(0, MAX_BACKUPS);
-    this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
-    return next;
+    const existing = this.backups();
+    // 配额紧张时逐级缩减保留份数，保证最新一份能写进去，不直接抛错。
+    for (const keep of [MAX_BACKUPS, 10, 5, 1] as const) {
+      const next = [backup, ...existing].slice(0, keep);
+      try {
+        this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+        return next;
+      } catch {
+        continue;
+      }
+    }
+    return existing;
   }
 
   deleteBackup(id: string): LocalBackup[] {
     const next = this.backups().filter((backup) => backup.id !== id);
-    this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+    try {
+      this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+    } catch {
+      // 删除时配额异常极少见，忽略以避免打断交互。
+    }
     return next;
   }
 }

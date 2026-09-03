@@ -3240,6 +3240,12 @@ input[type="number"] {
   gap: 6px;
 }
 
+.stat-card-sub {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .sprint-stat-card .stat-card-progress-bar {
   height: 6px;
   background: rgba(23, 33, 41, 0.06);
@@ -3634,6 +3640,20 @@ input[type="number"] {
   color: var(--coral);
   margin-left: -2px;
   padding-right: 2px;
+}
+
+.bento-score-saved {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  animation: score-saved-pop 1.5s ease-out both;
+}
+
+@keyframes score-saved-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  15% { opacity: 1; transform: scale(1); }
+  75% { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* Checkbox item in top row */

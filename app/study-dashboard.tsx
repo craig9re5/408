@@ -46,6 +46,14 @@ import {
   normalizePapers,
   mergePapers,
   maxPaperScore,
+  paperTotalQuestions,
+  paperMaxChoiceNum,
+  choiceQuestionWeight,
+  choiceFullScore,
+  bentoChoiceGroups,
+  modalChoiceGroups,
+  MOCK_MILESTONE_TARGET,
+  MOCK_MILESTONES,
   MATH_PAPER_STRUCTURE,
   CS408_PAPER_STRUCTURE,
   ENGLISH_PAPER_STRUCTURE,
@@ -476,10 +484,14 @@ function EditableDate({
 
 function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = defaultProgress()): ProgressMap {
   const merged = { ...base };
-  Object.keys(merged).forEach((sectionId) => {
-    const value = remote[sectionId];
+  Object.keys(remote ?? {}).forEach((sectionId) => {
+    const value = (remote as Record<string, unknown>)[sectionId];
     if (!value || typeof value !== "object") return;
-    merged[sectionId] = normalizeSectionProgress(value, merged[sectionId]);
+    if (sectionId in merged) {
+      merged[sectionId] = normalizeSectionProgress(value, merged[sectionId]);
+    } else {
+      merged[sectionId] = normalizeSectionProgress(value);
+    }
   });
   return merged;
 }
@@ -564,6 +576,8 @@ export function StudyDashboard() {
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
   const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
+  const [scoreSavedPaperId, setScoreSavedPaperId] = useState<string | null>(null);
+  const scoreSavedTimerRef = useRef<number | null>(null);
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
   const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
@@ -975,6 +989,15 @@ export function StudyDashboard() {
   const sprintPastCompleted = useMemo(() => pastPapers.filter((p) => p.completed).length, [pastPapers]);
   const sprintPastTotal = pastPapers.length;
   const sprintPastPercent = sprintPastTotal ? Math.round((sprintPastCompleted / sprintPastTotal) * 100) : 0;
+  const sprintPastYearRange = useMemo(() => {
+    const years = pastPapers
+      .map((p) => p.year)
+      .filter((year): year is number => typeof year === "number");
+    if (!years.length) return "";
+    const min = Math.min(...years);
+    const max = Math.max(...years);
+    return min === max ? `${min}` : `${min}–${max}`;
+  }, [pastPapers]);
 
   const sprintMockCompleted = useMemo(() => mockPapers.filter((p) => p.completed).length, [mockPapers]);
   const sprintMockTotal = mockPapers.length;
@@ -1002,10 +1025,10 @@ export function StudyDashboard() {
       if (!p.questions) continue;
       let pEarned = 0;
       let pRecorded = 0;
-      const maxChoice = p.area === "politics" ? 33 : 45;
+      const maxChoice = paperMaxChoiceNum(p.area);
       for (let i = 1; i <= maxChoice; i++) {
         const st = p.questions[i];
-        const weight = p.area === "politics" ? (i <= 16 ? 1.0 : 2.0) : (i <= 20 ? 0.5 : 2.0);
+        const weight = choiceQuestionWeight(p.area, i);
         if (st === "correct") {
           pEarned += weight;
           pRecorded += weight;
@@ -1084,6 +1107,14 @@ export function StudyDashboard() {
     }
   }
 
+  function flashScoreSaved(paperId: string) {
+    setScoreSavedPaperId(paperId);
+    if (scoreSavedTimerRef.current !== null) {
+      window.clearTimeout(scoreSavedTimerRef.current);
+    }
+    scoreSavedTimerRef.current = window.setTimeout(() => setScoreSavedPaperId(null), 1500);
+  }
+
   function togglePaperCompleted(id: string, completed: boolean) {
     const todayStr = dateToday();
     setPapers((current) => current.map((p) => {
@@ -1149,8 +1180,8 @@ export function StudyDashboard() {
   }
 
   function getPaperQuestionSummary(paper: PaperRecord) {
-    const totalQuestions = paper.area === "math" ? 22 : paper.area === "english" ? 52 : paper.area === "politics" ? 33 : 47;
-    const maxChoiceNum = paper.area === "math" ? 16 : paper.area === "english" ? 45 : paper.area === "politics" ? 33 : 40;
+    const totalQuestions = paperTotalQuestions(paper.area);
+    const maxChoiceNum = paperMaxChoiceNum(paper.area);
     if (!paper.questions || Object.keys(paper.questions).length === 0) {
       return null;
     }
@@ -1170,7 +1201,7 @@ export function StudyDashboard() {
     for (let i = 1; i <= totalQuestions; i++) {
       const qState = paper.questions[i];
       const isChoice = i <= maxChoiceNum;
-      const weight = paper.area === "politics" && isChoice ? (i <= 16 ? 1.0 : 2.0) : paper.area === "english" && isChoice ? (i <= 20 ? 0.5 : 2.0) : 1.0;
+      const weight = isChoice ? choiceQuestionWeight(paper.area, i) : 1.0;
 
       if (qState === "correct") {
         correctCount++;
@@ -1345,7 +1376,7 @@ export function StudyDashboard() {
   function markAllPaperQuestions(paperId: string, state: "correct" | "wrong") {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
-      const maxChoice = p.area === "math" ? 16 : p.area === "english" ? 45 : p.area === "politics" ? 33 : 40;
+      const maxChoice = paperMaxChoiceNum(p.area);
       const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
       for (let i = 1; i <= maxChoice; i++) {
         nextMap[i] = state;
@@ -1361,8 +1392,8 @@ export function StudyDashboard() {
   function batchSetWrongQuestions(paperId: string, rawInput: string) {
     setPapers((current) => current.map((p) => {
       if (p.id !== paperId) return p;
-      const maxChoice = p.area === "math" ? 16 : p.area === "english" ? 45 : p.area === "politics" ? 33 : 40;
-      const total = p.area === "math" ? 22 : p.area === "english" ? 52 : p.area === "politics" ? 33 : 47;
+      const maxChoice = paperMaxChoiceNum(p.area);
+      const total = paperTotalQuestions(p.area);
       const tokens: number[] = [];
       rawInput.split(/[,，\s、;；]+/).forEach((chunk) => {
         const trimmed = chunk.trim();
@@ -1430,22 +1461,17 @@ export function StudyDashboard() {
       (paper.questionScores && Object.keys(paper.questionScores).length > 0)
     );
 
-    type ChoiceGroup = { name: string; start: number; count: number; label: string };
     type BigQuestion = { num: number; name: string; max?: number };
 
-    let choiceGroups: ChoiceGroup[] = [];
+    // 客观题分组（起止数量）唯一口径见 study-data.ts bentoChoiceGroups；
+    // 主观题 max 与 CS408_PAPER_STRUCTURE 的分歧（P0-2）维持现状，待定夺后再收敛。
+    const choiceGroups = bentoChoiceGroups(paper.area);
     let bigQuestions: BigQuestion[] = [];
     let choiceTagLabel = "选择";
     let subjTagLabel = "大题";
     let subjectiveLabel = "大题";
 
     if (paper.area === "408") {
-      choiceGroups = [
-        { name: "DS", start: 1, count: 11, label: "数据结构" },
-        { name: "CO", start: 12, count: 11, label: "组成原理" },
-        { name: "OS", start: 23, count: 10, label: "操作系统" },
-        { name: "CN", start: 33, count: 8, label: "计算机网络" },
-      ];
       bigQuestions = [
         { num: 41, name: "DS" },
         { num: 42, name: "DS" },
@@ -1456,20 +1482,11 @@ export function StudyDashboard() {
         { num: 47, name: "CN" },
       ];
     } else if (paper.area === "politics") {
-      choiceGroups = [
-        { name: "单选", start: 1, count: 16, label: "单选 · 1分" },
-        { name: "多选", start: 17, count: 17, label: "多选 · 2分" },
-      ];
       bigQuestions = [];
       choiceTagLabel = "选择";
       subjTagLabel = "";
       subjectiveLabel = "";
     } else if (paper.area === "english") {
-      choiceGroups = [
-        { name: "完形", start: 1, count: 20, label: "完形" },
-        { name: "阅读A", start: 21, count: 20, label: "阅读A" },
-        { name: "阅读B", start: 41, count: 5, label: "阅读B" },
-      ];
       bigQuestions = [
         { num: 46, name: "翻译 1" },
         { num: 47, name: "翻译 2" },
@@ -1483,10 +1500,6 @@ export function StudyDashboard() {
       subjTagLabel = "主观";
       subjectiveLabel = "主观";
     } else {
-      choiceGroups = [
-        { name: "单选", start: 1, count: 10, label: "单选 · 5分" },
-        { name: "填空", start: 11, count: 6, label: "填空 · 5分" },
-      ];
       bigQuestions = [
         { num: 17, max: 10, name: "解答题 · 10分" },
         { num: 18, max: 12, name: "解答题 · 12分" },
@@ -1808,12 +1821,13 @@ export function StudyDashboard() {
 
   function downloadExport() {
     const data = currentAppData();
+    const areaNames: Record<StudyArea, string> = { "408": "408", math: "数学", english: "英语", politics: "政治" };
     const payload = {
       ...data,
       exportedAt: new Date().toISOString(),
-      projects: (["408", "math"] as StudyArea[]).map((area) => ({
+      projects: (["408", "math", "english", "politics"] as StudyArea[]).map((area) => ({
         id: area,
-        name: area === "408" ? "408" : "数学",
+        name: areaNames[area],
         subjects: books.filter((book) => book.area === area).map((book) => book.id),
       })),
     };
@@ -3269,6 +3283,9 @@ export function StudyDashboard() {
                       <div className="stat-card-progress-bar">
                         <div className="stat-card-progress-fill" style={{ width: `${sprintPastPercent}%` }} />
                       </div>
+                      {sprintPastYearRange && (
+                        <span className="stat-card-sub">{sprintPastYearRange} 年真题 · 共 {sprintPastTotal} 套</span>
+                      )}
                     </div>
                   </div>
 
@@ -3277,7 +3294,7 @@ export function StudyDashboard() {
                     <div className="score-box-num">
                       <strong>{sprintPastAvgScore}</strong>
                       {sprintPastAvgScore !== "--" && (
-                        <small className="stat-unit">/ {activeArea === "politics" ? 50 : activeArea === "english" ? 100 : 150} 分</small>
+                        <small className="stat-unit">/ {maxPaperScore(activeArea)} 分</small>
                       )}
                     </div>
                   </div>
@@ -3300,6 +3317,7 @@ export function StudyDashboard() {
                             }}
                           />
                         </div>
+                        <span className="stat-card-sub">按答题卡选择作答统计</span>
                       </div>
                     </div>
 
@@ -3308,7 +3326,7 @@ export function StudyDashboard() {
                       <div className="score-box-num">
                         <strong>{choiceOnlyStats?.avgChoiceScore ?? "--"}</strong>
                         {Boolean(choiceOnlyStats?.avgChoiceScore) && (
-                          <small className="stat-unit">/ {activeArea === "politics" ? 50 : 60} 分</small>
+                          <small className="stat-unit">/ {choiceFullScore(activeArea)} 分</small>
                         )}
                       </div>
                     </div>
@@ -3325,11 +3343,11 @@ export function StudyDashboard() {
                           <div className="endless-bar">
                             <div
                               className="endless-fill"
-                              style={{ width: `${Math.min(100, Math.round((sprintMockCompleted / 30) * 100))}%` }}
+                              style={{ width: `${Math.min(100, Math.round((sprintMockCompleted / MOCK_MILESTONE_TARGET) * 100))}%` }}
                             />
                           </div>
                           <div className="endless-ticks">
-                            {[5, 10, 15, 20, 25, 30].map((step) => {
+                            {MOCK_MILESTONES.map((step) => {
                               const isReached = sprintMockCompleted >= step;
                               return (
                                 <span
@@ -3341,6 +3359,7 @@ export function StudyDashboard() {
                               );
                             })}
                           </div>
+                          <span className="stat-card-sub">目标 {MOCK_MILESTONE_TARGET} 套模拟卷</span>
                         </div>
                       </div>
                     </div>
@@ -3350,7 +3369,7 @@ export function StudyDashboard() {
                       <div className="score-box-num">
                         <strong>{sprintMockAvgScore}</strong>
                         {sprintMockAvgScore !== "--" && (
-                          <small className="stat-unit">/ 150 分</small>
+                          <small className="stat-unit">/ {maxPaperScore(activeArea)} 分</small>
                         )}
                       </div>
                     </div>
@@ -3470,24 +3489,28 @@ export function StudyDashboard() {
                               <div className="bento-card-top">
                                 <span className="bento-year-pill">{paper.year}</span>
                                 <div className="bento-top-controls">
-                                  <div className="bento-score-inline" title="输入试卷分数">
-                                    <input
-                                      type="number"
-                                      className="bento-score-input"
-                                      min={0}
-                                      max={activeArea === "politics" ? 50 : activeArea === "english" ? 100 : 150}
-                                      step={0.5}
-                                      placeholder="分数"
-                                      value={paper.score ?? ""}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
-                                      }}
-                                    />
-                                    {paper.score !== null && paper.score !== undefined && (
-                                      <span className="bento-score-unit">分</span>
-                                    )}
-                                  </div>
+                                    <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
+                                      <input
+                                        type="number"
+                                        className="bento-score-input"
+                                        min={0}
+                                        max={maxPaperScore(activeArea)}
+                                        step={0.5}
+                                        placeholder="分数"
+                                        value={paper.score ?? ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
+                                        }}
+                                        onBlur={() => flashScoreSaved(paper.id)}
+                                      />
+                                      {paper.score !== null && paper.score !== undefined && (
+                                        <span className="bento-score-unit">分</span>
+                                      )}
+                                      {scoreSavedPaperId === paper.id && (
+                                        <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
+                                      )}
+                                    </div>
 
                                   <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
                                     <input
@@ -3598,12 +3621,12 @@ export function StudyDashboard() {
                                     <strong className="bento-paper-title">{paper.title}</strong>
                                   </div>
                                   <div className="bento-top-controls">
-                                    <div className="bento-score-inline" title="输入试卷分数">
+                                    <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
                                       <input
                                         type="number"
                                         className="bento-score-input"
                                         min={0}
-                                        max={150}
+                                        max={maxPaperScore(activeArea)}
                                         step={0.5}
                                         placeholder="分数"
                                         value={paper.score ?? ""}
@@ -3611,9 +3634,13 @@ export function StudyDashboard() {
                                           const val = e.target.value;
                                           updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
                                         }}
+                                        onBlur={() => flashScoreSaved(paper.id)}
                                       />
                                       {paper.score !== null && paper.score !== undefined && (
                                         <span className="bento-score-unit">分</span>
+                                      )}
+                                      {scoreSavedPaperId === paper.id && (
+                                        <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
                                       )}
                                     </div>
 
@@ -4982,50 +5009,30 @@ export function StudyDashboard() {
                       </button>
                     </div>
                     <div className="q-type-rows">
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">单选</strong>
-                          <span className="q-label-range">1~10</span>
+                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
+                        <div className="q-heatmap-row" key={grp.name}>
+                          <div className="q-subject-label">
+                            <strong className="q-label-name">{grp.name}</strong>
+                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
+                          </div>
+                          <div className="q-heatmap-chips">
+                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
+                              const state = activeQuestionPaper.questions?.[num];
+                              return (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
+                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                                >
+                                  {num}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [单选 · 5分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">填空</strong>
-                          <span className="q-label-range">11~16</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 6 }, (_, i) => 11 + i).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [填空 · 5分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
 
@@ -5116,50 +5123,30 @@ export function StudyDashboard() {
                       </button>
                     </div>
                     <div className="q-type-rows">
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">单选</strong>
-                          <span className="q-label-range">1~16</span>
+                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
+                        <div className="q-heatmap-row" key={grp.name}>
+                          <div className="q-subject-label">
+                            <strong className="q-label-name">{grp.name}</strong>
+                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
+                          </div>
+                          <div className="q-heatmap-chips">
+                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
+                              const state = activeQuestionPaper.questions?.[num];
+                              return (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
+                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                                >
+                                  {num}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 16 }, (_, i) => i + 1).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [单选 · 1分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">多选</strong>
-                          <span className="q-label-range">17~33</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 17 }, (_, i) => 17 + i).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [多选 · 2分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -5183,72 +5170,30 @@ export function StudyDashboard() {
                       </button>
                     </div>
                     <div className="q-type-rows">
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">完形</strong>
-                          <span className="q-label-range">1~20</span>
+                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
+                        <div className="q-heatmap-row" key={grp.name}>
+                          <div className="q-subject-label">
+                            <strong className="q-label-name">{grp.name}</strong>
+                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
+                          </div>
+                          <div className="q-heatmap-chips">
+                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
+                              const state = activeQuestionPaper.questions?.[num];
+                              return (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
+                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
+                                >
+                                  {num}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [完形 · 0.5分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">阅读A</strong>
-                          <span className="q-label-range">21~40</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 20 }, (_, i) => 21 + i).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读A · 2分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="q-heatmap-row">
-                        <div className="q-subject-label">
-                          <strong className="q-label-name">阅读B</strong>
-                          <span className="q-label-range">41~45</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: 5 }, (_, i) => 41 + i).map((num) => {
-                            const state = activeQuestionPaper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                title={`第 ${num} 题 [阅读B新题型 · 2分]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
 
