@@ -571,6 +571,7 @@ export function StudyDashboard() {
   const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
   const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
+  const effectiveSprintTab = (activeArea === "english" || activeArea === "politics") && sprintTab === "mock" ? "all" : sprintTab;
   const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
   const [pastPaperSortOrder, setPastPaperSortOrder] = useState<"desc" | "asc">("desc");
   const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
@@ -760,12 +761,6 @@ export function StudyDashboard() {
       window.clearInterval(interval);
     };
   }, [authState, loadRemoteData]);
-
-  useEffect(() => {
-    if ((activeArea === "english" || activeArea === "politics") && sprintTab === "mock") {
-      setSprintTab("all");
-    }
-  }, [activeArea, sprintTab]);
 
   useEffect(() => {
     if (!feedbackMessage) return;
@@ -1146,8 +1141,12 @@ export function StudyDashboard() {
 
   function togglePaperCompleted(id: string, completed: boolean) {
     const todayStr = dateToday();
+    let hadSecondRound = false;
     setPapers((current) => current.map((p) => {
       if (p.id !== id) return p;
+      if (!completed && p.secondRound) {
+        hadSecondRound = true;
+      }
       return {
         ...p,
         completed,
@@ -1156,13 +1155,20 @@ export function StudyDashboard() {
         secondRoundAt: completed ? p.secondRoundAt : "",
       };
     }));
+    if (!completed && hadSecondRound) {
+      setFeedbackMessage("已取消做题完成记录（二刷记录已同步重置）");
+    }
   }
 
   function togglePaperSecondRound(id: string, secondRound: boolean) {
     const todayStr = dateToday();
+    let autoCompletedFirstRound = false;
     setPapers((current) => current.map((p) => {
       if (p.id !== id) return p;
       const nextCompleted = secondRound ? true : p.completed;
+      if (secondRound && !p.completed) {
+        autoCompletedFirstRound = true;
+      }
       return {
         ...p,
         completed: nextCompleted,
@@ -1171,6 +1177,11 @@ export function StudyDashboard() {
         secondRoundAt: secondRound ? (p.secondRoundAt || todayStr) : "",
       };
     }));
+    if (secondRound) {
+      setFeedbackMessage(autoCompletedFirstRound ? "已标记二刷（已同步完成一刷）" : "已标记二刷完成");
+    } else {
+      setFeedbackMessage("已取消二刷");
+    }
   }
 
   function handleAddMockPaper() {
@@ -1543,20 +1554,21 @@ export function StudyDashboard() {
     }
 
     return (
-      <button
-        type="button"
-        className="bento-mini-heatmap"
-        aria-label={`打开${paper.title}答题卡`}
-        title="点击打开答题卡录入或调整做题表现"
-        onClick={() => {
-          setActivePaperQuestionModalId(paper.id);
-          setQuickWrongInput("");
-        }}
-      >
+      <div className="bento-mini-heatmap">
         <div className="mini-heatmap-head">
-          <span className="mini-heatmap-open-btn" aria-hidden="true">
-            答题卡
-          </span>
+          <button
+            type="button"
+            className="mini-heatmap-open-btn"
+            aria-label={`打开${paper.title}答题卡`}
+            title="打开答题卡录入或调整做题表现"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActivePaperQuestionModalId(paper.id);
+              setQuickWrongInput("");
+            }}
+          >
+            答题卡 ↗
+          </button>
           <div className="mini-heatmap-tags">
             {qSummary && (
               <>
@@ -1613,7 +1625,7 @@ export function StudyDashboard() {
             </div>
           </div>
         </div>
-      </button>
+      </div>
     );
   }
 
@@ -3417,8 +3429,8 @@ export function StudyDashboard() {
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={sprintTab === "all"}
-                      className={sprintTab === "all" ? "active" : ""}
+                      aria-selected={effectiveSprintTab === "all"}
+                      className={effectiveSprintTab === "all" ? "active" : ""}
                       onClick={() => setSprintTab("all")}
                     >
                       全部 ({sprintAreaPapers.length})
@@ -3426,8 +3438,8 @@ export function StudyDashboard() {
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={sprintTab === "past"}
-                      className={sprintTab === "past" ? "active" : ""}
+                      aria-selected={effectiveSprintTab === "past"}
+                      className={effectiveSprintTab === "past" ? "active" : ""}
                       onClick={() => setSprintTab("past")}
                     >
                       历年真题 ({sprintPastTotal})
@@ -3436,8 +3448,8 @@ export function StudyDashboard() {
                       <button
                         type="button"
                         role="tab"
-                        aria-selected={sprintTab === "mock"}
-                        className={sprintTab === "mock" ? "active" : ""}
+                        aria-selected={effectiveSprintTab === "mock"}
+                        className={effectiveSprintTab === "mock" ? "active" : ""}
                         onClick={() => setSprintTab("mock")}
                       >
                         模拟试题 ({sprintMockTotal})
@@ -3477,7 +3489,7 @@ export function StudyDashboard() {
               </div>
 
               <div className="sprint-bento-container">
-                {(sprintTab === "all" || sprintTab === "past") && (
+                {(effectiveSprintTab === "all" || effectiveSprintTab === "past") && (
                   <section className="sprint-section" aria-labelledby="past-bento-heading">
                     <div className="sprint-section-header">
                       <div className="sprint-header-title-group">
@@ -3558,7 +3570,7 @@ export function StudyDashboard() {
                                     <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
                                   </label>
 
-                                  <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : "标记二刷"}>
+                                  <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : (!paper.completed ? "标记二刷（将同步标记一刷）" : "标记二刷")}>
                                     <input
                                       type="checkbox"
                                       checked={Boolean(paper.secondRound)}
@@ -3622,7 +3634,7 @@ export function StudyDashboard() {
                   </section>
                 )}
 
-                  {(sprintTab === "all" || sprintTab === "mock") && activeArea !== "english" && activeArea !== "politics" && (
+                  {(effectiveSprintTab === "all" || effectiveSprintTab === "mock") && activeArea !== "english" && activeArea !== "politics" && (
                     <section className="sprint-section" aria-labelledby="mock-bento-heading">
                       <div className="sprint-section-header">
                         <h3 id="mock-bento-heading">模拟题</h3>
@@ -3651,22 +3663,12 @@ export function StudyDashboard() {
                             const paperJournals = journalsByPaper[paper.id] ?? [];
                             return (
                               <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                                <div className="bento-card-top bento-card-top--mock">
-                                  <div className="bento-title-row">
-                                    <div className="bento-title-wrap">
-                                      {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
-                                      <strong className="bento-paper-title">{paper.title}</strong>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="paper-btn-del"
-                                      title="删除该模拟卷"
-                                      onClick={() => setPendingDeletePaperId(paper.id)}
-                                    >
-                                      ✕
-                                    </button>
+                                <div className="bento-card-top">
+                                  <div className="bento-title-wrap" title={paper.title}>
+                                    {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
+                                    <strong className="bento-paper-title">{paper.title}</strong>
                                   </div>
-                                  <div className="bento-card-actions">
+                                  <div className="bento-top-controls">
                                     <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
                                       <input
                                         type="number"
@@ -3703,7 +3705,7 @@ export function StudyDashboard() {
                                       <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
                                     </label>
 
-                                    <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : "标记二刷"}>
+                                    <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : (!paper.completed ? "标记二刷（将同步标记一刷）" : "标记二刷")}>
                                       <input
                                         type="checkbox"
                                         checked={Boolean(paper.secondRound)}
@@ -3712,6 +3714,16 @@ export function StudyDashboard() {
                                       <span className="bento-check-box" />
                                       <span className="bento-check-text">二刷</span>
                                     </label>
+
+                                    <button
+                                      type="button"
+                                      className="paper-btn-del"
+                                      title="删除该模拟卷"
+                                      aria-label={`删除模拟卷 ${paper.title}`}
+                                      onClick={() => setPendingDeletePaperId(paper.id)}
+                                    >
+                                      ✕
+                                    </button>
                                   </div>
                                 </div>
 

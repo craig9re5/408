@@ -3281,7 +3281,7 @@ input[type="number"] {
 
 .endless-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--blue), #e8b277, var(--coral));
+  background: linear-gradient(90deg, var(--blue), var(--coral));
   border-radius: 999px;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -3418,18 +3418,18 @@ input[type="number"] {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(35, 42, 44, 0.02);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .sprint-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -3521,13 +3521,13 @@ input[type="number"] {
 
 .sprint-bento-card.completed {
   border-left: 3.5px solid var(--green);
-  background: rgba(251, 250, 246, 0.96);
+  background: #ffffff;
 }
 
 .bento-card-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   row-gap: 8px;
   column-gap: 8px;
@@ -3542,15 +3542,20 @@ input[type="number"] {
   color: var(--ink);
   background: rgba(23, 33, 41, 0.05);
   border: 1px solid var(--line-soft);
-  padding: 2px 9px;
+  padding: 0 9px;
+  height: 22px;
+  box-sizing: border-box;
   border-radius: 6px;
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .sprint-bento-card.completed .bento-year-pill {
-  background: var(--sidebar-soft);
-  border-color: var(--sidebar-soft);
-  color: #f2efe7;
+  background: rgba(124, 172, 133, 0.12);
+  border-color: rgba(124, 172, 133, 0.35);
+  color: var(--ink);
 }
 
 .paper-group-badge {
@@ -3558,13 +3563,16 @@ input[type="number"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 7px;
+  padding: 0 7px;
+  height: 20px;
+  box-sizing: border-box;
   font-size: 11px;
   font-weight: 600;
   color: var(--blue);
   background: rgba(116, 164, 181, 0.12);
   border: 1px solid rgba(116, 164, 181, 0.25);
-  border-radius: 6px;
+  border-radius: 5px;
+  line-height: 1;
 }
 
 .bento-title-wrap {
@@ -3574,6 +3582,7 @@ input[type="number"] {
   min-width: 0;
   flex: 1 1 120px;
   overflow: hidden;
+  height: 22px;
 }
 
 .bento-paper-title {
@@ -3583,6 +3592,7 @@ input[type="number"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 22px;
 }
 
 .bento-top-controls {
@@ -3596,49 +3606,21 @@ input[type="number"] {
   min-width: 0;
 }
 
-/* Mock cards: title owns the first row (with delete at its tail),
-   score + status checks form a dedicated action row beneath. */
-.bento-card-top--mock {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.bento-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.bento-title-row .bento-title-wrap {
-  flex: 1 1 auto;
-}
-
-.bento-title-row .paper-btn-del {
-  flex-shrink: 0;
-}
-
-.bento-card-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
 /* Inline score field: digits and unit are one running-text group —
    same typeface, same size, shared center; the input shrink-wraps its
    content so no dead space sits between number and unit. */
 .bento-score-inline {
   display: inline-flex;
   align-items: center;
+  height: 22px;
+  box-sizing: border-box;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 1px 7px;
+  border-radius: 6px;
+  padding: 0 5px;
   cursor: text;
   transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .bento-score-inline:hover {
@@ -3659,17 +3641,22 @@ input[type="number"] {
 }
 
 .bento-score-input {
-  width: 34px;
+  min-width: 24px;
+  width: 32px;
+  height: 18px;
+  line-height: 18px;
   border: none;
   background: transparent;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   font-family: var(--serif);
-  line-height: normal;
   text-align: left;
   color: var(--coral);
   outline: none;
   padding: 0;
+  margin: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .bento-score-input::placeholder {
@@ -3677,6 +3664,7 @@ input[type="number"] {
   font-weight: 500;
   font-size: 12px;
   font-family: var(--sans);
+  line-height: 18px;
 }
 
 .bento-score-input:placeholder-shown {
@@ -3685,19 +3673,24 @@ input[type="number"] {
 
 .bento-score-unit {
   font-family: var(--serif);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 18px;
   color: var(--coral);
-  margin-left: 3px;
+  margin-left: 2px;
   user-select: none;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .bento-score-saved {
   color: var(--green);
   font-size: 11px;
   font-weight: 700;
-  margin-left: 5px;
+  line-height: 18px;
+  margin-left: 4px;
+  display: inline-block;
+  vertical-align: middle;
   animation: score-saved-pop 1.5s ease-out both;
 }
 
@@ -3713,12 +3706,15 @@ input[type="number"] {
   position: relative;
   display: inline-flex;
   align-items: center;
+  height: 22px;
+  box-sizing: border-box;
   gap: 4px;
   cursor: pointer;
   user-select: none;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-soft);
   font-weight: 500;
+  line-height: 1;
   transition: color 0.15s ease;
 }
 
@@ -3735,8 +3731,9 @@ input[type="number"] {
 }
 
 .bento-check-box {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
   border: 1.5px solid var(--line);
   border-radius: 4px;
   background: #ffffff;
@@ -3763,23 +3760,27 @@ input[type="number"] {
 
 .bento-check-label input:checked + .bento-check-box::after {
   content: "";
-  width: 4px;
-  height: 8px;
+  width: 3.5px;
+  height: 7px;
   border: solid #ffffff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg) translate(-1px, -1px);
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg) translate(-0.5px, -0.5px);
   display: block;
 }
 
 .bento-check-text {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 
 .bento-card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 28px;
   padding-top: 4px;
   border-top: 1px dashed var(--line-soft);
 }
@@ -3787,6 +3788,16 @@ input[type="number"] {
 .bento-footer-left {
   display: flex;
   align-items: center;
+  min-height: 24px;
+}
+
+.bento-footer-left .editable-date-btn {
+  animation: bento-fade-in 0.18s ease-out both;
+}
+
+@keyframes bento-fade-in {
+  from { opacity: 0; transform: translateY(1px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .bento-actions-wrap {
@@ -3806,23 +3817,10 @@ input[type="number"] {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   padding: 6px 10px 8px;
-  cursor: pointer;
-  transition: all 0.16s ease;
+  cursor: default;
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.bento-mini-heatmap:hover {
-  background: rgba(23, 33, 41, 0.05);
-  border-color: var(--line);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(35, 42, 44, 0.04);
-}
-
-.bento-mini-heatmap:focus-visible {
-  outline: 2px solid var(--coral);
-  outline-offset: 2px;
 }
 
 .mini-heatmap-head {
@@ -3838,17 +3836,27 @@ input[type="number"] {
   padding: 2px 8px;
   border-radius: 6px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #ffffff;
   color: var(--ink-soft);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
+  cursor: pointer;
   user-select: none;
+  transition: all 0.15s ease;
 }
 
-.bento-mini-heatmap:hover .mini-heatmap-open-btn {
+.mini-heatmap-open-btn:hover {
   border-color: var(--coral);
   color: var(--coral);
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(35, 42, 44, 0.06);
+}
+
+.mini-heatmap-open-btn:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
 }
 
 .mini-heatmap-tags {
@@ -3988,14 +3996,37 @@ input[type="number"] {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border-radius: 4px;
-  font-size: 14px;
-  transition: color 0.15s;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.sprint-bento-card:hover .paper-btn-del,
+.paper-btn-del:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .paper-btn-del:hover {
   color: var(--coral);
+  background: rgba(217, 91, 74, 0.12);
+}
+
+@media (hover: none) {
+  .paper-btn-del {
+    opacity: 0.65;
+    pointer-events: auto;
+  }
 }
 
 .sprint-empty-card {
@@ -4729,10 +4760,25 @@ input[type="number"] {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    padding: 10px 12px;
+  }
+  .sprint-filter-section {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
   }
   .sprint-toolbar-right {
     justify-content: space-between;
     width: 100%;
+  }
+  .sprint-tab-group button,
+  .sprint-status-filters button {
+    padding: 5px 8px;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .bento-card-top {
+    gap: 6px;
   }
 }
 

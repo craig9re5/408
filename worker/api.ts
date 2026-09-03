@@ -810,7 +810,7 @@ async function writeAppData(
            reviewed_planned_at = excluded.reviewed_planned_at,
            is_current = excluded.is_current,
           updated_at = CURRENT_TIMESTAMP`,
-      ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
+      ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
     });
 
   let finalJournals = data.journals;

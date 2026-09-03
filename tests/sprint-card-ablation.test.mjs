@@ -1,0 +1,156 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import {
+  defaultPastPapers,
+  normalizePapers,
+  mergePapers,
+  maxPaperScore,
+} from "../app/study-data.ts";
+
+test("消融测试 1: CSS 布局与基线规范消融 (Layout & Baseline Invariants)", async () => {
+  const css = await readFile("app/globals.css", "utf8");
+
+  // 1.1 验证外层卡片头部统一为水平中心对齐 (避免 flex-start 造成的高低错落)
+  const bentoCardTopMatch = css.match(/\.bento-card-top\s*\{([^}]+)\}/);
+  assert.ok(bentoCardTopMatch, "必须包含 .bento-card-top 规则");
+  assert.match(bentoCardTopMatch[1], /align-items:\s*center/, "卡片头部必须为垂直居中对齐 align-items: center");
+
+  // 1.2 验证分数输入容器和复选框标签高度标准化为 22px
+  const scoreInlineMatch = css.match(/\.bento-score-inline\s*\{([^}]+)\}/);
+  assert.ok(scoreInlineMatch, "必须包含 .bento-score-inline 规则");
+  assert.match(scoreInlineMatch[1], /height:\s*22px/, "分数框高度必须标准为 22px");
+  assert.match(scoreInlineMatch[1], /box-sizing:\s*border-box/, "分数框必须声明 box-sizing: border-box");
+
+  const checkLabelMatch = css.match(/\.bento-check-label\s*\{([^}]+)\}/);
+  assert.ok(checkLabelMatch, "必须包含 .bento-check-label 规则");
+  assert.match(checkLabelMatch[1], /height:\s*22px/, "复选框标签高度必须标准为 22px");
+
+  // 1.3 验证文字与占位符行高精准对齐
+  const scoreInputMatch = css.match(/\.bento-score-input\s*\{([^}]+)\}/);
+  assert.ok(scoreInputMatch, "必须包含 .bento-score-input 规则");
+  assert.match(scoreInputMatch[1], /line-height:\s*18px/, "分数输入框 line-height 必须对齐为 18px");
+  assert.match(scoreInputMatch[1], /vertical-align:\s*middle/, "输入框文字应居中对齐 vertical-align: middle");
+
+  const scorePlaceholderMatch = css.match(/\.bento-score-input::placeholder\s*\{([^}]+)\}/);
+  assert.ok(scorePlaceholderMatch, "必须包含 .bento-score-input::placeholder 规则");
+  assert.match(scorePlaceholderMatch[1], /line-height:\s*18px/, "占位符行高必须为 18px 确保基线对齐");
+
+  const checkTextMatch = css.match(/\.bento-check-text\s*\{([^}]+)\}/);
+  assert.ok(checkTextMatch, "必须包含 .bento-check-text 规则");
+  assert.match(checkTextMatch[1], /display:\s*inline-flex/, "复选框文字必须为 inline-flex 确保文字垂直居中");
+
+  // 1.4 验证旧的双行规则已完全清除 (消除布局污染与死代码)
+  assert.doesNotMatch(css, /\.bento-card-top--mock/, "废弃的 .bento-card-top--mock 双行类必须彻底移除");
+  assert.doesNotMatch(css, /\.bento-title-row/, "废弃的 .bento-title-row 类必须彻底移除");
+  assert.doesNotMatch(css, /\.bento-card-actions/, "废弃的 .bento-card-actions 类必须彻底移除");
+});
+
+test("消融测试 2: 删除按钮悬浮显隐与无障碍消融 (Hover & A11y Invariants)", async () => {
+  const css = await readFile("app/globals.css", "utf8");
+
+  // 2.1 默认非悬浮态：完全隐藏且禁用鼠标响应，绝不产生误触
+  const delBtnMatch = css.match(/\.paper-btn-del\s*\{([^}]+)\}/);
+  assert.ok(delBtnMatch, "必须包含 .paper-btn-del 规则");
+  assert.match(delBtnMatch[1], /opacity:\s*0/, "删除按钮默认状态必须透明隐藏 opacity: 0");
+  assert.match(delBtnMatch[1], /pointer-events:\s*none/, "删除按钮默认状态必须禁用鼠标交互 pointer-events: none");
+  assert.match(delBtnMatch[1], /width:\s*20px/, "删除按钮必须保留标准宽度 20px 避免布局抖动");
+
+  // 2.2 悬浮态与键盘聚焦态：平滑显示并开启鼠标交互
+  const hoverDelMatch = css.match(/\.sprint-bento-card:hover\s+\.paper-btn-del/);
+  assert.ok(hoverDelMatch, "卡片 hover 时必须联动显示删除按钮");
+
+  const focusDelMatch = css.match(/\.paper-btn-del:focus-visible/);
+  assert.ok(focusDelMatch, "必须支持键盘 Tab 聚焦显示 :focus-visible");
+
+  // 2.3 按钮直接悬浮态：红底珊瑚色高亮
+  const directHoverMatch = css.match(/\.paper-btn-del:hover\s*\{([^}]+)\}/);
+  assert.ok(directHoverMatch, "必须包含 .paper-btn-del:hover 直接高亮规则");
+  assert.match(directHoverMatch[1], /color:\s*var\(--coral\)/, "删除按钮 hover 应显示珊瑚红");
+
+  // 2.4 触屏保底规则：无 hover 能力的设备上保持适度可见
+  assert.match(css, /@media\s*\(\s*hover:\s*none\s*\)/, "必须包含针对移动触屏的 @media (hover: none) 降级适配");
+});
+
+test("消融测试 3: 模拟卷与真题头部结构统一性消融 (Component Markup Invariants)", async () => {
+  const tsx = await readFile("app/study-dashboard.tsx", "utf8");
+
+  // 3.1 模拟卷必须与真题使用一致的 bento-card-top 与 bento-top-controls
+  assert.match(
+    tsx,
+    /<div className="bento-card-top">\s*<div className="bento-title-wrap"/,
+    "模拟卷必须使用标准单行 bento-card-top 结构",
+  );
+
+  // 3.2 模拟卷删除按钮必须置于 bento-top-controls 内部并拥有完整可访问性标签
+  assert.match(
+    tsx,
+    /<button[^>]*className="paper-btn-del"[^>]*title="删除该模拟卷"[^>]*aria-label=/,
+    "删除按钮必须包含 title 与 aria-label 辅助阅读语义",
+  );
+});
+
+test("消融测试 4: 试卷分数与状态全排列消融 (Data & State Permutations)", () => {
+  // 4.1 科目满分边界消融
+  assert.equal(maxPaperScore("408"), 150);
+  assert.equal(maxPaperScore("math"), 150);
+  assert.equal(maxPaperScore("english"), 100);
+  assert.equal(maxPaperScore("politics"), 50);
+
+  // 4.2 数据状态消融：空值、零分、浮点数、极值
+  const testCases = [
+    { score: null, completed: false, secondRound: false },
+    { score: 0, completed: true, secondRound: false },
+    { score: 112.5, completed: true, secondRound: true, secondRoundAt: "2026-11-15" },
+    { score: 150, completed: true, secondRound: true, secondRoundAt: "2026-11-20" },
+  ];
+
+  for (const tc of testCases) {
+    const raw = [{
+      id: "mock-test-1",
+      kind: "mock",
+      area: "408",
+      title: "合工大共创 卷一",
+      groupName: "合工大超越共创",
+      score: tc.score,
+      completed: tc.completed,
+      secondRound: tc.secondRound,
+      secondRoundAt: tc.secondRoundAt ?? "",
+      completedAt: tc.completed ? "2026-11-10" : "",
+    }];
+    const normalized = normalizePapers(raw, defaultPastPapers());
+    const paper = normalized.find((p) => p.id === "mock-test-1");
+    assert.ok(paper, "标准化必须保留测试模拟卷");
+    assert.equal(paper.score, tc.score, `分数 ${tc.score} 必须严格保持`);
+    assert.equal(paper.completed, tc.completed, `完成态 ${tc.completed} 必须严格保持`);
+    assert.equal(paper.secondRound, tc.secondRound, `二刷态 ${tc.secondRound} 必须严格保持`);
+  }
+
+  // 4.3 模拟卷墓碑删除消融：删除后本地与多端合并均生效
+  const base = defaultPastPapers();
+  const mockPaper = {
+    id: "mock-delete-ablation",
+    kind: "mock",
+    area: "math",
+    title: "李林考前冲刺6套卷 (卷一)",
+    groupName: "李林6套卷",
+    completed: false,
+    score: null,
+  };
+  const withMock = [...base, mockPaper];
+  const normalizedWithMock = normalizePapers(withMock, base);
+  assert.ok(normalizedWithMock.some((p) => p.id === "mock-delete-ablation"));
+
+  // 标记删除（墓碑状态）
+  const deletedMock = {
+    ...mockPaper,
+    deleted: true,
+    deletedAt: "2026-09-03T14:30:00Z",
+  };
+  const mergedAfterDelete = mergePapers(normalizedWithMock, [...base, deletedMock]);
+  assert.equal(
+    mergedAfterDelete.some((p) => p.id === "mock-delete-ablation" && !p.deleted),
+    false,
+    "已墓碑删除的模拟卷在合并后不应出现在活跃试卷列表中",
+  );
+});
