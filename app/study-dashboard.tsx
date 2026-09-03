@@ -2630,8 +2630,11 @@ export function StudyDashboard() {
             <span className="navigation-symbol navigation-symbol--settings" aria-hidden="true" />
             <span className="navigation-copy"><strong>设置</strong></span>
           </button>
-          <span className="space-note" title="当前数据空间">空间 {workspaceId || "main"}</span>
-          <p className="storage-note"><i className={syncStatus === "saved" ? "synced" : ""} />{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</p>
+          <p className="sync-note" title="同步状态与当前数据空间">
+            <i className={syncStatus === "saved" ? "synced" : ""} />
+            <span>{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</span>
+            <em>空间 {workspaceId || "main"}</em>
+          </p>
         </div>
       </aside>
 
