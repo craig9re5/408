@@ -3593,15 +3593,16 @@ input[type="number"] {
   min-width: 0;
 }
 
-/* Inline score box: de-chromed ghost field. Empty state is just faint text;
-   chrome appears only on hover/focus, same language as EditableDate. */
+/* Inline score field: digits and unit are one running-text group —
+   same typeface, same size, shared center; the input shrink-wraps its
+   content so no dead space sits between number and unit. */
 .bento-score-inline {
   display: inline-flex;
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: 8px;
+  padding: 1px 7px;
   cursor: text;
   transition: all 0.15s ease;
 }
@@ -3617,17 +3618,23 @@ input[type="number"] {
   box-shadow: 0 1px 4px rgba(35, 42, 44, 0.08);
 }
 
+/* The input's own sharp-cornered outline must not compete with the soft ring. */
+.bento-score-inline .bento-score-input:focus,
+.bento-score-inline .bento-score-input:focus-visible {
+  outline: none;
+}
+
 .bento-score-input {
-  min-width: 44px;
-  width: 50px;
-  height: 22px;
-  line-height: 22px;
+  min-width: 38px;
+  width: 44px;
+  field-sizing: content;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   font-family: var(--serif);
-  text-align: center;
+  line-height: 1.35;
+  text-align: left;
   color: var(--coral);
   outline: none;
   padding: 0;
@@ -3636,18 +3643,51 @@ input[type="number"] {
 .bento-score-input::placeholder {
   color: var(--muted);
   font-weight: 500;
-  font-size: 11.5px;
+  font-size: 12px;
   font-family: var(--sans);
 }
 
 .bento-score-unit {
   font-family: var(--serif);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
   color: var(--coral);
-  margin-left: 2px;
-  padding-right: 2px;
+  margin-left: 4px;
+  user-select: none;
+}
+
+.bento-score-input {
+  min-width: 38px;
+  width: 44px;
+  field-sizing: content;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--serif);
+  line-height: 1.35;
+  text-align: left;
+  color: var(--coral);
+  outline: none;
+  padding: 0;
+}
+
+.bento-score-input::placeholder {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  font-family: var(--sans);
+}
+
+.bento-score-unit {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--coral);
+  margin-left: 4px;
+  user-select: none;
 }
 
 .bento-score-saved {
