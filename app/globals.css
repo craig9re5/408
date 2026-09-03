@@ -3618,6 +3618,7 @@ input[type="number"] {
 .bento-card-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
@@ -3661,7 +3662,7 @@ input[type="number"] {
   font-size: 15px;
   font-weight: 700;
   font-family: var(--serif);
-  line-height: 1.35;
+  line-height: normal;
   text-align: left;
   color: var(--coral);
   outline: none;
