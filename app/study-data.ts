@@ -1,4 +1,100 @@
-import type { Book, StudyArea } from "./data/books";
+import type { Book } from "./data/books";
+import type {
+  StudyArea,
+  SectionProgress,
+  ProgressValue,
+  ProgressMap,
+  PlanChangeSource,
+  PlanHistoryEntry,
+  ProjectSetting,
+  ProjectSettings,
+  JournalProjectContext,
+  JournalSubjectContext,
+  JournalSectionItem,
+  JournalSectionContext,
+  JournalSectionsContext,
+  JournalPaperContext,
+  JournalContext,
+  JournalPublish,
+  JournalEntry,
+  PaperKind,
+  QuestionState,
+  QuestionGroupDef,
+  PaperRecord,
+} from "../shared/types.ts";
+import {
+  DEFAULT_EXAM_DATE,
+  DEFAULT_PROJECT_SETTINGS,
+  PAST_PAPER_YEARS,
+  POLITICS_PAST_PAPER_YEARS,
+  maxPaperScore,
+} from "../shared/constants.ts";
+import {
+  isRecord,
+  isDate,
+  addCalendarDays,
+  normalizeProjectSettings,
+  normalizePlanHistory,
+  normalizeJournalContext,
+  normalizeJournalPublish,
+  normalizeJournalEntry,
+  normalizeJournals,
+  defaultPastPapers,
+  normalizePaperRecord,
+  normalizePapers,
+  mergePapers,
+  mergeJournals,
+  clampPaperScore,
+  parseQuestionRanges,
+} from "../shared/merge.ts";
+
+export type {
+  StudyArea,
+  SectionProgress,
+  ProgressValue,
+  ProgressMap,
+  PlanChangeSource,
+  PlanHistoryEntry,
+  ProjectSetting,
+  ProjectSettings,
+  JournalProjectContext,
+  JournalSubjectContext,
+  JournalSectionItem,
+  JournalSectionContext,
+  JournalSectionsContext,
+  JournalPaperContext,
+  JournalContext,
+  JournalPublish,
+  JournalEntry,
+  PaperKind,
+  QuestionState,
+  QuestionGroupDef,
+  PaperRecord,
+};
+
+export {
+  DEFAULT_EXAM_DATE,
+  DEFAULT_PROJECT_SETTINGS,
+  PAST_PAPER_YEARS,
+  POLITICS_PAST_PAPER_YEARS,
+  maxPaperScore,
+  isRecord,
+  isDate,
+  addCalendarDays,
+  clampPaperScore,
+  parseQuestionRanges,
+  normalizeProjectSettings,
+  normalizePlanHistory,
+  normalizeJournalContext,
+  normalizeJournalPublish,
+  normalizeJournalEntry,
+  normalizeJournals,
+  defaultPastPapers,
+  normalizePaperRecord,
+  normalizePapers,
+  mergePapers,
+  mergeJournals,
+};
 
 export const SCHEMA_VERSION = 2;
 export const APP_VERSION = "2.0.0";
@@ -7,18 +103,6 @@ export const MAX_BACKUPS = 15;
 const APP_DATA_KEY = "study-app-data-v1";
 const LEGACY_PROGRESS_KEY = "408-section-progress-v1";
 const BACKUPS_KEY = "study-local-backups-v1";
-
-export type SectionProgress = {
-  learned: boolean;
-  learnedAt: string;
-  reviewed: boolean;
-  reviewedAt: string;
-  plannedAt: string;
-  reviewedPlannedAt: string;
-  isCurrent: boolean;
-};
-
-export type ProgressMap = Record<string, SectionProgress>;
 
 export function buildDefaultProgress(bookList: Book[], isMain = false): ProgressMap {
   const progress: ProgressMap = {};
@@ -45,7 +129,7 @@ export function buildDefaultProgress(bookList: Book[], isMain = false): Progress
 export function createBlankProgress(bookList: Book[]): ProgressMap {
   return buildDefaultProgress(bookList, false);
 }
-export type PlanChangeSource = "manual" | "batchSchedule" | "shift" | "undo";
+
 export type ChapterPlanMode = "uniform" | "spread";
 
 export type ChapterPlanSection = {
@@ -54,103 +138,6 @@ export type ChapterPlanSection = {
   reviewed: boolean;
   plannedAt: string;
   reviewedPlannedAt?: string;
-};
-
-export type PlanHistoryEntry = {
-  id: string;
-  sectionId: string;
-  from: string;
-  to: string;
-  changedAt: string;
-  source: PlanChangeSource;
-};
-
-export type ProjectSetting = {
-  examDate: string;
-};
-
-export type ProjectSettings = Record<StudyArea, ProjectSetting>;
-
-export type JournalProjectContext = {
-  type: "project";
-  area: StudyArea;
-};
-
-export type JournalSubjectContext = {
-  type: "subject";
-  area: StudyArea;
-  bookId: string;
-  bookTitle?: string;
-};
-
-export type JournalSectionItem = {
-  area: StudyArea;
-  bookId: string;
-  sectionId: string;
-  bookTitle?: string;
-  sectionTitle?: string;
-  sectionNumber?: string;
-};
-
-export type JournalSectionContext = {
-  type: "section";
-  area: StudyArea;
-  bookId: string;
-  sectionId: string;
-  bookTitle?: string;
-  sectionTitle?: string;
-  sectionNumber?: string;
-};
-
-export type JournalSectionsContext = {
-  type: "sections";
-  sections: JournalSectionItem[];
-};
-
-export type JournalPaperContext = {
-  type: "paper";
-  area: StudyArea;
-  paperId: string;
-  paperTitle: string;
-};
-
-export type JournalContext =
-  | JournalProjectContext
-  | JournalSubjectContext
-  | JournalSectionContext
-  | JournalSectionsContext
-  | JournalPaperContext;
-
-export type JournalPublish = {
-  status: "local" | "published";
-  publishedAt: string | null;
-  blogUrl: string | null;
-  blogPostId: string | null;
-};
-
-export type JournalEntry = {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  title: string | null;
-  content: string;
-  context: JournalContext | null;
-  publish: JournalPublish;
-  important?: boolean;
-};
-
-export type PaperKind = "past" | "mock";
-
-export type QuestionState = "correct" | "partial" | "wrong";
-
-export type QuestionGroupDef = {
-  type: "选择题" | "填空题" | "解答题" | "综合应用题" | "主观表达题";
-  subject?: string;
-  start: number;
-  end: number;
-  count: number;
-  scorePerQuestion?: number;
-  questionScores?: Record<number, number>;
 };
 
 export const MATH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[] } = {
@@ -322,23 +309,59 @@ export function modalChoiceGroups(area: StudyArea): ModalChoiceGroup[] {
   return [];
 }
 
-export type PaperRecord = {
+export type WeekdayNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export type ScheduleThemeKey = "cs408" | "math_intense" | "math_regular" | "english_pol" | "custom";
+
+export interface CustomPeriodConfig {
+  period: number;
+  start: string;
+  end: string;
+}
+
+export interface RestBreak {
+  id: "lunch" | "dinner";
+  label: "午休" | "晚休";
+  startTime: string;
+  endTime: string;
+  startMinutes: number;
+  endMinutes: number;
+}
+
+export interface ScheduleEvent {
   id: string;
-  kind: PaperKind;
-  area: StudyArea;
   title: string;
-  groupName?: string;
-  year?: number;
-  completed: boolean;
-  completedAt: string;
-  score?: number | null;
-  durationMinutes?: number | null;
-  secondRound?: boolean;
-  secondRoundAt?: string;
-  notes?: string;
-  questions?: Record<number, QuestionState>;
-  questionScores?: Record<number, number>;
-};
+  theme: ScheduleThemeKey;
+  dayOfWeek: WeekdayNumber;
+  startPeriod: number;
+  endPeriod: number;
+  locationOrNotes?: string;
+  linkedArea?: "408" | "math" | "english" | "politics";
+  applicableWeeks?: number[];
+}
+
+export interface ScheduleAppData {
+  version: number;
+  activeWeek: number;
+  semesterStartDate: string;
+  periods: CustomPeriodConfig[];
+  lunchBreak: { start: string; end: string };
+  dinnerBreak: { start: string; end: string };
+  events: ScheduleEvent[];
+}
+
+export type ScheduleSlotStatus = "in_progress" | "rest_break" | "intermission" | "idle";
+
+export interface ActiveScheduleInfo {
+  status: ScheduleSlotStatus;
+  activeEvent: ScheduleEvent | null;
+  activePeriod: CustomPeriodConfig | null;
+  restBreak: RestBreak | null;
+  intermissionNextEvent: ScheduleEvent | null;
+  elapsedPercent: number;
+  remainingMinutes: number;
+  startsInMinutes: number;
+}
 
 export type StudyAppData = {
   schemaVersion: number;
@@ -348,6 +371,7 @@ export type StudyAppData = {
   planHistory: PlanHistoryEntry[];
   journals: JournalEntry[];
   papers: PaperRecord[];
+  schedule?: ScheduleAppData;
 };
 
 export type BackupKind = "manual" | "before-import" | "before-restore" | "before-migration";
@@ -407,9 +431,7 @@ export function calculateRecentStreak(progress: ProgressMap, today: string): num
   let cursor = latestActiveDate;
   while (activeDates.has(cursor)) {
     streak += 1;
-    const date = new Date(`${cursor}T00:00:00`);
-    date.setDate(date.getDate() - 1);
-    cursor = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    cursor = addCalendarDays(cursor, -1);
   }
   return streak;
 }
@@ -750,31 +772,7 @@ export function calculateDisciplineStats(
   };
 }
 
-export const defaultProjectSettings = (): ProjectSettings => ({
-  "408": { examDate: "2026-12-19" },
-  math: { examDate: "2026-12-19" },
-  english: { examDate: "2026-12-19" },
-  politics: { examDate: "2026-12-19" },
-});
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-export function addCalendarDays(value: string, days: number): string {
-  if (!isDate(value) || !Number.isInteger(days)) return "";
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+export const defaultProjectSettings = (): ProjectSettings => structuredClone(DEFAULT_PROJECT_SETTINGS);
 
 export function buildChapterPlanChanges(
   sections: ChapterPlanSection[],
@@ -859,39 +857,6 @@ function normalizeProgressMap(value: unknown, fallback: ProgressMap): ProgressMa
   return normalized;
 }
 
-function normalizeProjectSettings(value: unknown): ProjectSettings {
-  const defaults = defaultProjectSettings();
-  if (!isRecord(value)) return defaults;
-  (["408", "math", "english", "politics"] as StudyArea[]).forEach((area) => {
-    const setting = value[area];
-    if (isRecord(setting) && isDate(setting.examDate)) defaults[area] = { examDate: setting.examDate };
-  });
-  return defaults;
-}
-
-function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
-  if (!Array.isArray(value)) return [];
-  const sources: PlanChangeSource[] = ["manual", "batchSchedule", "shift", "undo"];
-  return value.flatMap((entry): PlanHistoryEntry[] => {
-    if (!isRecord(entry)
-      || typeof entry.id !== "string"
-      || typeof entry.sectionId !== "string"
-      || typeof entry.changedAt !== "string"
-      || typeof entry.source !== "string"
-      || !sources.includes(entry.source as PlanChangeSource)) return [];
-    const from = entry.from === "" || isDate(entry.from) ? entry.from : "";
-    const to = entry.to === "" || isDate(entry.to) ? entry.to : "";
-    return [{
-      id: entry.id,
-      sectionId: entry.sectionId,
-      from,
-      to,
-      changedAt: entry.changedAt,
-      source: entry.source as PlanChangeSource,
-    }];
-  }).slice(-1000);
-}
-
 export function dateToday(): string {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
@@ -932,381 +897,348 @@ export function extractJournalSections(context: JournalContext | null): JournalS
   return [];
 }
 
-export function normalizeJournalContext(value: unknown): JournalContext | null {
-  if (!isRecord(value)) return null;
+export const WEEKDAY_LABELS: Record<WeekdayNumber, string> = {
+  1: "周一",
+  2: "周二",
+  3: "周三",
+  4: "周四",
+  5: "周五",
+  6: "周六",
+  7: "周日",
+};
 
-  if (value.type === "sections" && Array.isArray(value.sections)) {
-    const validSections: JournalSectionItem[] = [];
-    const seenSectionIds = new Set<string>();
+export const DEFAULT_SCHEDULE_PERIODS: CustomPeriodConfig[] = [
+  { period: 1, start: "08:10", end: "09:00" },
+  { period: 2, start: "09:10", end: "10:00" },
+  { period: 3, start: "10:10", end: "11:00" },
+  { period: 4, start: "11:10", end: "12:00" },
+  { period: 5, start: "14:00", end: "14:50" },
+  { period: 6, start: "15:00", end: "15:50" },
+  { period: 7, start: "16:10", end: "17:00" },
+  { period: 8, start: "17:10", end: "18:00" },
+  { period: 9, start: "18:30", end: "19:20" },
+  { period: 10, start: "19:30", end: "20:20" },
+  { period: 11, start: "20:30", end: "21:20" },
+  { period: 12, start: "21:30", end: "22:20" },
+  { period: 13, start: "22:30", end: "23:20" },
+];
 
-    value.sections.forEach((item) => {
-      if (!isRecord(item)) return;
-      const area = item.area === "math" || item.area === "408" || item.area === "english" || item.area === "politics"
-        ? item.area
-        : null;
-      if (!area) return;
-      if (typeof item.bookId !== "string" || !item.bookId.trim()) return;
-      if (typeof item.sectionId !== "string" || !item.sectionId.trim()) return;
-      const secId = item.sectionId.trim();
-      if (seenSectionIds.has(secId)) return;
-      seenSectionIds.add(secId);
+export const DEFAULT_SCHEDULE_EVENTS: ScheduleEvent[] = [
+  // ── 上午：周一至周五 2~4 节 (09:10 - 12:00) 数学强化 ──
+  { id: "sched_mon_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 1, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_tue_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 2, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_wed_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 3, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_thu_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 4, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_fri_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 5, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
 
-      validSections.push({
-        area,
-        bookId: item.bookId.trim(),
-        sectionId: secId,
-        bookTitle: typeof item.bookTitle === "string" && item.bookTitle.trim() ? item.bookTitle.trim() : undefined,
-        sectionTitle: typeof item.sectionTitle === "string" && item.sectionTitle.trim() ? item.sectionTitle.trim() : undefined,
-        sectionNumber: typeof item.sectionNumber === "string" && item.sectionNumber.trim() ? item.sectionNumber.trim() : undefined,
-      });
-    });
+  // ── 下午：周一至周六 5~8 节 (14:00 - 18:00) 408 统考 ──
+  { id: "sched_mon_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  { id: "sched_tue_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 2, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  { id: "sched_wed_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  { id: "sched_thu_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 4, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  { id: "sched_fri_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  { id: "sched_sat_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 6, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
 
-    if (validSections.length === 0) return null;
-    return {
-      type: "sections",
-      sections: validSections,
-    };
-  }
+  // ── 晚间前半场：10~11 节 (19:30 - 21:20) 408 与数学交替 ──
+  { id: "sched_mon_408_eve", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
+  { id: "sched_tue_math_eve", title: "数学", theme: "math_regular", dayOfWeek: 2, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  { id: "sched_wed_408_eve", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
+  { id: "sched_thu_math_eve", title: "数学", theme: "math_regular", dayOfWeek: 4, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  { id: "sched_fri_408_eve", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
+  { id: "sched_sat_math_eve", title: "数学强化", theme: "math_intense", dayOfWeek: 6, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
 
-  const area = value.area === "math" || value.area === "408" || value.area === "english" || value.area === "politics"
-    ? value.area
-    : null;
-  if (!area) return null;
+  // ── 晚间后半场：13 节 (22:30 - 23:20) / 周日 12~13 节 (21:30 - 23:20) 英政 ──
+  { id: "sched_mon_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 1, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_tue_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 2, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_wed_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 3, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_thu_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 4, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_fri_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 5, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_sat_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 6, startPeriod: 13, endPeriod: 13 },
+  { id: "sched_sun_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 7, startPeriod: 12, endPeriod: 13 },
+];
 
-  if (value.type === "project") {
-    return {
-      type: "project",
-      area,
-    };
-  }
-
-  if (value.type === "subject") {
-    if (typeof value.bookId !== "string" || !value.bookId.trim()) return null;
-    return {
-      type: "subject",
-      area,
-      bookId: value.bookId.trim(),
-      bookTitle: typeof value.bookTitle === "string" && value.bookTitle.trim() ? value.bookTitle.trim() : undefined,
-    };
-  }
-
-  if (value.type === "section") {
-    if (typeof value.bookId !== "string" || !value.bookId.trim()) return null;
-    if (typeof value.sectionId !== "string" || !value.sectionId.trim()) return null;
-    return {
-      type: "section",
-      area,
-      bookId: value.bookId.trim(),
-      sectionId: value.sectionId.trim(),
-      bookTitle: typeof value.bookTitle === "string" && value.bookTitle.trim() ? value.bookTitle.trim() : undefined,
-      sectionTitle: typeof value.sectionTitle === "string" && value.sectionTitle.trim() ? value.sectionTitle.trim() : undefined,
-      sectionNumber: typeof value.sectionNumber === "string" && value.sectionNumber.trim() ? value.sectionNumber.trim() : undefined,
-    };
-  }
-
-  if (value.type === "paper") {
-    if (typeof value.paperId !== "string" || !value.paperId.trim()) return null;
-    return {
-      type: "paper",
-      area,
-      paperId: value.paperId.trim(),
-      paperTitle: typeof value.paperTitle === "string" && value.paperTitle.trim() ? value.paperTitle.trim() : "真题/模拟卷",
-    };
-  }
-
-  return null;
-}
-
-export function normalizeJournalPublish(value: unknown): JournalPublish {
-  if (!isRecord(value)) {
-    return {
-      status: "local",
-      publishedAt: null,
-      blogUrl: null,
-      blogPostId: null,
-    };
-  }
-  const status = value.status === "published" ? "published" : "local";
+export function buildDefaultSchedule(): ScheduleAppData {
   return {
-    status,
-    publishedAt: typeof value.publishedAt === "string" ? value.publishedAt : null,
-    blogUrl: typeof value.blogUrl === "string" ? value.blogUrl : null,
-    blogPostId: typeof value.blogPostId === "string" ? value.blogPostId : null,
+    version: 1,
+    activeWeek: 2,
+    semesterStartDate: "2026-08-24",
+    periods: DEFAULT_SCHEDULE_PERIODS.map((p) => ({ ...p })),
+    lunchBreak: { start: "12:00", end: "14:00" },
+    dinnerBreak: { start: "18:00", end: "18:30" },
+    events: DEFAULT_SCHEDULE_EVENTS.map((e) => ({ ...e })),
   };
 }
 
-export function normalizeJournalEntry(value: unknown): JournalEntry | null {
-  if (!isRecord(value)
-    || typeof value.id !== "string"
-    || !/^\d{8}\d{3}$/.test(value.id)
-    || typeof value.createdAt !== "string"
-    || typeof value.content !== "string") {
-    return null;
+export function timeToMinutes(timeStr: string): number {
+  if (!timeStr || !timeStr.includes(":")) return 0;
+  const [h, m] = timeStr.split(":").map((v) => parseInt(v, 10));
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+
+export function minutesToTime(minutes: number): string {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, minutes));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function formatMonthDay(dateStr: string): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length < 3) return "";
+  const [, m, d] = parts;
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+}
+
+export interface WeekDayInfo {
+  dayOfWeek: WeekdayNumber;
+  label: string;
+  dateStr: string;
+  monthDay: string;
+  isToday: boolean;
+}
+
+export function getWeekDaysInfo(
+  semesterStartDate: string,
+  weekNumber: number,
+  todayStr: string,
+): WeekDayInfo[] {
+  const mondayOffset = (Math.max(1, weekNumber) - 1) * 7;
+  const weekMonday = addCalendarDays(semesterStartDate, mondayOffset);
+
+  const days: WeekDayInfo[] = [];
+  for (let d = 1; d <= 7; d++) {
+    const dow = d as WeekdayNumber;
+    const dateStr = addCalendarDays(weekMonday, d - 1);
+    days.push({
+      dayOfWeek: dow,
+      label: WEEKDAY_LABELS[dow],
+      dateStr,
+      monthDay: formatMonthDay(dateStr),
+      isToday: dateStr === todayStr,
+    });
   }
-  const updatedAt = typeof value.updatedAt === "string" ? value.updatedAt : value.createdAt;
-  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : null;
-  const context = normalizeJournalContext(value.context);
-  const publish = normalizeJournalPublish(value.publish);
-  const important = Boolean(value.important);
-
-  return {
-    id: value.id,
-    createdAt: value.createdAt,
-    updatedAt,
-    title,
-    content: value.content,
-    context,
-    publish,
-    important,
-  };
+  return days;
 }
 
-export function normalizeJournals(value: unknown): JournalEntry[] {
-  if (!Array.isArray(value)) return [];
-  const entries: JournalEntry[] = [];
-  value.forEach((candidate) => {
-    const entry = normalizeJournalEntry(candidate);
-    if (entry) entries.push(entry);
-  });
-  return entries;
+export function calculateWeekNumber(semesterStartDate: string, todayStr: string): number {
+  if (!semesterStartDate || !todayStr) return 1;
+  const start = new Date(`${semesterStartDate}T00:00:00Z`).getTime();
+  const current = new Date(`${todayStr}T00:00:00Z`).getTime();
+  const diffDays = Math.floor((current - start) / (86400 * 1000));
+  if (diffDays < 0) return 1;
+  const week = Math.floor(diffDays / 7) + 1;
+  return Math.min(Math.max(1, week), 25);
 }
 
-export const PAST_PAPER_YEARS = [
-  2026, 2025, 2024, 2023, 2022, 2021, 2020,
-  2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
-] as const;
+export function normalizeSchedule(value: unknown): ScheduleAppData {
+  const fallback = buildDefaultSchedule();
+  if (!isRecord(value)) return fallback;
 
-export const POLITICS_PAST_PAPER_YEARS = [
-  2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017
-] as const;
+  const version = typeof value.version === "number" ? value.version : 1;
+  const activeWeek = typeof value.activeWeek === "number" && value.activeWeek >= 1 && value.activeWeek <= 30
+    ? value.activeWeek
+    : fallback.activeWeek;
+  const semesterStartDate = typeof value.semesterStartDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.semesterStartDate)
+    ? value.semesterStartDate
+    : fallback.semesterStartDate;
 
-export function defaultPastPapers(): PaperRecord[] {
-  const list: PaperRecord[] = [];
-  (["408", "math", "english"] as StudyArea[]).forEach((area) => {
-    PAST_PAPER_YEARS.forEach((year) => {
-      list.push({
-        id: `past-${area}-${year}`,
-        kind: "past",
-        area,
-        title: `${year}年${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
-        groupName: "历年真题",
-        year,
-        completed: false,
-        completedAt: "",
-        score: null,
-        durationMinutes: null,
-        secondRound: false,
-        secondRoundAt: "",
-      });
-    });
-  });
-  POLITICS_PAST_PAPER_YEARS.forEach((year) => {
-    list.push({
-      id: `past-politics-${year}`,
-      kind: "past",
-      area: "politics",
-      title: `${year}年政治真题`,
-      groupName: "历年真题",
-      year,
-      completed: false,
-      completedAt: "",
-      score: null,
-      durationMinutes: null,
-      secondRound: false,
-      secondRoundAt: "",
-    });
-  });
-  return list;
-}
+  const lunchBreak = isRecord(value.lunchBreak) && typeof value.lunchBreak.start === "string" && typeof value.lunchBreak.end === "string"
+    ? { start: value.lunchBreak.start, end: value.lunchBreak.end }
+    : fallback.lunchBreak;
 
-export function maxPaperScore(area: StudyArea): number {
-  if (area === "politics") return 50;
-  if (area === "english") return 100;
-  return 150;
-}
+  const dinnerBreak = isRecord(value.dinnerBreak) && typeof value.dinnerBreak.start === "string" && typeof value.dinnerBreak.end === "string"
+    ? { start: value.dinnerBreak.start, end: value.dinnerBreak.end }
+    : fallback.dinnerBreak;
 
-export function normalizePaperRecord(value: unknown): PaperRecord | null {
-  if (!isRecord(value)) return null;
-  if (typeof value.id !== "string" || !value.id.trim()) return null;
-  const kind: PaperKind = value.kind === "mock" ? "mock" : "past";
-  const area: StudyArea = value.area === "math" ? "math" : value.area === "english" ? "english" : value.area === "politics" ? "politics" : "408";
-  let title = typeof value.title === "string" && value.title.trim()
-    ? value.title.trim()
-    : (kind === "past" ? `${value.year ?? ""}年真题` : "模拟卷");
-  title = title.replace(/^(\d{4}年)\s+/, "$1");
-  const year = typeof value.year === "number" && value.year >= 2000 && value.year <= 2100 ? value.year : undefined;
-  const completed = Boolean(value.completed);
-  const completedAt = isDate(value.completedAt) ? value.completedAt : "";
-  const maxScore = maxPaperScore(area);
-  const score = typeof value.score === "number" && !Number.isNaN(value.score) && value.score >= 0 && value.score <= maxScore
-    ? Math.round(value.score * 10) / 10
-    : null;
-  const durationMinutes = typeof value.durationMinutes === "number" && value.durationMinutes > 0 && value.durationMinutes <= 600
-    ? Math.round(value.durationMinutes)
-    : null;
-  const secondRound = Boolean(value.secondRound);
-  const secondRoundAt = isDate(value.secondRoundAt) ? value.secondRoundAt : "";
-  const groupName = typeof value.groupName === "string" && value.groupName.trim() ? value.groupName.trim() : undefined;
-  const notes = typeof value.notes === "string" ? value.notes.trim() : undefined;
-
-  let questions: Record<number, QuestionState> | undefined = undefined;
-  if (isRecord(value.questions)) {
-    const qMap: Record<number, QuestionState> = {};
-    Object.entries(value.questions).forEach(([k, v]) => {
-      const qNum = parseInt(k, 10);
-      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
-        if (v === "correct" || v === "partial" || v === "wrong") {
-          qMap[qNum] = v;
-        }
-      }
-    });
-    questions = qMap;
+  let periods: CustomPeriodConfig[] = fallback.periods;
+  if (Array.isArray(value.periods) && value.periods.length > 0) {
+    const cleanedPeriods = value.periods
+      .filter((p): p is Record<string, unknown> => isRecord(p) && typeof p.period === "number" && typeof p.start === "string" && typeof p.end === "string")
+      .map((p) => ({
+        period: p.period as number,
+        start: String(p.start),
+        end: String(p.end),
+      }));
+    if (cleanedPeriods.length > 0) {
+      periods = cleanedPeriods;
+    }
   }
 
-  let questionScores: Record<number, number> | undefined = undefined;
-  if (isRecord(value.questionScores)) {
-    const sMap: Record<number, number> = {};
-    Object.entries(value.questionScores).forEach(([k, v]) => {
-      const qNum = parseInt(k, 10);
-      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100 && typeof v === "number" && !Number.isNaN(v) && v >= 0 && v <= 100) {
-        sMap[qNum] = Math.round(v * 10) / 10;
-      }
-    });
-    questionScores = sMap;
+  let events: ScheduleEvent[] = fallback.events;
+  if (Array.isArray(value.events)) {
+    const validThemes = new Set<ScheduleThemeKey>(["cs408", "math_intense", "math_regular", "english_pol", "custom"]);
+    const cleanedEvents = value.events
+      .filter((e): e is Record<string, unknown> =>
+        isRecord(e) &&
+        typeof e.id === "string" &&
+        typeof e.title === "string" &&
+        typeof e.dayOfWeek === "number" &&
+        e.dayOfWeek >= 1 && e.dayOfWeek <= 7 &&
+        typeof e.startPeriod === "number" &&
+        typeof e.endPeriod === "number" &&
+        e.startPeriod <= e.endPeriod
+      )
+      .map((e) => ({
+        id: String(e.id),
+        title: String(e.title).trim(),
+        theme: (typeof e.theme === "string" && validThemes.has(e.theme as ScheduleThemeKey) ? e.theme : "custom") as ScheduleThemeKey,
+        dayOfWeek: e.dayOfWeek as WeekdayNumber,
+        startPeriod: e.startPeriod as number,
+        endPeriod: e.endPeriod as number,
+        locationOrNotes: typeof e.locationOrNotes === "string" ? e.locationOrNotes : undefined,
+        linkedArea: (e.linkedArea === "408" || e.linkedArea === "math" || e.linkedArea === "english" || e.linkedArea === "politics") ? (e.linkedArea as "408" | "math" | "english" | "politics") : undefined,
+        applicableWeeks: Array.isArray(e.applicableWeeks) ? e.applicableWeeks.filter((w) => typeof w === "number") : undefined,
+      }));
+    if (cleanedEvents.length > 0 || value.events.length === 0) {
+      events = cleanedEvents;
+    }
   }
 
   return {
-    id: value.id.trim(),
-    kind,
-    area,
-    title,
-    groupName,
-    year,
-    completed: completed && Boolean(completedAt),
-    completedAt: completed ? completedAt : "",
-    score,
-    durationMinutes,
-    secondRound: secondRound && Boolean(secondRoundAt),
-    secondRoundAt: secondRound ? secondRoundAt : "",
-    notes,
-    questions,
-    questionScores,
+    version,
+    activeWeek,
+    semesterStartDate,
+    periods,
+    lunchBreak,
+    dinnerBreak,
+    events,
   };
 }
 
-export function normalizePapers(value: unknown): PaperRecord[] {
-  const defaults = defaultPastPapers();
-  const map = new Map<string, PaperRecord>();
-  defaults.forEach((paper) => map.set(paper.id, paper));
+export function calculateScheduleStatus(
+  schedule: ScheduleAppData,
+  now = new Date(),
+  overrideDayOfWeek?: WeekdayNumber,
+  overrideTimeStr?: string,
+): ActiveScheduleInfo {
+  let dow: WeekdayNumber;
+  let currentMinutes: number;
 
-  if (Array.isArray(value)) {
-    value.forEach((candidate) => {
-      const normalized = normalizePaperRecord(candidate);
-      if (!normalized) return;
-      map.set(normalized.id, normalized);
-    });
+  if (overrideDayOfWeek !== undefined && overrideTimeStr !== undefined) {
+    dow = overrideDayOfWeek;
+    currentMinutes = timeToMinutes(overrideTimeStr);
+  } else {
+    const jsDay = now.getDay();
+    dow = (jsDay === 0 ? 7 : jsDay) as WeekdayNumber;
+    currentMinutes = now.getHours() * 60 + now.getMinutes();
   }
 
-  return Array.from(map.values());
-}
+  const lunchStart = timeToMinutes(schedule.lunchBreak.start);
+  const lunchEnd = timeToMinutes(schedule.lunchBreak.end);
+  if (currentMinutes >= lunchStart && currentMinutes < lunchEnd) {
+    return {
+      status: "rest_break",
+      activeEvent: null,
+      activePeriod: null,
+      restBreak: {
+        id: "lunch",
+        label: "午休",
+        startTime: schedule.lunchBreak.start,
+        endTime: schedule.lunchBreak.end,
+        startMinutes: lunchStart,
+        endMinutes: lunchEnd,
+      },
+      intermissionNextEvent: null,
+      elapsedPercent: Math.round(((currentMinutes - lunchStart) / (lunchEnd - lunchStart)) * 100),
+      remainingMinutes: lunchEnd - currentMinutes,
+      startsInMinutes: 0,
+    };
+  }
 
-export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[] {
-  const map = new Map<string, PaperRecord>();
-  const defaults = defaultPastPapers();
-  defaults.forEach((p) => map.set(p.id, p));
+  const dinnerStart = timeToMinutes(schedule.dinnerBreak.start);
+  const dinnerEnd = timeToMinutes(schedule.dinnerBreak.end);
+  if (currentMinutes >= dinnerStart && currentMinutes < dinnerEnd) {
+    return {
+      status: "rest_break",
+      activeEvent: null,
+      activePeriod: null,
+      restBreak: {
+        id: "dinner",
+        label: "晚休",
+        startTime: schedule.dinnerBreak.start,
+        endTime: schedule.dinnerBreak.end,
+        startMinutes: dinnerStart,
+        endMinutes: dinnerEnd,
+      },
+      intermissionNextEvent: null,
+      elapsedPercent: Math.round(((currentMinutes - dinnerStart) / (dinnerEnd - dinnerStart)) * 100),
+      remainingMinutes: dinnerEnd - currentMinutes,
+      startsInMinutes: 0,
+    };
+  }
 
-  remote.forEach((p) => {
-    if (p && p.id) {
-      const existing = map.get(p.id);
-      map.set(p.id, existing ? { ...existing, ...p } : p);
+  const periodMap = new Map<number, CustomPeriodConfig>();
+  for (const p of schedule.periods) {
+    periodMap.set(p.period, p);
+  }
+
+  const todayEvents = schedule.events.filter((e) => e.dayOfWeek === dow);
+
+  for (const evt of todayEvents) {
+    const startP = periodMap.get(evt.startPeriod);
+    const endP = periodMap.get(evt.endPeriod);
+    if (!startP || !endP) continue;
+
+    const startMin = timeToMinutes(startP.start);
+    const endMin = timeToMinutes(endP.end);
+
+    if (currentMinutes >= startMin && currentMinutes < endMin) {
+      const elapsed = currentMinutes - startMin;
+      const total = endMin - startMin;
+      const percent = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
+      return {
+        status: "in_progress",
+        activeEvent: evt,
+        activePeriod: startP,
+        restBreak: null,
+        intermissionNextEvent: null,
+        elapsedPercent: percent,
+        remainingMinutes: endMin - currentMinutes,
+        startsInMinutes: 0,
+      };
     }
-  });
+  }
 
-  local.forEach((p) => {
-    if (!p || !p.id) return;
-    const existing = map.get(p.id);
-    if (!existing) {
-      map.set(p.id, p);
-    } else {
-      const localExplicitClear = (
-        (p.questions !== undefined && Object.keys(p.questions).length === 0) ||
-        (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0)
-      );
+  let nextEvt: ScheduleEvent | null = null;
+  let minStartDiff = Infinity;
 
-      const localHasData = Boolean(
-        p.completed ||
-        p.score !== null ||
-        p.durationMinutes !== null ||
-        p.secondRound ||
-        (p.questions && Object.keys(p.questions).length > 0) ||
-        (p.questionScores && Object.keys(p.questionScores).length > 0)
-      );
-      const remoteHasData = Boolean(
-        existing.completed ||
-        existing.score !== null ||
-        existing.durationMinutes !== null ||
-        existing.secondRound ||
-        (existing.questions && Object.keys(existing.questions).length > 0) ||
-        (existing.questionScores && Object.keys(existing.questionScores).length > 0)
-      );
-
-      if (!localHasData && remoteHasData && !localExplicitClear) {
-        return;
-      }
-
-      // 本地是当前内存态（含此前远端数据），远端是轮询到的旧快照：
-      // 标量一律本地优先（早前的 `||` 会导致取消勾选/清空分数被复活）；
-      // 题库以“本地是否触碰过（!== undefined）”为准，触碰过则整体采用本地，
-      // 否则保留远端。空对象 `{}` 表示“已清空”，与“未触碰 undefined”区分。
-      let questions = p.questions !== undefined ? p.questions : existing.questions;
-      let questionScores = p.questionScores !== undefined ? p.questionScores : existing.questionScores;
-
-      map.set(p.id, {
-        ...existing,
-        ...p,
-        completed: p.completed,
-        completedAt: p.completed ? (p.completedAt || existing.completedAt) : "",
-        score: p.score ?? null,
-        durationMinutes: p.durationMinutes ?? null,
-        secondRound: p.secondRound ?? false,
-        secondRoundAt: p.secondRound ? (p.secondRoundAt || existing.secondRoundAt) : "",
-        questions,
-        questionScores,
-      });
-    }
-  });
-
-  return Array.from(map.values());
-}
-
-/**
- * Deterministic CRDT/LWW map-merge for JournalEntry lists across devices.
- * Prevents silent overwriting when different devices create or edit journals concurrently.
- */
-export function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEntry[] {
-  const map = new Map<string, JournalEntry>();
-
-  remote.forEach((entry) => {
-    if (entry && entry.id) map.set(entry.id, entry);
-  });
-
-  local.forEach((entry) => {
-    if (!entry || !entry.id) return;
-    const existing = map.get(entry.id);
-    if (!existing) {
-      map.set(entry.id, entry);
-    } else {
-      const localTime = new Date(entry.updatedAt || entry.createdAt).getTime();
-      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
-      if (Number.isNaN(localTime) || Number.isNaN(existingTime)) {
-        map.set(entry.id, entry);
-      } else if (localTime >= existingTime) {
-        map.set(entry.id, entry);
+  for (const evt of todayEvents) {
+    const startP = periodMap.get(evt.startPeriod);
+    if (!startP) continue;
+    const startMin = timeToMinutes(startP.start);
+    if (startMin > currentMinutes) {
+      const diff = startMin - currentMinutes;
+      if (diff < minStartDiff) {
+        minStartDiff = diff;
+        nextEvt = evt;
       }
     }
-  });
+  }
 
-  return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (nextEvt && minStartDiff <= 30) {
+    return {
+      status: "intermission",
+      activeEvent: null,
+      activePeriod: null,
+      restBreak: null,
+      intermissionNextEvent: nextEvt,
+      elapsedPercent: 0,
+      remainingMinutes: 0,
+      startsInMinutes: minStartDiff,
+    };
+  }
+
+  return {
+    status: "idle",
+    activeEvent: null,
+    activePeriod: null,
+    restBreak: null,
+    intermissionNextEvent: nextEvt,
+    elapsedPercent: 0,
+    remainingMinutes: 0,
+    startsInMinutes: nextEvt ? minStartDiff : 0,
+  };
 }
 
 export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap): StudyAppData | null {
@@ -1318,6 +1250,7 @@ export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap):
 
   const journals = Array.isArray(value.journals) ? normalizeJournals(value.journals) : [];
   const papers = normalizePapers(value.papers);
+  const schedule = normalizeSchedule(value.schedule);
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1327,6 +1260,7 @@ export function normalizeAppData(value: unknown, fallbackProgress: ProgressMap):
     planHistory: normalizePlanHistory(value.planHistory),
     journals,
     papers,
+    schedule,
   };
 }
 
@@ -1336,6 +1270,7 @@ export function createAppData(
   planHistory: PlanHistoryEntry[] = [],
   journals: JournalEntry[] = [],
   papers: PaperRecord[] = defaultPastPapers(),
+  schedule: ScheduleAppData = buildDefaultSchedule(),
 ): StudyAppData {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1345,6 +1280,7 @@ export function createAppData(
     planHistory,
     journals,
     papers,
+    schedule,
   };
 }
 

@@ -1,3 +1,52 @@
+import type {
+  JournalProjectContext,
+  JournalSubjectContext,
+  JournalSectionItem,
+  JournalSectionContext,
+  JournalSectionsContext,
+  JournalPaperContext,
+  JournalContext,
+  JournalPublish,
+  JournalEntry,
+  PaperKind,
+  QuestionState,
+  PaperRecord,
+  ProgressValue,
+  PlanChangeSource,
+  PlanHistoryEntry,
+  ProjectSettings,
+} from "../shared/types.ts";
+import { DEFAULT_PROJECT_SETTINGS } from "../shared/constants.ts";
+import {
+  isDate,
+  normalizeProjectSettings,
+  normalizePlanHistory as normalizePlanHistoryShared,
+  normalizeJournalContext,
+  normalizeJournalPublish,
+  normalizeJournalEntry,
+  normalizeJournals,
+  defaultPastPapers,
+  normalizePaperRecord,
+  normalizePapers,
+  mergePapers,
+  mergeJournals,
+} from "../shared/merge.ts";
+
+export type {
+  JournalProjectContext,
+  JournalSubjectContext,
+  JournalSectionItem,
+  JournalSectionContext,
+  JournalSectionsContext,
+  JournalPaperContext,
+  JournalContext,
+  JournalPublish,
+  JournalEntry,
+  PaperKind,
+  QuestionState,
+  PaperRecord,
+};
+
 const DEFAULT_WORKSPACE_ID = "main";
 const SESSION_COOKIE = "408_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -5,16 +54,6 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 function isSafeWorkspaceId(workspaceId: string): boolean {
   return workspaceId.length > 0 && workspaceId.length <= 64 && /^[a-z0-9-]+$/.test(workspaceId);
 }
-
-type ProgressValue = {
-  learned: boolean;
-  learnedAt: string;
-  reviewed: boolean;
-  reviewedAt: string;
-  plannedAt: string;
-  reviewedPlannedAt: string;
-  isCurrent: boolean;
-};
 
 type ProgressRow = {
   section_id: string;
@@ -27,119 +66,13 @@ type ProgressRow = {
   is_current: number;
 };
 
-type PlanChangeSource = "manual" | "batchSchedule" | "shift" | "undo";
-
-type PlanHistoryEntry = {
-  id: string;
-  sectionId: string;
-  from: string;
-  to: string;
-  changedAt: string;
-  source: PlanChangeSource;
-};
-
-type ProjectSettings = {
-  "408": { examDate: string };
-  math: { examDate: string };
-  english: { examDate: string };
-  politics: { examDate: string };
-};
-
-export type JournalProjectContext = {
-  type: "project";
-  area: "408" | "math" | "english" | "politics";
-};
-
-export type JournalSubjectContext = {
-  type: "subject";
-  area: "408" | "math" | "english" | "politics";
-  bookId: string;
-  bookTitle?: string;
-};
-
-export type JournalSectionItem = {
-  area: "408" | "math" | "english" | "politics";
-  bookId: string;
-  sectionId: string;
-  bookTitle?: string;
-  sectionTitle?: string;
-  sectionNumber?: string;
-};
-
-export type JournalSectionContext = {
-  type: "section";
-  area: "408" | "math" | "english" | "politics";
-  bookId: string;
-  sectionId: string;
-  bookTitle?: string;
-  sectionTitle?: string;
-  sectionNumber?: string;
-};
-
-export type JournalSectionsContext = {
-  type: "sections";
-  sections: JournalSectionItem[];
-};
-
-export type JournalPaperContext = {
-  type: "paper";
-  area: "408" | "math" | "english" | "politics";
-  paperId: string;
-  paperTitle: string;
-};
-
-export type JournalContext =
-  | JournalProjectContext
-  | JournalSubjectContext
-  | JournalSectionContext
-  | JournalSectionsContext
-  | JournalPaperContext;
-
-export type JournalPublish = {
-  status: "local" | "published";
-  publishedAt: string | null;
-  blogUrl: string | null;
-  blogPostId: string | null;
-};
-
-export type JournalEntry = {
-  id: string;
-  createdAt: string;
-  updatedAt?: string;
-  title: string | null;
-  content: string;
-  context: JournalContext | null;
-  publish: JournalPublish;
-  important?: boolean;
-};
-
-export type PaperKind = "past" | "mock";
-export type QuestionState = "correct" | "partial" | "wrong";
-
-export type PaperRecord = {
-  id: string;
-  kind: PaperKind;
-  area: "408" | "math" | "english" | "politics";
-  title: string;
-  groupName?: string;
-  year?: number;
-  completed: boolean;
-  completedAt: string;
-  score?: number | null;
-  durationMinutes?: number | null;
-  secondRound?: boolean;
-  secondRoundAt?: string;
-  notes?: string;
-  questions?: Record<number, QuestionState>;
-  questionScores?: Record<number, number>;
-};
-
 type AppStateRow = {
   schema_version: number;
   project_settings: string;
   plan_history: string;
   journals?: string;
   papers?: string;
+  schedule?: string;
 };
 
 type AppData = {
@@ -149,13 +82,7 @@ type AppData = {
   planHistory: PlanHistoryEntry[];
   journals: JournalEntry[];
   papers: PaperRecord[];
-};
-
-const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
-  "408": { examDate: "2026-12-19" },
-  math: { examDate: "2026-12-19" },
-  english: { examDate: "2026-12-19" },
-  politics: { examDate: "2026-12-19" },
+  schedule?: unknown;
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -253,7 +180,11 @@ function clearCookie(request: Request): string {
 }
 
 function getSessionSecret(env: Env): string {
-  return env.SESSION_SECRET?.trim() || "408-default-session-secret-261219";
+  const secret = env.SESSION_SECRET?.trim();
+  if (!secret) {
+    throw new Error("CRITICAL: SESSION_SECRET is not configured.");
+  }
+  return secret;
 }
 
 function getWorkspaceMap(env: Env): Map<string, string> {
@@ -275,14 +206,22 @@ function getWorkspaceMap(env: Env): Map<string, string> {
     });
   }
   if (map.size === 0) {
-    const legacy = (env as unknown as Record<string, string | undefined>).INVITE_CODE?.trim() || "261219";
-    map.set(legacy, DEFAULT_WORKSPACE_ID);
+    const legacy = (env as unknown as Record<string, string | undefined>).INVITE_CODE?.trim();
+    if (legacy) {
+      map.set(legacy, DEFAULT_WORKSPACE_ID);
+    }
   }
   return map;
 }
 
 async function requireWorkspace(request: Request, env: Env): Promise<string | Response> {
-  const workspaceId = await getSessionWorkspaceId(request, getSessionSecret(env));
+  let secret = "";
+  try {
+    secret = getSessionSecret(env);
+  } catch {
+    return json({ error: "服务器会话密钥未配置 (SESSION_SECRET)" }, { status: 500 });
+  }
+  const workspaceId = await getSessionWorkspaceId(request, secret);
   if (!workspaceId) {
     return json({ error: "请先输入邀请码" }, { status: 401 });
   }
@@ -315,7 +254,13 @@ function isSafeSectionId(sectionId: string): boolean {
 async function readProgress(env: Env, workspaceId: string): Promise<Record<string, ProgressValue>> {
   const result = await env.DB.prepare(
     "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, COALESCE(reviewed_planned_at, '') as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
-  ).bind(workspaceId).all<ProgressRow>();
+  ).bind(workspaceId).all<ProgressRow>().catch(() => {
+    return env.DB.prepare(
+      "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, '' as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
+    ).bind(workspaceId).all<ProgressRow>().catch(() => {
+      return { results: [] as ProgressRow[] };
+    });
+  });
 
   return Object.fromEntries(result.results.flatMap((row: ProgressRow) => {
     const normalized = normalizeProgress({
@@ -351,418 +296,26 @@ async function writeProgress(env: Env, workspaceId: string, values: Record<strin
   if (statements.length > 0) await env.DB.batch(statements);
 }
 
-function isDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-function normalizeProjectSettings(value: unknown): ProjectSettings {
-  const normalized = structuredClone(DEFAULT_PROJECT_SETTINGS);
-  if (!value || typeof value !== "object" || Array.isArray(value)) return normalized;
-  const settings = value as Record<string, unknown>;
-  (["408", "math", "english", "politics"] as const).forEach((area) => {
-    const candidate = settings[area];
-    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
-      const examDate = (candidate as Record<string, unknown>).examDate;
-      if (isDate(examDate)) normalized[area] = { examDate };
-    }
-  });
-  return normalized;
-}
-
 function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
-  if (!Array.isArray(value)) return [];
-  const sources: PlanChangeSource[] = ["manual", "batchSchedule", "shift", "undo"];
-  return value.flatMap((entry): PlanHistoryEntry[] => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const candidate = entry as Record<string, unknown>;
-    if (typeof candidate.id !== "string"
-      || typeof candidate.sectionId !== "string"
-      || !isSafeSectionId(candidate.sectionId)
-      || typeof candidate.changedAt !== "string"
-      || typeof candidate.source !== "string"
-      || !sources.includes(candidate.source as PlanChangeSource)) return [];
-    return [{
-      id: candidate.id.slice(0, 120),
-      sectionId: candidate.sectionId,
-      from: candidate.from === "" || isDate(candidate.from) ? candidate.from : "",
-      to: candidate.to === "" || isDate(candidate.to) ? candidate.to : "",
-      changedAt: candidate.changedAt.slice(0, 64),
-      source: candidate.source as PlanChangeSource,
-    }];
-  }).slice(-1000);
-}
-
-function normalizeJournalContext(value: unknown): JournalContext | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const candidate = value as Record<string, unknown>;
-
-  if (candidate.type === "sections" && Array.isArray(candidate.sections)) {
-    const validSections: JournalSectionItem[] = [];
-    const seenSectionIds = new Set<string>();
-
-    candidate.sections.forEach((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) return;
-      const secCandidate = item as Record<string, unknown>;
-      const area = secCandidate.area === "math" || secCandidate.area === "english" || secCandidate.area === "politics" || secCandidate.area === "408" ? secCandidate.area : null;
-      if (!area) return;
-      if (typeof secCandidate.bookId !== "string" || !secCandidate.bookId.trim()) return;
-      if (typeof secCandidate.sectionId !== "string" || !secCandidate.sectionId.trim()) return;
-      const secId = secCandidate.sectionId.trim().slice(0, 120);
-      if (seenSectionIds.has(secId)) return;
-      seenSectionIds.add(secId);
-
-      validSections.push({
-        area,
-        bookId: secCandidate.bookId.trim().slice(0, 80),
-        sectionId: secId,
-        bookTitle: typeof secCandidate.bookTitle === "string" ? secCandidate.bookTitle.trim().slice(0, 100) : undefined,
-        sectionTitle: typeof secCandidate.sectionTitle === "string" ? secCandidate.sectionTitle.trim().slice(0, 100) : undefined,
-        sectionNumber: typeof secCandidate.sectionNumber === "string" ? secCandidate.sectionNumber.trim().slice(0, 30) : undefined,
-      });
-    });
-
-    if (validSections.length === 0) return null;
-    return {
-      type: "sections",
-      sections: validSections.slice(0, 50),
-    };
-  }
-
-  const area = candidate.area === "math" || candidate.area === "english" || candidate.area === "politics" || candidate.area === "408" ? candidate.area : null;
-  if (!area) return null;
-
-  if (candidate.type === "project") {
-    return {
-      type: "project",
-      area,
-    };
-  }
-
-  if (candidate.type === "subject") {
-    if (typeof candidate.bookId !== "string" || !candidate.bookId.trim()) return null;
-    return {
-      type: "subject",
-      area,
-      bookId: candidate.bookId.trim().slice(0, 80),
-      bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.trim().slice(0, 100) : undefined,
-    };
-  }
-
-  if (candidate.type === "section") {
-    if (typeof candidate.bookId !== "string" || !candidate.bookId.trim()) return null;
-    if (typeof candidate.sectionId !== "string" || !candidate.sectionId.trim()) return null;
-    return {
-      type: "section",
-      area,
-      bookId: candidate.bookId.trim().slice(0, 80),
-      sectionId: candidate.sectionId.trim().slice(0, 120),
-      bookTitle: typeof candidate.bookTitle === "string" ? candidate.bookTitle.trim().slice(0, 100) : undefined,
-      sectionTitle: typeof candidate.sectionTitle === "string" ? candidate.sectionTitle.trim().slice(0, 100) : undefined,
-      sectionNumber: typeof candidate.sectionNumber === "string" ? candidate.sectionNumber.trim().slice(0, 30) : undefined,
-    };
-  }
-
-  if (candidate.type === "paper") {
-    if (typeof candidate.paperId !== "string" || !candidate.paperId.trim()) return null;
-    return {
-      type: "paper",
-      area,
-      paperId: candidate.paperId.trim().slice(0, 100),
-      paperTitle: typeof candidate.paperTitle === "string" ? candidate.paperTitle.trim().slice(0, 150) : "真题/模拟卷",
-    };
-  }
-
-  return null;
-}
-
-function normalizeJournalPublish(value: unknown): JournalPublish {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { status: "local", publishedAt: null, blogUrl: null, blogPostId: null };
-  }
-  const candidate = value as Record<string, unknown>;
-  return {
-    status: candidate.status === "published" ? "published" : "local",
-    publishedAt: typeof candidate.publishedAt === "string" ? candidate.publishedAt.slice(0, 64) : null,
-    blogUrl: typeof candidate.blogUrl === "string" ? candidate.blogUrl.slice(0, 300) : null,
-    blogPostId: typeof candidate.blogPostId === "string" ? candidate.blogPostId.slice(0, 100) : null,
-  };
-}
-
-function normalizeJournalEntry(value: unknown): JournalEntry | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const candidate = value as Record<string, unknown>;
-  if (typeof candidate.id !== "string"
-    || !/^\d{8}\d{3}$/.test(candidate.id)
-    || typeof candidate.createdAt !== "string"
-    || typeof candidate.content !== "string") {
-    return null;
-  }
-  const updatedAt = typeof candidate.updatedAt === "string" ? candidate.updatedAt.slice(0, 64) : candidate.createdAt.slice(0, 64);
-  const title = typeof candidate.title === "string" && candidate.title.trim() ? candidate.title.trim().slice(0, 200) : null;
-  const context = normalizeJournalContext(candidate.context);
-  const publish = normalizeJournalPublish(candidate.publish);
-  const important = candidate.important === true;
-
-  return {
-    id: candidate.id,
-    createdAt: candidate.createdAt.slice(0, 64),
-    updatedAt,
-    title,
-    content: candidate.content.slice(0, 200000),
-    context,
-    publish,
-    important,
-  };
-}
-
-function normalizeJournals(value: unknown): JournalEntry[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((candidate): JournalEntry[] => {
-    const entry = normalizeJournalEntry(candidate);
-    return entry ? [entry] : [];
-  }).slice(-2000);
-}
-
-const PAST_PAPER_YEARS = [
-  2026, 2025, 2024, 2023, 2022, 2021, 2020,
-  2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010
-] as const;
-
-const POLITICS_PAST_PAPER_YEARS = [
-  2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017
-] as const;
-
-function defaultPastPapers(): PaperRecord[] {
-  const list: PaperRecord[] = [];
-  (["408", "math", "english"] as const).forEach((area) => {
-    PAST_PAPER_YEARS.forEach((year) => {
-      list.push({
-        id: `past-${area}-${year}`,
-        kind: "past",
-        area,
-        title: `${year}年${area === "408" ? "408真题" : area === "math" ? "数学真题" : "英语真题"}`,
-        groupName: "历年真题",
-        year,
-        completed: false,
-        completedAt: "",
-        score: null,
-        durationMinutes: null,
-        secondRound: false,
-        secondRoundAt: "",
-      });
-    });
-  });
-  POLITICS_PAST_PAPER_YEARS.forEach((year) => {
-    list.push({
-      id: `past-politics-${year}`,
-      kind: "past",
-      area: "politics",
-      title: `${year}年政治真题`,
-      groupName: "历年真题",
-      year,
-      completed: false,
-      completedAt: "",
-      score: null,
-      durationMinutes: null,
-      secondRound: false,
-      secondRoundAt: "",
-    });
-  });
-  return list;
-}
-
-function normalizePaperRecord(value: unknown): PaperRecord | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const candidate = value as Record<string, unknown>;
-  if (typeof candidate.id !== "string" || !candidate.id.trim()) return null;
-  const kind: PaperKind = candidate.kind === "mock" ? "mock" : "past";
-  const area: "408" | "math" | "english" | "politics" = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : candidate.area === "politics" ? "politics" : "408";
-  let title = typeof candidate.title === "string" && candidate.title.trim()
-    ? candidate.title.trim().slice(0, 150)
-    : (kind === "past" ? `${candidate.year ?? ""}年真题` : "模拟卷");
-  title = title.replace(/^(\d{4}年)\s+/, "$1");
-  const year = typeof candidate.year === "number" && candidate.year >= 2000 && candidate.year <= 2100 ? candidate.year : undefined;
-  const completed = Boolean(candidate.completed);
-  const completedAt = typeof candidate.completedAt === "string" && isDate(candidate.completedAt) ? candidate.completedAt : "";
-  const maxScore = area === "politics" ? 50 : area === "english" ? 100 : 150;
-  const score = typeof candidate.score === "number" && !Number.isNaN(candidate.score) && candidate.score >= 0 && candidate.score <= maxScore
-    ? Math.round(candidate.score * 10) / 10
-    : null;
-  const durationMinutes = typeof candidate.durationMinutes === "number" && candidate.durationMinutes > 0 && candidate.durationMinutes <= 600
-    ? Math.round(candidate.durationMinutes)
-    : null;
-  const secondRound = Boolean(candidate.secondRound);
-  const secondRoundAt = typeof candidate.secondRoundAt === "string" && isDate(candidate.secondRoundAt) ? candidate.secondRoundAt : "";
-  const groupName = typeof candidate.groupName === "string" && candidate.groupName.trim() ? candidate.groupName.trim().slice(0, 80) : undefined;
-  const notes = typeof candidate.notes === "string" ? candidate.notes.trim().slice(0, 2000) : undefined;
-
-  let questions: Record<number, QuestionState> | undefined = undefined;
-  if (candidate.questions && typeof candidate.questions === "object" && !Array.isArray(candidate.questions)) {
-    const qObj = candidate.questions as Record<string, unknown>;
-    const qMap: Record<number, QuestionState> = {};
-    Object.entries(qObj).forEach(([k, v]) => {
-      const qNum = parseInt(k, 10);
-      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100) {
-        if (v === "correct" || v === "partial" || v === "wrong") {
-          qMap[qNum] = v;
-        }
-      }
-    });
-    questions = qMap;
-  }
-
-  let questionScores: Record<number, number> | undefined = undefined;
-  if (candidate.questionScores && typeof candidate.questionScores === "object" && !Array.isArray(candidate.questionScores)) {
-    const sObj = candidate.questionScores as Record<string, unknown>;
-    const sMap: Record<number, number> = {};
-    Object.entries(sObj).forEach(([k, v]) => {
-      const qNum = parseInt(k, 10);
-      if (!Number.isNaN(qNum) && qNum >= 1 && qNum <= 100 && typeof v === "number" && !Number.isNaN(v) && v >= 0 && v <= 100) {
-        sMap[qNum] = Math.round(v * 10) / 10;
-      }
-    });
-    questionScores = sMap;
-  }
-
-  return {
-    id: candidate.id.trim().slice(0, 100),
-    kind,
-    area,
-    title,
-    groupName,
-    year,
-    completed: completed && Boolean(completedAt),
-    completedAt: completed ? completedAt : "",
-    score,
-    durationMinutes,
-    secondRound: secondRound && Boolean(secondRoundAt),
-    secondRoundAt: secondRound ? secondRoundAt : "",
-    notes,
-    questions,
-    questionScores,
-  };
-}
-
-function normalizePapers(value: unknown): PaperRecord[] {
-  const defaults = defaultPastPapers();
-  const map = new Map<string, PaperRecord>();
-  defaults.forEach((paper) => map.set(paper.id, paper));
-
-  if (Array.isArray(value)) {
-    value.forEach((candidate) => {
-      const normalized = normalizePaperRecord(candidate);
-      if (!normalized) return;
-      map.set(normalized.id, normalized);
-    });
-  }
-
-  return Array.from(map.values());
-}
-
-function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[] {
-  const map = new Map<string, PaperRecord>();
-  const defaults = defaultPastPapers();
-  defaults.forEach((p) => map.set(p.id, p));
-
-  remote.forEach((p) => {
-    if (p && p.id) {
-      const existing = map.get(p.id);
-      map.set(p.id, existing ? { ...existing, ...p } : p);
-    }
-  });
-
-  local.forEach((p) => {
-    if (!p || !p.id) return;
-    const existing = map.get(p.id);
-    if (!existing) {
-      map.set(p.id, p);
-    } else {
-      const localExplicitClear = (
-        (p.questions !== undefined && Object.keys(p.questions).length === 0) ||
-        (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0)
-      );
-
-      const localHasData = Boolean(
-        p.completed ||
-        p.score !== null ||
-        p.durationMinutes !== null ||
-        p.secondRound ||
-        (p.questions && Object.keys(p.questions).length > 0) ||
-        (p.questionScores && Object.keys(p.questionScores).length > 0)
-      );
-      const remoteHasData = Boolean(
-        existing.completed ||
-        existing.score !== null ||
-        existing.durationMinutes !== null ||
-        existing.secondRound ||
-        (existing.questions && Object.keys(existing.questions).length > 0) ||
-        (existing.questionScores && Object.keys(existing.questionScores).length > 0)
-      );
-
-      if (!localHasData && remoteHasData && !localExplicitClear) {
-        return;
-      }
-
-      // 与前端保持一致：本地为当前内存态，标量本地优先；题库以是否触碰为准
-      const questions = p.questions !== undefined ? p.questions : existing.questions;
-      const questionScores = p.questionScores !== undefined ? p.questionScores : existing.questionScores;
-
-      map.set(p.id, {
-        ...existing,
-        ...p,
-        completed: p.completed,
-        completedAt: p.completed ? (p.completedAt || existing.completedAt) : "",
-        score: p.score ?? null,
-        durationMinutes: p.durationMinutes ?? null,
-        secondRound: p.secondRound ?? false,
-        secondRoundAt: p.secondRound ? (p.secondRoundAt || existing.secondRoundAt) : "",
-        questions,
-        questionScores,
-      });
-    }
-  });
-
-  return Array.from(map.values());
-}
-
-function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEntry[] {
-  const map = new Map<string, JournalEntry>();
-  remote.forEach((entry) => {
-    if (entry && entry.id) map.set(entry.id, entry);
-  });
-  local.forEach((entry) => {
-    if (!entry || !entry.id) return;
-    const existing = map.get(entry.id);
-    if (!existing) {
-      map.set(entry.id, entry);
-    } else {
-      const localTime = new Date(entry.updatedAt || entry.createdAt).getTime();
-      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
-      if (Number.isNaN(localTime) || Number.isNaN(existingTime)) {
-        map.set(entry.id, entry);
-      } else if (localTime >= existingTime) {
-        map.set(entry.id, entry);
-      }
-    }
-  });
-  return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return normalizePlanHistoryShared(value, isSafeSectionId);
 }
 
 async function readAppData(env: Env, workspaceId: string): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
     readProgress(env, workspaceId),
     env.DB.prepare(
-      "SELECT schema_version, project_settings, plan_history, journals, papers FROM app_state WHERE workspace_id = ?",
+      "SELECT schema_version, project_settings, plan_history, journals, papers, schedule FROM app_state WHERE workspace_id = ?",
     ).bind(workspaceId).all<AppStateRow>().catch(() => {
       return env.DB.prepare(
-        "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
+        "SELECT schema_version, project_settings, plan_history, journals, papers FROM app_state WHERE workspace_id = ?",
       ).bind(workspaceId).all<AppStateRow>().catch(() => {
         return env.DB.prepare(
-          "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
-        ).bind(workspaceId).all<AppStateRow>();
+          "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
+        ).bind(workspaceId).all<AppStateRow>().catch(() => {
+          return env.DB.prepare(
+            "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
+          ).bind(workspaceId).all<AppStateRow>();
+        });
       });
     }),
   ]);
@@ -771,10 +324,12 @@ async function readAppData(env: Env, workspaceId: string): Promise<AppData> {
   let parsedHistory: unknown = null;
   let parsedJournals: unknown = null;
   let parsedPapers: unknown = null;
+  let parsedSchedule: unknown = null;
   try { parsedSettings = state ? JSON.parse(state.project_settings) : null; } catch { parsedSettings = null; }
   try { parsedHistory = state ? JSON.parse(state.plan_history) : null; } catch { parsedHistory = null; }
   try { parsedJournals = state?.journals ? JSON.parse(state.journals) : null; } catch { parsedJournals = null; }
   try { parsedPapers = state?.papers ? JSON.parse(state.papers) : null; } catch { parsedPapers = null; }
+  try { parsedSchedule = state?.schedule ? JSON.parse(state.schedule) : null; } catch { parsedSchedule = null; }
   return {
     schemaVersion: 2,
     progress,
@@ -782,6 +337,7 @@ async function readAppData(env: Env, workspaceId: string): Promise<AppData> {
     planHistory: normalizePlanHistory(parsedHistory),
     journals: normalizeJournals(parsedJournals),
     papers: normalizePapers(parsedPapers),
+    schedule: parsedSchedule,
   };
 }
 
@@ -846,25 +402,52 @@ async function writeAppData(
     finalPapers = finalPapers.filter((p) => !deletedSet.has(p.id));
   }
 
-  statements.push(env.DB.prepare(
-    `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT(workspace_id) DO UPDATE SET
-       schema_version = excluded.schema_version,
-       project_settings = excluded.project_settings,
-       plan_history = excluded.plan_history,
-       journals = excluded.journals,
-       papers = excluded.papers,
-       updated_at = CURRENT_TIMESTAMP`,
-  ).bind(
-    workspaceId,
-    2,
-    JSON.stringify(data.projectSettings),
-    JSON.stringify(data.planHistory),
-    JSON.stringify(finalJournals),
-    JSON.stringify(finalPapers),
-  ));
-  await env.DB.batch(statements);
+  try {
+    const scheduleJson = data.schedule ? JSON.stringify(data.schedule) : null;
+    statements.push(env.DB.prepare(
+      `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, schedule, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(workspace_id) DO UPDATE SET
+         schema_version = excluded.schema_version,
+         project_settings = excluded.project_settings,
+         plan_history = excluded.plan_history,
+         journals = excluded.journals,
+         papers = excluded.papers,
+         schedule = excluded.schedule,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(
+      workspaceId,
+      2,
+      JSON.stringify(data.projectSettings),
+      JSON.stringify(data.planHistory),
+      JSON.stringify(finalJournals),
+      JSON.stringify(finalPapers),
+      scheduleJson,
+    ));
+    await env.DB.batch(statements);
+  } catch {
+    // If schedule column does not exist yet in D1, fallback to previous schema
+    statements.pop();
+    statements.push(env.DB.prepare(
+      `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(workspace_id) DO UPDATE SET
+         schema_version = excluded.schema_version,
+         project_settings = excluded.project_settings,
+         plan_history = excluded.plan_history,
+         journals = excluded.journals,
+         papers = excluded.papers,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(
+      workspaceId,
+      2,
+      JSON.stringify(data.projectSettings),
+      JSON.stringify(data.planHistory),
+      JSON.stringify(finalJournals),
+      JSON.stringify(finalPapers),
+    ));
+    await env.DB.batch(statements);
+  }
   return finalJournals;
 }
 
@@ -888,6 +471,7 @@ function normalizeAppDataBody(body: unknown): AppData | null {
     planHistory: normalizePlanHistory(candidate.planHistory),
     journals: normalizeJournals(candidate.journals),
     papers: normalizePapers(candidate.papers),
+    schedule: candidate.schedule,
   };
 }
 
@@ -896,7 +480,13 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (!url.pathname.startsWith("/api/")) return null;
 
   if (url.pathname === "/api/auth/session" && request.method === "GET") {
-    const workspaceId = await getSessionWorkspaceId(request, getSessionSecret(env));
+    let secret = "";
+    try {
+      secret = getSessionSecret(env);
+    } catch {
+      return json({ authenticated: false });
+    }
+    const workspaceId = await getSessionWorkspaceId(request, secret);
     if (!workspaceId) return json({ authenticated: false });
     try {
       return json({ authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) });
@@ -913,7 +503,12 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     if (!code || !workspaceId) {
       return json({ error: "邀请码不正确" }, { status: 401 });
     }
-    const secret = getSessionSecret(env);
+    let secret = "";
+    try {
+      secret = getSessionSecret(env);
+    } catch {
+      return json({ error: "服务器会话密钥未配置 (SESSION_SECRET)" }, { status: 500 });
+    }
     try {
       return json(
         { authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) },

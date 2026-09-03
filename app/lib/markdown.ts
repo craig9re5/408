@@ -63,13 +63,13 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
 
   // Step 7: Restore Escaped Dollars, Inline Code, and Code Blocks
   escapedDollars.forEach((val, idx) => {
-    processed = processed.replace(new RegExp(`%%ESCAPED_DOLLAR_${idx}%%`, "g"), val);
+    processed = processed.replaceAll(`%%ESCAPED_DOLLAR_${idx}%%`, () => val);
   });
   inlineCodes.forEach((val, idx) => {
-    processed = processed.replace(new RegExp(`%%INLINE_CODE_${idx}%%`, "g"), val);
+    processed = processed.replaceAll(`%%INLINE_CODE_${idx}%%`, () => val);
   });
   codeBlocks.forEach((val, idx) => {
-    processed = processed.replace(new RegExp(`%%CODE_BLOCK_${idx}%%`, "g"), val);
+    processed = processed.replaceAll(`%%CODE_BLOCK_${idx}%%`, () => val);
   });
 
   // Step 8: Parse Markdown with GFM enabled
@@ -96,7 +96,7 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
       rendered = `<pre class="katex-error">${escapeHtml(math)}</pre>`;
     }
     const token = new RegExp(`<p>\\s*%%KATEX_BLOCK_${index}%%\\s*<\\/p>|%%KATEX_BLOCK_${index}%%`, "g");
-    html = html.replace(token, rendered);
+    html = html.replace(token, () => rendered);
   });
 
   // Step 11: Restore Inline Math
@@ -111,7 +111,7 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
       rendered = `<code class="katex-error">${escapeHtml(math)}</code>`;
     }
     const token = new RegExp(`%%KATEX_INLINE_${index}%%`, "g");
-    html = html.replace(token, rendered);
+    html = html.replace(token, () => rendered);
   });
 
   return html;
@@ -132,12 +132,13 @@ export function sanitizeHtml(html: string): string {
     .replace(/<form[\s\S]*?<\/form\s*>/gi, "")
     .replace(/<base[\s\S]*?>/gi, "");
 
-  // Remove event handlers like onerror=..., onclick=..., onload=...
-  clean = clean.replace(/\s+on[a-zA-Z]+\s*=\s*(['"]).*?\1/gi, "");
-  clean = clean.replace(/\s+on[a-zA-Z]+\s*=\s*[^ >]+/gi, "");
+  // Remove event handlers like onerror=..., onclick=..., onload=... (supporting spaces and slash delimiters)
+  clean = clean.replace(/[\s/]+on[a-zA-Z]+\s*=\s*(['"]).*?\1/gi, "");
+  clean = clean.replace(/[\s/]+on[a-zA-Z]+\s*=\s*[^ >]+/gi, "");
 
   // Neutralize dangerous javascript:, vbscript:, data:text/html URIs in href and src
-  clean = clean.replace(/(href|src)\s*=\s*(['"])\s*(?:javascript|vbscript|data:\s*text\/html):.*?\2/gi, '$1="#"');
+  clean = clean.replace(/(href|src)\s*=\s*(['"])\s*(?:javascript:|vbscript:|data:\s*(?:text\/html|text\/javascript|application\/javascript)).*?\2/gi, '$1="#"');
+  clean = clean.replace(/(href|src)\s*=\s*(?:javascript:|vbscript:|data:\s*(?:text\/html|text\/javascript|application\/javascript))[^\s>]+/gi, '$1="#"');
 
   return clean;
 }

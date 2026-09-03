@@ -3,19 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
 import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
-import {
-  wrapSelection,
-  applyLink,
-  applyMath,
-  applyCode,
-  applyHeading,
-  toggleLinePrefix,
-  handleTabKey,
-  handleSmartEnter,
-  handleAutoPair,
-  applyTableTemplate,
-  applyTextResultToTextarea,
-} from "./lib/markdown-editor-utils";
+import { AnswerSheetModal } from "./components/sprint/AnswerSheetModal";
+import { PaperCard } from "./components/sprint/PaperCard";
+import { JournalEditorModal } from "./components/journal/JournalEditorModal";
+import { EditableDate } from "./components/common/EditableDate";
+import { ScheduleView } from "./components/schedule/ScheduleView";
+import { TodayScheduleBanner } from "./components/schedule/TodayScheduleBanner";
+import { useScheduleTicker } from "./components/schedule/useScheduleTicker";
+import { TimetableGrid } from "./components/schedule/TimetableGrid";
 import {
   APP_VERSION,
   StorageRepository,
@@ -25,6 +20,7 @@ import {
   calculateDisciplineStats,
   calculateMaxStreak,
   calculateVelocityAndForecast,
+  calculateWeekNumber,
   calculateWeeklyTrends,
   createAppData,
   createBlankProgress,
@@ -47,7 +43,11 @@ import {
   defaultPastPapers,
   normalizePapers,
   mergePapers,
+  buildDefaultSchedule,
+  normalizeSchedule,
   maxPaperScore,
+  clampPaperScore,
+  parseQuestionRanges,
   paperTotalQuestions,
   paperMaxChoiceNum,
   choiceQuestionWeight,
@@ -79,6 +79,8 @@ import {
   type SectionProgress,
   type StorageLoadIssue,
   type StudyAppData,
+  type ScheduleAppData,
+  type ScheduleEvent,
   type VelocityForecast,
   type WeeklyTrend,
 } from "./study-data";
@@ -88,14 +90,15 @@ type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
 type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
 type ShiftScope = "chapter" | "subject";
-type AppPage = "progress" | "sprint" | "today" | "analytics" | "settings";
-type NavigationIcon = "progress" | "sprint" | "today" | "analytics" | "settings";
+type AppPage = "progress" | "sprint" | "today" | "schedule" | "analytics" | "settings";
+type NavigationIcon = "progress" | "sprint" | "today" | "schedule" | "analytics" | "settings";
 type JournalFilter = "all" | "important" | "unlinked" | "linked" | "408" | "math" | "published";
 
 const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] = [
   { page: "progress", icon: "progress", label: "学习进度" },
   { page: "sprint", icon: "sprint", label: "套卷冲刺" },
   { page: "today", icon: "today", label: "今日" },
+  { page: "schedule", icon: "schedule", label: "复习课表" },
   { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
@@ -103,6 +106,7 @@ const pageTitles: Record<AppPage, string> = {
   progress: "学习进度",
   sprint: "套卷冲刺",
   today: "今日",
+  schedule: "复习课表",
   analytics: "数据分析",
   settings: "设置",
 };
@@ -111,6 +115,7 @@ const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
   { page: "progress", mark: "进", label: "进度" },
   { page: "sprint", mark: "冲", label: "冲刺" },
   { page: "today", mark: "今", label: "今日" },
+  { page: "schedule", mark: "课", label: "课表" },
   { page: "analytics", mark: "析", label: "分析" },
   { page: "settings", mark: "设", label: "设置" },
 ];
@@ -386,86 +391,6 @@ function parseFlexibleDate(input: string): string | null {
   return null;
 }
 
-function EditableDate({
-  value,
-  emptyLabel,
-  ariaLabel,
-  prefix = "",
-  tone = "normal",
-  validate,
-  onError,
-  onChange,
-}: {
-  value: string;
-  emptyLabel: string;
-  ariaLabel: string;
-  prefix?: string;
-  tone?: "late" | "soon" | "normal" | "empty";
-  validate?: (value: string) => string | null;
-  onError?: (message: string) => void;
-  onChange: (value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [inputText, setInputText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const startEditing = () => {
-    setInputText(value ? formatDateShort(value).replace("/", "") : "");
-    setEditing(true);
-  };
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  const handleSave = () => {
-    setEditing(false);
-    const parsed = parseFlexibleDate(inputText);
-    if (parsed !== null) {
-      const validationError = validate?.(parsed);
-      if (validationError) {
-        onError?.(validationError);
-        return;
-      }
-      if (parsed !== value) {
-        onChange(parsed);
-      }
-    }
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        className="date-editor"
-        type="text"
-        inputMode="numeric"
-        placeholder="如 0805"
-        value={inputText}
-        aria-label={ariaLabel}
-        onChange={(event) => setInputText(event.target.value)}
-        onBlur={handleSave}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            handleSave();
-          } else if (event.key === "Escape") {
-            setEditing(false);
-          }
-        }}
-      />
-    );
-  }
-
-  return (
-    <button className={`date-text ${tone}`} type="button" onClick={startEditing} aria-label={`${ariaLabel}，点击编辑`}>
-      {value ? `${prefix}${formatDateShort(value)}` : emptyLabel}
-    </button>
-  );
-}
-
 function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = defaultProgress(false)): ProgressMap {
   const merged = { ...base };
   Object.keys(remote ?? {}).forEach((sectionId) => {
@@ -511,11 +436,8 @@ export function StudyDashboard() {
   const [editorTitle, setEditorTitle] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [editorSections, setEditorSections] = useState<JournalSectionItem[]>([]);
-  const [editorBookId, setEditorBookId] = useState<string>("data-structure");
   const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(null);
-  const journalTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [editorImportant, setEditorImportant] = useState(false);
-  const [showTitleInput, setShowTitleInput] = useState(false);
   const [pendingDeleteJournal, setPendingDeleteJournal] = useState<JournalEntry | null>(null);
   const [blogPublishJournal, setBlogPublishJournal] = useState<JournalEntry | null>(null);
   const [publishTitle, setPublishTitle] = useState("");
@@ -558,6 +480,9 @@ export function StudyDashboard() {
   const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
   const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
   const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
+  const [schedule, setSchedule] = useState<ScheduleAppData>(buildDefaultSchedule);
+  const { activeInfo: activeScheduleInfo } = useScheduleTicker(schedule);
+  const [cockpitFocusedEvent, setCockpitFocusedEvent] = useState<ScheduleEvent | null>(null);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
   const effectiveSprintTab = (activeArea === "english" || activeArea === "politics") && sprintTab === "mock" ? "all" : sprintTab;
   const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
@@ -567,7 +492,6 @@ export function StudyDashboard() {
   const [newMockGroup, setNewMockGroup] = useState("");
   const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
-  const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
   const [pendingClearAllPapers, setPendingClearAllPapers] = useState(false);
 
@@ -620,22 +544,24 @@ export function StudyDashboard() {
     const mergedHistory = body.planHistory ?? local?.planHistory ?? [];
     const mergedJournalsList = mergeJournals(local?.journals ?? [], body.journals ?? []);
     const mergedPapersList = mergePapers(local?.papers ?? defaultPastPapers(), body.papers ?? []);
+    const mergedSchedule = normalizeSchedule(body.schedule ?? local?.schedule);
 
     setProgress(mergedProgress);
     setProjectSettings(mergedSettings);
     setPlanHistory(mergedHistory);
     setJournals(mergedJournalsList);
     setPapers(mergedPapersList);
+    setSchedule(mergedSchedule);
     setBackups(repo.backups());
 
     // 若判定为非 main 的全新用户，立即主动覆写清洗本地缓存，确保下一次打开也彻底洁净
     if (isNewNonMainUser) {
-      repo.save(createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList));
+      repo.save(createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList, mergedSchedule));
     }
 
     // Record the current state payload so auto-save doesn't fire for unchanged data
     lastSavedPayloadRef.current = JSON.stringify({
-      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList),
+      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList, mergedSchedule),
       deletedJournalIds: [],
       deletedPaperIds: [],
     });
@@ -682,7 +608,7 @@ export function StudyDashboard() {
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
-    const appData = createAppData(progress, projectSettings, planHistory, journals, papers);
+    const appData = createAppData(progress, projectSettings, planHistory, journals, papers, schedule);
     repository().save(appData);
 
     const payloadString = JSON.stringify({
@@ -722,7 +648,7 @@ export function StudyDashboard() {
           if (isDifferent) {
             setJournals(resData.journals);
             lastSavedPayloadRef.current = JSON.stringify({
-              ...createAppData(progress, projectSettings, planHistory, resData.journals),
+              ...createAppData(progress, projectSettings, planHistory, resData.journals, papers, schedule),
               deletedJournalIds: [],
               deletedPaperIds: [],
             });
@@ -735,7 +661,7 @@ export function StudyDashboard() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [authState, loaded, planHistory, progress, projectSettings, journals, papers, repository]);
+  }, [authState, loaded, planHistory, progress, projectSettings, journals, papers, schedule, repository]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -932,28 +858,95 @@ export function StudyDashboard() {
     ...projectTaskEntries("math"),
   ], []);
   const today = dateToday();
-  const todayBasePlan: TaskEntry[] = todayTasks
-    .filter(({ section }) => isTodayBasePlan(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "base" as const }));
-  const todayReviewPlan: TaskEntry[] = todayTasks
-    .filter(({ section }) => isTodayReviewPlan(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" as const }));
-  const todayPlan = [...todayBasePlan, ...todayReviewPlan];
-  const overdueBaseTasks: TaskEntry[] = todayTasks
-    .filter(({ section }) => isOverdueBaseTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "base" as const }))
-    .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
-  const overdueReviewTasks: TaskEntry[] = todayTasks
-    .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" as const }))
-    .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
-  const overdueTasks = [...overdueBaseTasks, ...overdueReviewTasks];
+  const todayBasePlan: TaskEntry[] = useMemo(() => {
+    return todayTasks
+      .filter(({ section }) => isTodayBasePlan(progress[section.id], today))
+      .map((task) => ({ ...task, phase: "base" as const }));
+  }, [todayTasks, progress, today]);
+
+  const todayReviewPlan: TaskEntry[] = useMemo(() => {
+    return todayTasks
+      .filter(({ section }) => isTodayReviewPlan(progress[section.id], today))
+      .map((task) => ({ ...task, phase: "review" as const }));
+  }, [todayTasks, progress, today]);
+
+  const todayPlan = useMemo(() => [...todayBasePlan, ...todayReviewPlan], [todayBasePlan, todayReviewPlan]);
+
+  const overdueBaseTasks: TaskEntry[] = useMemo(() => {
+    return todayTasks
+      .filter(({ section }) => isOverdueBaseTask(progress[section.id], today))
+      .map((task) => ({ ...task, phase: "base" as const }))
+      .sort((left, right) => (progress[left.section.id]?.plannedAt ?? "").localeCompare(progress[right.section.id]?.plannedAt ?? ""));
+  }, [todayTasks, progress, today]);
+
+  const overdueReviewTasks: TaskEntry[] = useMemo(() => {
+    return todayTasks
+      .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
+      .map((task) => ({ ...task, phase: "review" as const }))
+      .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
+  }, [todayTasks, progress, today]);
+
+  const overdueTasks = useMemo(() => [...overdueBaseTasks, ...overdueReviewTasks], [overdueBaseTasks, overdueReviewTasks]);
   const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
   const unreviewedTasks: TaskEntry[] = todayTasks
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
     .map((task) => ({ ...task, phase: "review" as const }))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
   const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
+
+  const rescheduleToToday = useCallback((sectionId: string, phase: "base" | "review") => {
+    const todayStr = dateToday();
+    const field = phase === "review" ? "reviewedPlannedAt" : "plannedAt";
+    setProgress((prev) => {
+      const existing = prev[sectionId] ?? {
+        learned: false,
+        learnedAt: "",
+        reviewed: false,
+        reviewedAt: "",
+        plannedAt: "",
+        reviewedPlannedAt: "",
+        isCurrent: false,
+      };
+      return {
+        ...prev,
+        [sectionId]: {
+          ...existing,
+          [field]: todayStr,
+        },
+      };
+    });
+    setFeedbackMessage("已成功将逾期任务改排至今日执行！");
+  }, []);
+
+  const cockpitWeek = useMemo(() => {
+    return schedule.activeWeek || calculateWeekNumber(schedule.semesterStartDate, dateToday()) || 2;
+  }, [schedule.activeWeek, schedule.semesterStartDate]);
+
+  const activeSlotArea = cockpitFocusedEvent?.linkedArea ?? (activeScheduleInfo.status === "in_progress" ? activeScheduleInfo.activeEvent?.linkedArea : null);
+
+  const displayedTodayPlan = useMemo(() => {
+    let list = todayPlan;
+    if (cockpitFocusedEvent?.linkedArea) {
+      list = list.filter((t) => t.book.area === cockpitFocusedEvent.linkedArea);
+    }
+    if (activeSlotArea) {
+      return [...list].sort((a, b) => {
+        const aDone = Boolean(progress[a.section.id]?.learned || progress[a.section.id]?.reviewed);
+        const bDone = Boolean(progress[b.section.id]?.learned || progress[b.section.id]?.reviewed);
+        const aMatch = a.book.area === activeSlotArea && !aDone;
+        const bMatch = b.book.area === activeSlotArea && !bDone;
+        if (aMatch && !bMatch) return -1;
+        if (!aMatch && bMatch) return 1;
+        return 0;
+      });
+    }
+    return list;
+  }, [todayPlan, cockpitFocusedEvent, activeSlotArea, progress]);
+
+  const displayedOverdueTasks = useMemo(() => {
+    if (!cockpitFocusedEvent?.linkedArea) return overdueTasks;
+    return overdueTasks.filter((t) => t.book.area === cockpitFocusedEvent.linkedArea);
+  }, [overdueTasks, cockpitFocusedEvent]);
 
   const nearestExamDate = [projectSettings["408"].examDate, projectSettings.math.examDate, projectSettings.english?.examDate ?? "2026-12-19", projectSettings.politics?.examDate ?? "2026-12-19"].sort()[0];
   const examDate = (activePage === "progress" || activePage === "sprint") ? (projectSettings[activeArea]?.examDate ?? nearestExamDate) : nearestExamDate;
@@ -1110,7 +1103,7 @@ export function StudyDashboard() {
       if (typeof nextPatch.score === "number" && !Number.isNaN(nextPatch.score)) {
         const maxScore = maxPaperScore(p.area);
         const origScore = nextPatch.score;
-        const clamped = Math.max(0, Math.min(maxScore, Math.round(origScore * 10) / 10));
+        const clamped = clampPaperScore(origScore, p.area) ?? 0;
         if (origScore > maxScore) {
           clampNotice = `已按满分 ${maxScore} 分修正`;
         } else if (origScore < 0) {
@@ -1420,28 +1413,7 @@ export function StudyDashboard() {
       if (p.id !== paperId) return p;
       const maxChoice = paperMaxChoiceNum(p.area);
       const total = paperTotalQuestions(p.area);
-      const tokens: number[] = [];
-      rawInput.split(/[,，\s、;；]+/).forEach((chunk) => {
-        const trimmed = chunk.trim();
-        if (!trimmed) return;
-        const rangeMatch = trimmed.match(/^(\d+)[-~至到\.]+(\d+)$/);
-        if (rangeMatch) {
-          const start = parseInt(rangeMatch[1], 10);
-          const end = parseInt(rangeMatch[2], 10);
-          if (!Number.isNaN(start) && !Number.isNaN(end)) {
-            const min = Math.min(start, end);
-            const max = Math.max(start, end);
-            for (let n = min; n <= max; n++) {
-              if (n >= 1 && n <= total) tokens.push(n);
-            }
-            return;
-          }
-        }
-        const n = parseInt(trimmed, 10);
-        if (!Number.isNaN(n) && n >= 1 && n <= total) {
-          tokens.push(n);
-        }
-      });
+      const tokens = parseQuestionRanges(rawInput, total);
       const wrongSet = new Set(tokens);
       const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
       for (let i = 1; i <= maxChoice; i++) {
@@ -1476,143 +1448,6 @@ export function StudyDashboard() {
       };
     }));
     setFeedbackMessage("已清空本卷所有做题记录与得分");
-  }
-
-  function renderBentoHeatmap(paper: PaperRecord) {
-    const qSummary = getPaperQuestionSummary(paper);
-    const hasRecorded = Boolean(
-      paper.completed ||
-      paper.score !== null ||
-      (paper.questions && Object.keys(paper.questions).length > 0) ||
-      (paper.questionScores && Object.keys(paper.questionScores).length > 0)
-    );
-
-    type BigQuestion = { num: number; name: string; max?: number };
-
-    // 客观题分组（起止数量）唯一口径见 study-data.ts bentoChoiceGroups；
-    // 主观题 max 与 CS408_PAPER_STRUCTURE 的分歧（P0-2）维持现状，待定夺后再收敛。
-    const choiceGroups = bentoChoiceGroups(paper.area);
-    let bigQuestions: BigQuestion[] = [];
-    let choiceTagLabel = "选择";
-    let subjTagLabel = "大题";
-    let subjectiveLabel = "大题";
-
-    if (paper.area === "408") {
-      bigQuestions = [
-        { num: 41, name: "DS" },
-        { num: 42, name: "DS" },
-        { num: 43, name: "CO" },
-        { num: 44, name: "CO" },
-        { num: 45, name: "OS" },
-        { num: 46, name: "OS" },
-        { num: 47, name: "CN" },
-      ];
-    } else if (paper.area === "politics") {
-      bigQuestions = [];
-      choiceTagLabel = "选择";
-      subjTagLabel = "";
-      subjectiveLabel = "";
-    } else if (paper.area === "english") {
-      bigQuestions = [
-        { num: 46, name: "翻译 1" },
-        { num: 47, name: "翻译 2" },
-        { num: 48, name: "翻译 3" },
-        { num: 49, name: "翻译 4" },
-        { num: 50, name: "翻译 5" },
-        { num: 51, name: "小作文" },
-        { num: 52, name: "大作文" },
-      ];
-      choiceTagLabel = "选择";
-      subjTagLabel = "主观";
-      subjectiveLabel = "主观";
-    } else {
-      bigQuestions = [
-        { num: 17, max: 10, name: "解答题 · 10分" },
-        { num: 18, max: 12, name: "解答题 · 12分" },
-        { num: 19, max: 12, name: "解答题 · 12分" },
-        { num: 20, max: 12, name: "解答题 · 12分" },
-        { num: 21, max: 12, name: "解答题 · 12分" },
-        { num: 22, max: 12, name: "解答题 · 12分" },
-      ];
-      choiceTagLabel = "选填";
-      subjTagLabel = "大题";
-      subjectiveLabel = "解答";
-    }
-
-    return (
-      <div className="bento-mini-heatmap">
-        <div className="mini-heatmap-head">
-          <button
-            type="button"
-            className="mini-heatmap-open-btn"
-            aria-label={`打开${paper.title}答题卡`}
-            title="打开答题卡录入或调整做题表现"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActivePaperQuestionModalId(paper.id);
-              setQuickWrongInput("");
-            }}
-          >
-            答题卡 ↗
-          </button>
-          <div className="mini-heatmap-tags">
-            {qSummary && (
-              <>
-                <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
-                  {choiceTagLabel}: {qSummary.choiceAccuracyPercent}%
-                </span>
-                {qSummary.subjectiveRecorded > 0 && (
-                  <span className="mini-heatmap-tag tag-subj">
-                    {subjTagLabel}: {qSummary.subjectivePerfectCount}优 {qSummary.subjectivePartialCount}良 {qSummary.subjectiveWrongCount}差
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="mini-heatmap-rows-stack">
-          {choiceGroups.map((grp) => (
-            <div className="mini-heatmap-row" key={grp.name} title={`[${grp.label}] 第 ${grp.start}~${grp.start + grp.count - 1} 题`}>
-              <span className="mini-row-label">{grp.name}:</span>
-              <div className="mini-group-dots">
-                {Array.from({ length: grp.count }, (_, i) => {
-                  const num = grp.start + i;
-                  const st = paper.questions?.[num];
-                  return (
-                    <span
-                      key={num}
-                      className={`mini-dot ${st ? `dot-${st}` : "dot-unset"}`}
-                      title={`第 ${num} 题 [${grp.label}]: ${st === "correct" ? "正确" : st === "wrong" ? "错题" : "未答"}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          <div className="mini-heatmap-row mini-heatmap-row--subj">
-            <span className="mini-row-label">{subjectiveLabel}:</span>
-            <div className="mini-subj-chips">
-              {bigQuestions.map((bq) => {
-                const st = paper.questions?.[bq.num];
-                const sc = paper.questionScores?.[bq.num];
-                const scoreInfo = sc !== undefined ? `(${sc}分)` : bq.max ? `(${bq.max}分)` : "";
-                return (
-                  <span
-                    key={bq.num}
-                    className={`mini-subj-chip ${st ? `chip-${st}` : "chip-unset"}`}
-                    title={`第 ${bq.num} 题 [${bq.name}]: ${st === "correct" ? `满分/优 ${scoreInfo}` : st === "partial" ? `部分得分/良 ${sc !== undefined ? `(${sc}分)` : ""}` : st === "wrong" ? `失分/差 ${sc !== undefined ? `(${sc}分)` : ""}` : "未录入"}`}
-                  >
-                    {bq.num}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   function updateProgress(sectionId: string, next: Partial<SectionProgress>) {
@@ -1822,7 +1657,7 @@ export function StudyDashboard() {
   }
 
   function currentAppData(): StudyAppData {
-    return createAppData(progress, projectSettings, planHistory, journals, papers);
+    return createAppData(progress, projectSettings, planHistory, journals, papers, schedule);
   }
 
   async function replaceCloudData(data: StudyAppData): Promise<boolean> {
@@ -1909,6 +1744,9 @@ export function StudyDashboard() {
     setPlanHistory(pendingImport.planHistory);
     setJournals(pendingImport.journals);
     setPapers(pendingImport.papers ?? defaultPastPapers());
+    if (pendingImport.schedule) {
+      setSchedule(normalizeSchedule(pendingImport.schedule));
+    }
     repository().save(pendingImport);
     setPendingImport(null);
     setFeedbackMessage("数据导入完成，已自动保留导入前备份");
@@ -1930,6 +1768,9 @@ export function StudyDashboard() {
     setPlanHistory(restored.planHistory);
     setJournals(restored.journals);
     setPapers(restored.papers ?? defaultPastPapers());
+    if (restored.schedule) {
+      setSchedule(normalizeSchedule(restored.schedule));
+    }
     repository().save(restored);
     setBackups(repository().backups());
     setPendingRestore(null);
@@ -1945,7 +1786,7 @@ export function StudyDashboard() {
   async function clearAllPaperRecords() {
     const cleanPapers = defaultPastPapers();
     setPapers(cleanPapers);
-    const cleanAppData = createAppData(progress, projectSettings, planHistory, journals, cleanPapers);
+    const cleanAppData = createAppData(progress, projectSettings, planHistory, journals, cleanPapers, schedule);
     repository().save(cleanAppData);
     await replaceCloudData(cleanAppData);
     setPendingClearAllPapers(false);
@@ -1966,6 +1807,8 @@ export function StudyDashboard() {
     tasks: TaskEntry[],
     kind: "today" | "overdue" | "unreviewed",
     emptyMessage: string,
+    onReschedule?: (sectionId: string, phase: "base" | "review") => void,
+    slotArea?: string | null,
   ) {
     if (!tasks.length) return <p className="task-empty">{emptyMessage}</p>;
     return (
@@ -1974,10 +1817,14 @@ export function StudyDashboard() {
           const state = progress[section.id];
           const isReviewAction = phase === "review" || kind === "unreviewed" || (!phase && Boolean(state?.learned) && !state?.reviewed);
           const checked = isReviewAction ? state?.reviewed : state?.learned;
+          const isCurrentSlot = kind === "today" && Boolean(slotArea && book.area === slotArea && !checked);
           return (
-            <article className={`task-row${checked ? " completed" : ""}`} key={`${kind}-${phase ?? "task"}-${section.id}`}>
+            <article className={`task-row${checked ? " completed" : ""}${isCurrentSlot ? " task-row--current-slot" : ""}`} key={`${kind}-${phase ?? "task"}-${section.id}`}>
               <div className="task-main">
-                <div className="task-title"><span>{section.number}</span><strong>{section.title}</strong></div>
+                <div className="task-title">
+                  {isCurrentSlot && <span className="task-slot-tag" aria-label="当前时段课程">🎯 正在进行</span>}
+                  <span>{section.number}</span><strong>{section.title}</strong>
+                </div>
                 <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
               </div>
               <div className="task-row-right">
@@ -1990,6 +1837,20 @@ export function StudyDashboard() {
                       ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}`
                       : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`}
                 </span>
+                {kind === "overdue" && onReschedule && (
+                  <button
+                    type="button"
+                    className="task-reschedule-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReschedule(section.id, isReviewAction ? "review" : "base");
+                    }}
+                    title="一键排到今日执行"
+                    aria-label="一键排到今日执行"
+                  >
+                    + 今日
+                  </button>
+                )}
                 <label className="task-check">
                   <input
                     type="checkbox"
@@ -2133,7 +1994,6 @@ export function StudyDashboard() {
       setEditorPaper(null);
       setEditorSections(extractJournalSections(context ?? null));
     }
-    setShowTitleInput(false);
     setIsEditorOpen(true);
   }, [papers]);
 
@@ -2149,7 +2009,6 @@ export function StudyDashboard() {
       setEditorPaper(null);
       setEditorSections(extractJournalSections(journal.context));
     }
-    setShowTitleInput(Boolean(journal.title));
     setIsEditorOpen(true);
   }, []);
 
@@ -2169,30 +2028,23 @@ export function StudyDashboard() {
     });
   }, []);
 
-  const handleSaveJournal = useCallback(() => {
-    const trimmedContent = editorContent.trim();
-    if (!trimmedContent) {
-      setFeedbackMessage("日志内容不能为空");
-      return;
-    }
-
-    const trimmedTitle = editorTitle.trim() ? editorTitle.trim() : null;
+  const handleSaveJournalPayload = useCallback((payload: {
+    id: string | null;
+    title: string | null;
+    content: string;
+    important: boolean;
+    context: JournalContext | null;
+  }) => {
     const now = new Date().toISOString();
-    const contextToSave: JournalContext | null = editorPaper
-      ? editorPaper
-      : editorSections.length > 0
-        ? { type: "sections", sections: editorSections }
-        : null;
-
-    if (editingJournalId) {
+    if (payload.id) {
       setJournals((prev) => prev.map((entry) => {
-        if (entry.id !== editingJournalId) return entry;
+        if (entry.id !== payload.id) return entry;
         return {
           ...entry,
-          title: trimmedTitle,
-          content: editorContent,
-          context: contextToSave,
-          important: editorImportant,
+          title: payload.title,
+          content: payload.content,
+          context: payload.context,
+          important: payload.important,
           updatedAt: now,
         };
       }));
@@ -2203,10 +2055,10 @@ export function StudyDashboard() {
         id: newId,
         createdAt: now,
         updatedAt: now,
-        title: trimmedTitle,
-        content: editorContent,
-        context: contextToSave,
-        important: editorImportant,
+        title: payload.title,
+        content: payload.content,
+        context: payload.context,
+        important: payload.important,
         publish: {
           status: "local",
           publishedAt: null,
@@ -2225,190 +2077,7 @@ export function StudyDashboard() {
     setEditorImportant(false);
     setEditorSections([]);
     setEditorPaper(null);
-  }, [editorContent, editorTitle, editorImportant, editingJournalId, editorSections, editorPaper, journals]);
-
-  const applyEditorFormat = useCallback(
-    (
-      formatter: (
-        text: string,
-        start: number,
-        end: number
-      ) => { newText: string; selectionStart: number; selectionEnd: number }
-    ) => {
-      const textarea = journalTextareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const result = formatter(editorContent, start, end);
-      applyTextResultToTextarea(textarea, result, setEditorContent);
-    },
-    [editorContent]
-  );
-
-  const handleEditorKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const textarea = journalTextareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-
-      // 1. Quick Save (Ctrl+S / Cmd+S)
-      if (isCtrlOrCmd && e.key.toLowerCase() === "s" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        handleSaveJournal();
-        return;
-      }
-
-      // 2. Bold (Ctrl+B / Cmd+B)
-      if (isCtrlOrCmd && e.key.toLowerCase() === "b" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        const res = wrapSelection(editorContent, start, end, "**", "**", "加粗文本");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 3. Italic (Ctrl+I / Cmd+I)
-      if (isCtrlOrCmd && e.key.toLowerCase() === "i" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        const res = wrapSelection(editorContent, start, end, "*", "*", "斜体文本");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 4. Underline (Ctrl+U / Cmd+U)
-      if (isCtrlOrCmd && e.key.toLowerCase() === "u" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        const res = wrapSelection(editorContent, start, end, "<u>", "</u>", "下划线");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 5. Strikethrough (Ctrl+Shift+X or Ctrl+Shift+S or Alt+Shift+5)
-      if (
-        (isCtrlOrCmd && e.shiftKey && (e.key.toLowerCase() === "x" || e.key.toLowerCase() === "s")) ||
-        (e.altKey && e.shiftKey && e.key === "5")
-      ) {
-        e.preventDefault();
-        const res = wrapSelection(editorContent, start, end, "~~", "~~", "删除线文本");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 6. Link (Ctrl+K / Cmd+K)
-      if (isCtrlOrCmd && e.key.toLowerCase() === "k" && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        const res = applyLink(editorContent, start, end);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 7. Math LaTeX (Ctrl+M or Ctrl+Shift+K or Ctrl+Alt+M)
-      if (
-        (isCtrlOrCmd && e.key.toLowerCase() === "m" && !e.shiftKey && !e.altKey) ||
-        (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === "k") ||
-        (isCtrlOrCmd && e.altKey && e.key.toLowerCase() === "m")
-      ) {
-        e.preventDefault();
-        const res = applyMath(editorContent, start, end);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 8. Code / Code block (Ctrl+` or Ctrl+E or Ctrl+Shift+C)
-      if (
-        (isCtrlOrCmd && e.key === "`" && !e.shiftKey && !e.altKey) ||
-        (isCtrlOrCmd && e.key.toLowerCase() === "e" && !e.shiftKey && !e.altKey) ||
-        (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === "c")
-      ) {
-        e.preventDefault();
-        const res = applyCode(editorContent, start, end);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 9. Headings 1~4 (Ctrl+1~4 or Ctrl+Alt+1~4)
-      if (
-        (isCtrlOrCmd && !e.shiftKey && e.key >= "1" && e.key <= "4") ||
-        (isCtrlOrCmd && e.altKey && e.key >= "1" && e.key <= "4")
-      ) {
-        e.preventDefault();
-        const level = parseInt(e.key, 10) as 1 | 2 | 3 | 4;
-        const res = applyHeading(editorContent, start, end, level);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 10. Clear Heading (Ctrl+0)
-      if (isCtrlOrCmd && e.key === "0" && !e.shiftKey) {
-        e.preventDefault();
-        const res = applyHeading(editorContent, start, end, 0);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 11. Bullet List (Ctrl+Shift+U or Ctrl+Alt+U)
-      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "u") {
-        e.preventDefault();
-        const res = toggleLinePrefix(editorContent, start, end, "bullet");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 12. Numbered List (Ctrl+Shift+O or Ctrl+Alt+O)
-      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        const res = toggleLinePrefix(editorContent, start, end, "number");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 13. Task List (Ctrl+Shift+T or Ctrl+Alt+T)
-      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        const res = toggleLinePrefix(editorContent, start, end, "task");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 14. Blockquote (Ctrl+Shift+Q or Ctrl+Alt+Q)
-      if (isCtrlOrCmd && (e.shiftKey || e.altKey) && e.key.toLowerCase() === "q") {
-        e.preventDefault();
-        const res = toggleLinePrefix(editorContent, start, end, "quote");
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 15. Tab / Shift+Tab (Indent / Outdent)
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const res = handleTabKey(editorContent, start, end, e.shiftKey);
-        applyTextResultToTextarea(textarea, res, setEditorContent);
-        return;
-      }
-
-      // 16. Smart Enter
-      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        const smartRes = handleSmartEnter(editorContent, start, end);
-        if (smartRes) {
-          e.preventDefault();
-          applyTextResultToTextarea(textarea, smartRes, setEditorContent);
-          return;
-        }
-      }
-
-      // 17. Auto-pairing quotes and brackets on text selection
-      if (start < end && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        const autoRes = handleAutoPair(editorContent, start, end, e.key);
-        if (autoRes) {
-          e.preventDefault();
-          applyTextResultToTextarea(textarea, autoRes, setEditorContent);
-          return;
-        }
-      }
-    },
-    [editorContent, handleSaveJournal]
-  );
+  }, [journals]);
 
   const handleDeleteJournal = useCallback((journal: JournalEntry) => {
     setPendingDeleteJournal(journal);
@@ -3031,40 +2700,130 @@ export function StudyDashboard() {
                 </div>
               </div>
 
-              <div className="today-sections">
-                <section className="task-panel task-panel--today" aria-labelledby="today-plan-title">
-                  <header>
-                    <div className="task-panel-heading">
-                      <span className="task-panel-badge">01</span>
-                      <div className="task-panel-title-group">
-                        <h2 id="today-plan-title">今日任务</h2>
-                        <span className="task-panel-subtitle">{todayCompleted} / {todayPlan.length} 项已完成</span>
-                      </div>
+              <div className="today-cockpit-workbench">
+                {/* ── 左侧：复习课表 (紧凑自适应，约占 69%) ── */}
+                <div className="cockpit-left-schedule">
+                  <div className="cockpit-schedule-topbar">
+                    <div className="cockpit-schedule-title-group">
+                      <span className="cockpit-badge">作息</span>
+                      <h3>复习课表</h3>
+                      <span className="cockpit-week-indicator">第 {cockpitWeek} 周</span>
                     </div>
-                    <div className="task-panel-stat">
-                      <strong className="stat-num">{todayPlan.length}</strong>
-                      <span className="stat-unit">项</span>
-                    </div>
-                  </header>
-                  {renderTaskList(todayPlan, "today", "今天没有安排小节，完成的今日任务也会保留在这里。")}
-                </section>
 
-                <section className="task-panel task-panel--overdue" aria-labelledby="overdue-title">
-                  <header>
-                    <div className="task-panel-heading">
-                      <span className="task-panel-badge">02</span>
-                      <div className="task-panel-title-group">
-                        <h2 id="overdue-title">逾期任务</h2>
-                        <span className="task-panel-subtitle">新学 {overdueBaseTasks.length} · 复习 {overdueReviewTasks.length}</span>
+                    <div className="cockpit-schedule-controls">
+                      {activeScheduleInfo.status === "in_progress" && activeScheduleInfo.activeEvent && (
+                        <div className="cockpit-live-indicator" title="当前时段正在进行">
+                          <span className="cockpit-live-dot" />
+                          <span>进行中: {activeScheduleInfo.activeEvent.title}</span>
+                        </div>
+                      )}
+                      {activeScheduleInfo.status === "rest_break" && (
+                        <div className="cockpit-rest-indicator">
+                          <span>☕ {activeScheduleInfo.restBreak?.label} (剩 {activeScheduleInfo.remainingMinutes}m)</span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        className="cockpit-action-btn"
+                        onClick={() => setActivePage("schedule")}
+                        title="查看/编辑全屏课表"
+                      >
+                        ⤢ 全屏/设置
+                      </button>
+                    </div>
+                  </div>
+
+                  <TimetableGrid
+                    schedule={schedule}
+                    activeInfo={activeScheduleInfo}
+                    todayStr={today}
+                    activeWeek={cockpitWeek}
+                    onSelectEvent={(evt) => {
+                      setCockpitFocusedEvent((prev) => (prev?.id === evt.id ? null : evt));
+                    }}
+                    isCompact={true}
+                    focusedEventId={cockpitFocusedEvent?.id ?? null}
+                  />
+                </div>
+
+                {/* ── 右侧：今日任务 (右上) + 逾期任务 (右下)，不超过左侧一半宽 ── */}
+                <div className="cockpit-right-tasks">
+                  {cockpitFocusedEvent && (
+                    <div className="cockpit-focus-bar">
+                      <div className="cockpit-focus-info">
+                        <span className="focus-icon">🎯</span>
+                        <span className="focus-label">
+                          已聚焦: <strong>{cockpitFocusedEvent.title}</strong>
+                          {cockpitFocusedEvent.linkedArea ? ` (${cockpitFocusedEvent.linkedArea})` : ""}
+                        </span>
                       </div>
+                      <button
+                        type="button"
+                        className="cockpit-clear-focus-btn"
+                        onClick={() => setCockpitFocusedEvent(null)}
+                      >
+                        显示全部 ×
+                      </button>
                     </div>
-                    <div className={`task-panel-stat ${overdueTasks.length > 0 ? "stat--overdue" : ""}`}>
-                      <strong className="stat-num">{overdueTasks.length}</strong>
-                      <span className="stat-unit">项</span>
-                    </div>
-                  </header>
-                  {renderTaskList(overdueTasks, "overdue", "没有逾期任务，节奏保持得很好。")}
-                </section>
+                  )}
+
+                  {/* ── 右上：今日任务 ── */}
+                  <section className="task-panel task-panel--today task-panel--cockpit" aria-labelledby="today-plan-title">
+                    <header>
+                      <div className="task-panel-heading">
+                        <span className="task-panel-badge">01</span>
+                        <div className="task-panel-title-group">
+                          <h2 id="today-plan-title">今日任务</h2>
+                          <span className="task-panel-subtitle">
+                            {displayedTodayPlan.filter(({ section }) => progress[section.id]?.learned || progress[section.id]?.reviewed).length} / {displayedTodayPlan.length} 项完成
+                          </span>
+                        </div>
+                      </div>
+                      <div className="task-panel-stat">
+                        <strong className="stat-num">{displayedTodayPlan.length}</strong>
+                        <span className="stat-unit">项</span>
+                      </div>
+                    </header>
+                    {renderTaskList(
+                      displayedTodayPlan,
+                      "today",
+                      cockpitFocusedEvent
+                        ? `今天没有安排【${cockpitFocusedEvent.title}】的任务。`
+                        : "今天没有安排小节，完成的任务会保留在这里。",
+                      undefined,
+                      activeSlotArea,
+                    )}
+                  </section>
+
+                  {/* ── 右下：逾期任务 ── */}
+                  <section className="task-panel task-panel--overdue task-panel--cockpit" aria-labelledby="overdue-title">
+                    <header>
+                      <div className="task-panel-heading">
+                        <span className="task-panel-badge">02</span>
+                        <div className="task-panel-title-group">
+                          <h2 id="overdue-title">逾期任务</h2>
+                          <span className="task-panel-subtitle">
+                            新学 {displayedOverdueTasks.filter((t) => t.phase === "base").length} · 复习 {displayedOverdueTasks.filter((t) => t.phase === "review").length}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`task-panel-stat ${displayedOverdueTasks.length > 0 ? "stat--overdue" : ""}`}>
+                        <strong className="stat-num">{displayedOverdueTasks.length}</strong>
+                        <span className="stat-unit">项</span>
+                      </div>
+                    </header>
+                    {renderTaskList(
+                      displayedOverdueTasks,
+                      "overdue",
+                      cockpitFocusedEvent
+                        ? `暂无【${cockpitFocusedEvent.title}】相关的逾期任务。`
+                        : "没有逾期任务，节奏保持得很好。",
+                      rescheduleToToday,
+                      null,
+                    )}
+                  </section>
+                </div>
               </div>
 
               <div id="journal-timeline-section" className="journal-stream-container">
@@ -3518,104 +3277,31 @@ export function StudyDashboard() {
                       </div>
                     ) : (
                       <div className="sprint-bento-grid">
-                        {visiblePastPapers.map((paper) => {
-                          const paperJournals = journalsByPaper[paper.id] ?? [];
-                          return (
-                            <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                              <div className="bento-card-top">
-                                <span className="bento-year-pill">{paper.year}</span>
-                                <div className="bento-top-controls">
-                                    <div className="bento-score-inline" title="点击输入分数">
-                                      <input
-                                        type="number"
-                                        className="bento-score-input"
-                                        min={0}
-                                        max={maxPaperScore(activeArea)}
-                                        step={0.5}
-                                        placeholder="分数"
-                                        value={paper.score ?? ""}
-                                        style={paper.score === null || paper.score === undefined
-                                          ? undefined
-                                          : { width: `${String(paper.score).length}ch` }}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
-                                        }}
-                                      />
-                                      {paper.score !== null && paper.score !== undefined && (
-                                        <span className="bento-score-unit">分</span>
-                                      )}
-                                    </div>
-
-                                  <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
-                                    <input
-                                      type="checkbox"
-                                      checked={paper.completed}
-                                      onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
-                                    />
-                                    <span className="bento-check-box" />
-                                    <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
-                                  </label>
-
-                                  <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : (!paper.completed ? "标记二刷（将同步标记一刷）" : "标记二刷")}>
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(paper.secondRound)}
-                                      onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
-                                    />
-                                    <span className="bento-check-box" />
-                                    <span className="bento-check-text">二刷</span>
-                                  </label>
-                                </div>
-                              </div>
-
-                              {renderBentoHeatmap(paper)}
-
-                              <div className="bento-card-footer">
-                                <div className="bento-footer-left">
-                                  {paper.completed ? (
-                                    <EditableDate
-                                      value={paper.completedAt}
-                                      emptyLabel="设置日期"
-                                      ariaLabel={`${paper.year}年真题完成日期`}
-                                      onChange={(val) => updatePaper(paper.id, { completedAt: val })}
-                                    />
-                                  ) : null}
-                                </div>
-
-                                <div className="bento-actions-wrap">
-                                  {paperJournals.length > 0 && (
-                                    <button
-                                      type="button"
-                                      className="section-journal-badge"
-                                      title={`查看此真题的 ${paperJournals.length} 条复盘日志`}
-                                      onClick={() => {
-                                        setJournalSearchQuery(paper.title);
-                                        setActivePage("today");
-                                      }}
-                                    >
-                                      📝 <span>{paperJournals.length}</span>
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    className="section-record-btn"
-                                    title="写一条关于该真题的复盘日志"
-                                    onClick={() => openCreateJournal({
-                                      type: "paper",
-                                      area: activeArea,
-                                      paperId: paper.id,
-                                      paperTitle: paper.title,
-                                    })}
-                                  >
-                                    <span className="record-plus">+</span>
-                                    <span className="record-label">记</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {visiblePastPapers.map((paper) => (
+                          <PaperCard
+                            key={paper.id}
+                            paper={paper}
+                            activeArea={activeArea}
+                            paperJournals={journalsByPaper[paper.id] ?? []}
+                            maxScore={maxPaperScore(activeArea)}
+                            onUpdateScore={(id, score) => updatePaper(id, { score })}
+                            onToggleCompleted={(id, completed) => togglePaperCompleted(id, completed)}
+                            onToggleSecondRound={(id, secondRound) => togglePaperSecondRound(id, secondRound)}
+                            onOpenAnswerSheet={(id) => setActivePaperQuestionModalId(id)}
+                            onOpenCreateJournal={(p) => openCreateJournal({
+                              type: "paper",
+                              area: activeArea,
+                              paperId: p.id,
+                              paperTitle: p.title,
+                            })}
+                            onViewJournals={(p) => {
+                              setJournalSearchQuery(p.title);
+                              setActivePage("today");
+                            }}
+                            onChangeCompletedAt={(id, completedAt) => updatePaper(id, { completedAt })}
+                            qSummary={getPaperQuestionSummary(paper)}
+                          />
+                        ))}
                       </div>
                     )}
                   </section>
@@ -3646,122 +3332,55 @@ export function StudyDashboard() {
                         </div>
                       ) : (
                         <div className="sprint-bento-grid">
-                          {visibleMockPapers.map((paper) => {
-                            const paperJournals = journalsByPaper[paper.id] ?? [];
-                            return (
-                              <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                                <div className="bento-card-top bento-card-top--mock">
-                                  <div className="bento-title-wrap" title={paper.title}>
-                                    {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
-                                    <strong className="bento-paper-title">{paper.title}</strong>
-                                  </div>
-                                  <div className="bento-top-controls">
-                                    <div className="bento-score-inline" title="点击输入分数">
-                                      <input
-                                        type="number"
-                                        className="bento-score-input"
-                                        min={0}
-                                        max={maxPaperScore(activeArea)}
-                                        step={0.5}
-                                        placeholder="分数"
-                                        value={paper.score ?? ""}
-                                        style={paper.score === null || paper.score === undefined
-                                          ? undefined
-                                          : { width: `${String(paper.score).length}ch` }}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
-                                        }}
-                                      />
-                                      {paper.score !== null && paper.score !== undefined && (
-                                        <span className="bento-score-unit">分</span>
-                                      )}
-                                    </div>
-
-                                    <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
-                                      <input
-                                        type="checkbox"
-                                        checked={paper.completed}
-                                        onChange={(e) => togglePaperCompleted(paper.id, e.target.checked)}
-                                      />
-                                      <span className="bento-check-box" />
-                                      <span className="bento-check-text">{paper.completed ? "已做" : "未做"}</span>
-                                    </label>
-
-                                    <label className="bento-check-label" title={paper.secondRound ? "已完成二刷 (点击取消)" : (!paper.completed ? "标记二刷（将同步标记一刷）" : "标记二刷")}>
-                                      <input
-                                        type="checkbox"
-                                        checked={Boolean(paper.secondRound)}
-                                        onChange={(e) => togglePaperSecondRound(paper.id, e.target.checked)}
-                                      />
-                                      <span className="bento-check-box" />
-                                      <span className="bento-check-text">二刷</span>
-                                    </label>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    className="paper-btn-del"
-                                    title="删除该模拟卷"
-                                    aria-label={`删除模拟卷 ${paper.title}`}
-                                    onClick={() => setPendingDeletePaperId(paper.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-
-                                {renderBentoHeatmap(paper)}
-
-                                <div className="bento-card-footer">
-                                  <div className="bento-footer-left">
-                                    {paper.completed ? (
-                                      <EditableDate
-                                        value={paper.completedAt}
-                                        emptyLabel="设置日期"
-                                        ariaLabel={`${paper.title} 完成日期`}
-                                        onChange={(val) => updatePaper(paper.id, { completedAt: val })}
-                                      />
-                                    ) : null}
-                                  </div>
-
-                                  <div className="bento-actions-wrap">
-                                    {paperJournals.length > 0 && (
-                                      <button
-                                        type="button"
-                                        className="section-journal-badge"
-                                        title={`查看此模拟卷的 ${paperJournals.length} 条复盘日志`}
-                                        onClick={() => {
-                                          setJournalSearchQuery(paper.title);
-                                          setActivePage("today");
-                                        }}
-                                      >
-                                        📝 <span>{paperJournals.length}</span>
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="section-record-btn"
-                                      title="写一条关于该模拟卷的复盘日志"
-                                      onClick={() => openCreateJournal({
-                                        type: "paper",
-                                        area: activeArea,
-                                        paperId: paper.id,
-                                        paperTitle: paper.title,
-                                      })}
-                                    >
-                                      <span className="record-plus">+</span>
-                                      <span className="record-label">记</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          {visibleMockPapers.map((paper) => (
+                            <PaperCard
+                              key={paper.id}
+                              paper={paper}
+                              activeArea={activeArea}
+                              paperJournals={journalsByPaper[paper.id] ?? []}
+                              maxScore={maxPaperScore(activeArea)}
+                              onUpdateScore={(id, score) => updatePaper(id, { score })}
+                              onToggleCompleted={(id, completed) => togglePaperCompleted(id, completed)}
+                              onToggleSecondRound={(id, secondRound) => togglePaperSecondRound(id, secondRound)}
+                              onOpenAnswerSheet={(id) => setActivePaperQuestionModalId(id)}
+                              onOpenCreateJournal={(p) => openCreateJournal({
+                                type: "paper",
+                                area: activeArea,
+                                paperId: p.id,
+                                paperTitle: p.title,
+                              })}
+                              onViewJournals={(p) => {
+                                setJournalSearchQuery(p.title);
+                                setActivePage("today");
+                              }}
+                              onDelete={(id) => setPendingDeletePaperId(id)}
+                              onChangeCompletedAt={(id, completedAt) => updatePaper(id, { completedAt })}
+                              qSummary={getPaperQuestionSummary(paper)}
+                            />
+                          ))}
                         </div>
                       )}
                     </section>
                   )}
                 </div>
+            </section>
+          ) : activePage === "schedule" ? (
+            <section className="page-view schedule-page" aria-labelledby="schedule-title">
+              <ScheduleView
+                schedule={schedule}
+                todayStr={dateToday()}
+                onUpdateSchedule={setSchedule}
+                onWriteJournal={() => {
+                  openCreateJournal(null);
+                }}
+                onJumpToTasks={(area) => {
+                  if (area === "408" || area === "math") {
+                    setActiveArea(area);
+                    setActivePage("progress");
+                  }
+                }}
+                onBackToToday={() => setActivePage("today")}
+              />
             </section>
           ) : activePage === "analytics" ? (
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
@@ -4296,374 +3915,20 @@ export function StudyDashboard() {
 
       {/* Journal Editor Modal */}
       {isEditorOpen && (
-        <div className="confirm-overlay journal-editor-overlay" role="presentation">
-          <div className="journal-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-editor-title">
-            <header className="journal-editor-header">
-              <div className="journal-editor-title-wrap">
-                <span className="dialog-kicker">{editingJournalId ? "编辑记录" : "新建记录"}</span>
-                <h2 id="journal-editor-title">{editingJournalId ? "编辑学习日志" : "写一条学习日志"}</h2>
-              </div>
-              <button
-                type="button"
-                className="journal-modal-close"
-                onClick={() => {
-                  setIsEditorOpen(false);
-                  setEditingJournalId(null);
-                }}
-                aria-label="关闭编辑器"
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="journal-editor-meta-bar">
-              <div className="journal-context-selector-wrap">
-                <div className="journal-context-selector">
-                  <span className="meta-label">关联小节:</span>
-                  <div className="journal-cascading-selects">
-                    <select
-                      className="journal-book-select"
-                      value={editorBookId}
-                      onChange={(e) => setEditorBookId(e.target.value)}
-                      aria-label="第一列：选择科目与书籍"
-                    >
-                      <optgroup label="408 考研科目">
-                        {books.filter((b) => b.area === "408").map((b) => (
-                          <option key={b.id} value={b.id}>
-                            408 · {b.shortTitle} ({b.title})
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="数学科目">
-                        {books.filter((b) => b.area === "math").map((b) => (
-                          <option key={b.id} value={b.id}>
-                            数学 · {b.shortTitle} ({b.title})
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-
-                    <select
-                      className="journal-section-select"
-                      value=""
-                      onChange={(e) => {
-                        const secId = e.target.value;
-                        if (!secId) return;
-                        const currentBook = books.find((b) => b.id === editorBookId);
-                        if (!currentBook) return;
-                        const found = currentBook.chapters
-                          .flatMap((c) => c.sections.map((s) => ({ book: currentBook, chapter: c, section: s })))
-                          .find((item) => item.section.id === secId);
-                        if (found) {
-                          setEditorSections((prev) => {
-                            if (prev.some((s) => s.sectionId === found.section.id)) return prev;
-                            return [
-                              ...prev,
-                              {
-                                area: found.book.area,
-                                bookId: found.book.id,
-                                sectionId: found.section.id,
-                                bookTitle: found.book.shortTitle,
-                                sectionTitle: found.section.title,
-                                sectionNumber: found.section.number,
-                              },
-                            ];
-                          });
-                        }
-                      }}
-                      aria-label="第二列：选择该科目具体小节"
-                    >
-                      <option value="">+ 添加对应小节 (支持多选)...</option>
-                      {(() => {
-                        const activeBook = books.find((b) => b.id === editorBookId);
-                        if (!activeBook) return null;
-                        return activeBook.chapters.map((chap) => (
-                          <optgroup key={chap.id} label={`第 ${chap.number} 章 ${chap.title}`}>
-                            {chap.sections.map((s) => {
-                              const isSelected = editorSections.some((es) => es.sectionId === s.id);
-                              return (
-                                <option key={s.id} value={s.id} disabled={isSelected}>
-                                  {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
-                                </option>
-                              );
-                            })}
-                          </optgroup>
-                        ));
-                      })()}
-                    </select>
-                  </div>
-                  {editorSections.length > 0 && (
-                    <button
-                      type="button"
-                      className="journal-clear-sections-btn"
-                      onClick={() => setEditorSections([])}
-                      title="清空所有关联小节，转为纯时间流随笔"
-                    >
-                      清空关联
-                    </button>
-                  )}
-                </div>
-
-                {editorPaper && (
-                  <div className="journal-selected-sections-list">
-                    <span className={`journal-section-chip area-${editorPaper.area}`}>
-                      <span className="chip-text">
-                        🎯 模考复盘 · {editorPaper.paperTitle}
-                      </span>
-                      <button
-                        type="button"
-                        className="chip-remove-btn"
-                        onClick={() => setEditorPaper(null)}
-                        aria-label="移除试卷关联"
-                        title="移除试卷关联"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  </div>
-                )}
-
-                {editorSections.length > 0 && (
-                  <div className="journal-selected-sections-list">
-                    {editorSections.map((sec) => (
-                      <span key={sec.sectionId} className={`journal-section-chip area-${sec.area}`}>
-                        <span className="chip-text">
-                          {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
-                        </span>
-                        <button
-                          type="button"
-                          className="chip-remove-btn"
-                          onClick={() => setEditorSections((prev) => prev.filter((item) => item.sectionId !== sec.sectionId))}
-                          aria-label={`移除 ${sec.sectionTitle} 关联`}
-                          title="移除关联"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="journal-title-field">
-                {showTitleInput || editorTitle ? (
-                  <div className="journal-title-input-wrap">
-                    <input
-                      type="text"
-                      className="journal-title-input"
-                      placeholder="输入日志标题 (可选)..."
-                      value={editorTitle}
-                      onChange={(e) => setEditorTitle(e.target.value)}
-                    />
-                    {!editorTitle && (
-                      <button
-                        type="button"
-                        className="title-remove-btn"
-                        onClick={() => setShowTitleInput(false)}
-                      >
-                        隐藏标题
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="journal-add-title-btn"
-                    onClick={() => setShowTitleInput(true)}
-                  >
-                    + 添加标题 (可选)
-                  </button>
-                )}
-              </div>
-
-              <div className="journal-important-field">
-                <button
-                  type="button"
-                  className={`journal-important-toggle-btn ${editorImportant ? "is-important" : ""}`}
-                  onClick={() => setEditorImportant((prev) => !prev)}
-                  title={editorImportant ? "点击取消重点标记" : "标记为重点日志，便于后续重点筛选复习"}
-                >
-                  {editorImportant ? "★ 重点日志" : "☆ 设为重点"}
-                </button>
-              </div>
-            </div>
-
-            <div className="journal-editor-body mode-split">
-              <div className="journal-editor-pane pane-input">
-                <div className="journal-editor-toolbar" role="toolbar" aria-label="Markdown 格式化工具栏">
-                  <button
-                    type="button"
-                    className="journal-tb-btn journal-tb-btn--bold"
-                    title="加粗 (Ctrl+B)"
-                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "**", "**", "加粗文本"))}
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn journal-tb-btn--italic"
-                    title="斜体 (Ctrl+I)"
-                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "*", "*", "斜体文本"))}
-                  >
-                    I
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn journal-tb-btn--strike"
-                    title="删除线 (Ctrl+Shift+X)"
-                    onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "~~", "~~", "删除线文本"))}
-                  >
-                    S
-                  </button>
-                  <span className="journal-tb-divider" />
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="1级标题 (Ctrl+1)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 1))}
-                  >
-                    H1
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="2级标题 (Ctrl+2)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 2))}
-                  >
-                    H2
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="3级标题 (Ctrl+3)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 3))}
-                  >
-                    H3
-                  </button>
-                  <span className="journal-tb-divider" />
-                  <button
-                    type="button"
-                    className="journal-tb-btn journal-tb-btn--mono"
-                    title="LaTeX 数学公式 (Ctrl+M)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyMath(t, s, e))}
-                  >
-                    $fx$
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn journal-tb-btn--mono"
-                    title="代码块 (Ctrl+`)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyCode(t, s, e))}
-                  >
-                    &lt;/&gt;
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="超链接 (Ctrl+K)"
-                    onClick={() => applyEditorFormat((t, s, e) => applyLink(t, s, e))}
-                  >
-                    🔗
-                  </button>
-                  <span className="journal-tb-divider" />
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="无序列表 (Ctrl+Shift+U)"
-                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "bullet"))}
-                  >
-                    • 列表
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="有序列表 (Ctrl+Shift+O)"
-                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "number"))}
-                  >
-                    1. 列表
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="待办清单 (Ctrl+Shift+T)"
-                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "task"))}
-                  >
-                    ☑ 待办
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="引用块 (Ctrl+Shift+Q)"
-                    onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "quote"))}
-                  >
-                    ❝ 引用
-                  </button>
-                  <button
-                    type="button"
-                    className="journal-tb-btn"
-                    title="插入表格模板"
-                    onClick={() => applyEditorFormat((t, s, e) => applyTableTemplate(t, s, e))}
-                  >
-                    ⊞ 表格
-                  </button>
-                </div>
-
-                <textarea
-                  ref={journalTextareaRef}
-                  className="journal-textarea"
-                  placeholder="写下今天的学习心得、对定理/算法的理解或复盘体会...&#10;&#10;支持 Markdown 语法与 LaTeX 数学公式：&#10;- 行内公式：$O(n \log n)$ 或 $e^{i\pi} + 1 = 0$&#10;- 块级公式：$$\int_0^1 f(x)dx$$&#10;- 代码块：```cpp ... ```&#10;- 任务列表：- [ ] 待复习"
-                  value={editorContent}
-                  onChange={(e) => setEditorContent(e.target.value)}
-                  onKeyDown={handleEditorKeyDown}
-                  autoFocus
-                />
-                <div className="journal-editor-statusbar">
-                  <span>{editorContent.length} 字</span>
-                  <span className="math-hint">快捷键：Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+K 链接 · Ctrl+M 公式 · Tab 缩进</span>
-                </div>
-              </div>
-
-              <div className="journal-editor-pane pane-preview">
-                <div className="preview-header">
-                  <span className="preview-label">实时渲染预览</span>
-                </div>
-                <div className="preview-content-scroll">
-                  {editorTitle && <h3 className="preview-journal-title">{editorTitle}</h3>}
-                  {editorContent.trim() ? (
-                    <MarkdownRenderer content={editorContent} />
-                  ) : (
-                    <p className="preview-empty-hint">在左侧输入 Markdown 内容即可在此实时预览。</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <footer className="journal-editor-footer">
-              <div className="editor-footer-left">
-                <span className="editor-shortcut-hint">支持 GFM 表格、Task List 与 KaTeX 公式 · 按 Ctrl+S 保存</span>
-              </div>
-              <div className="editor-footer-actions">
-                <button
-                  type="button"
-                  className="journal-btn journal-btn--ghost"
-                  onClick={() => {
-                    setIsEditorOpen(false);
-                    setEditingJournalId(null);
-                  }}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="journal-btn journal-btn--primary"
-                  onClick={handleSaveJournal}
-                >
-                  {editingJournalId ? "保存修改" : "保存日志"}
-                </button>
-              </div>
-            </footer>
-          </div>
-        </div>
+        <JournalEditorModal
+          editingJournalId={editingJournalId}
+          initialTitle={editorTitle}
+          initialContent={editorContent}
+          initialImportant={editorImportant}
+          initialPaper={editorPaper}
+          initialSections={editorSections}
+          books={books}
+          onClose={() => {
+            setIsEditorOpen(false);
+            setEditingJournalId(null);
+          }}
+          onSave={handleSaveJournalPayload}
+        />
       )}
 
       {/* Blog Publish Modal */}
@@ -4951,586 +4216,32 @@ export function StudyDashboard() {
 
       {/* Visual Question Board Modal */}
       {activeQuestionPaper && (
-        <div className="confirm-overlay paper-q-modal-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setActivePaperQuestionModalId(null); }}>
-          <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
-            <div className="paper-q-modal-header">
-              <h2 id="q-modal-title">{activeQuestionPaper.title.replace(/(\d{4})年\s*/, "$1 ")}</h2>
-              <div className="paper-q-header-right">
-                {(() => {
-                  const qSummary = getPaperQuestionSummary(activeQuestionPaper);
-                  return (
-                    <div className="paper-q-header-metrics">
-                      <span className="q-header-pill q-pill--correct" title="正确 / 满分">
-                        <span className="q-pill-dot dot-correct" /> {qSummary?.correctCount ?? 0}
-                      </span>
-                      <span className="q-header-pill q-pill--partial" title="部分得分 / 良好">
-                        <span className="q-pill-dot dot-partial" /> {qSummary?.partialCount ?? 0}
-                      </span>
-                      <span className="q-header-pill q-pill--wrong" title="错题 / 低分">
-                        <span className="q-pill-dot dot-wrong" /> {qSummary?.wrongCount ?? 0}
-                      </span>
-                    </div>
-                  );
-                })()}
-                <button
-                  type="button"
-                  className="paper-modal-close-btn"
-                  onClick={() => setActivePaperQuestionModalId(null)}
-                  title="关闭"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Action Toolbar */}
-            <div className="paper-q-tools">
-              <div className="q-quick-input-group">
-                <label htmlFor="quick-wrong-input">批量录入错题：</label>
-                <input
-                  id="quick-wrong-input"
-                  type="text"
-                  placeholder="如: 3, 8, 14, 43"
-                  value={quickWrongInput}
-                  onChange={(e) => setQuickWrongInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && quickWrongInput.trim()) {
-                      e.preventDefault();
-                      batchSetWrongQuestions(activeQuestionPaper.id, quickWrongInput);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn-apply-quick-wrong"
-                  disabled={!quickWrongInput.trim()}
-                  onClick={() => batchSetWrongQuestions(activeQuestionPaper.id, quickWrongInput)}
-                >
-                  应用
-                </button>
-              </div>
-
-              <div className="q-quick-btn-group">
-                <button
-                  type="button"
-                  className="btn-clear-questions"
-                  onClick={() => clearPaperQuestions(activeQuestionPaper.id)}
-                  title="重置清空本卷所有做题记录"
-                >
-                  一键清零
-                </button>
-              </div>
-            </div>
-
-            {/* Question Heatmap Matrix */}
-            <div className="paper-q-heatmap-matrix">
-              {activeQuestionPaper.area === "math" ? (
-                /* Math: 1~10 选择 (5分), 11~16 填空 (5分), 17~22 解答 (10~12分) */
-                <div className="q-subjective-container">
-                  {/* Part 1: 客观题 (1~16, 包含单选与填空，纯点选对错) */}
-                  <div className="q-type-block">
-                    <div className="q-type-header">
-                      <div className="q-type-header-left">
-                        <span className="q-type-title">客观题</span>
-                        <span className="q-type-subtitle">第 1 ~ 16 题 · 每题 5 分 · 共 80 分</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-choice-all-correct"
-                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
-                        title="将客观选择与填空设为全部正确"
-                      >
-                        一键全对
-                      </button>
-                    </div>
-                    <div className="q-type-rows">
-                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
-                        <div className="q-heatmap-row" key={grp.name}>
-                          <div className="q-subject-label">
-                            <strong className="q-label-name">{grp.name}</strong>
-                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                          </div>
-                          <div className="q-heatmap-chips">
-                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                              const state = activeQuestionPaper.questions?.[num];
-                              return (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                                >
-                                  {num}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Part 2: 解答题 (17~22) */}
-                  <div className="q-type-block q-type-block--comprehensive">
-                    <div className="q-type-header">
-                      <span className="q-type-title">解答题</span>
-                      <span className="q-type-subtitle">第 17 ~ 22 题 · 共 70 分</span>
-                    </div>
-                    <div className="q-rating-grid">
-                      {[
-                        { num: 17, max: 10 },
-                        { num: 18, max: 12 },
-                        { num: 19, max: 12 },
-                        { num: 20, max: 12 },
-                        { num: 21, max: 12 },
-                        { num: 22, max: 12 },
-                      ].map((item) => {
-                        const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
-                        return (
-                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
-                            <div className="q-rating-label">
-                              <span className="q-rating-badge">解答</span>
-                              <strong className="q-rating-title">第 {item.num} 题</strong>
-                            </div>
-                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 · 满分（再次点击取消）"
-                              >
-                                优
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 · 部分分（再次点击取消）"
-                              >
-                                良
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 · 失分（再次点击取消）"
-                              >
-                                差
-                              </button>
-                            </div>
-                            <div className="q-score-input-wrap">
-                              <input
-                                type="number"
-                                min={0}
-                                max={item.max}
-                                step={0.5}
-                                placeholder="0"
-                                value={score ?? ""}
-                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
-                              />
-                              <span className="q-score-unit">分</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              ) : activeQuestionPaper.area === "politics" ? (
-                /* Politics: 1~16 单选 (1分), 17~33 多选 (2分), 共 50 分，纯选择题 */
-                <div className="q-subjective-container">
-                  {/* Part 1: 选择题 (1~33) */}
-                  <div className="q-type-block">
-                    <div className="q-type-header">
-                      <div className="q-type-header-left">
-                        <span className="q-type-title">选择题</span>
-                        <span className="q-type-subtitle">第 1 ~ 33 题 · 单选 1~16 题 (每题 1 分) · 多选 17~33 题 (每题 2 分) · 共 50 分</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-choice-all-correct"
-                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
-                        title="将选择题设为全部正确"
-                      >
-                        一键全对
-                      </button>
-                    </div>
-                    <div className="q-type-rows">
-                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
-                        <div className="q-heatmap-row" key={grp.name}>
-                          <div className="q-subject-label">
-                            <strong className="q-label-name">{grp.name}</strong>
-                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                          </div>
-                          <div className="q-heatmap-chips">
-                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                              const state = activeQuestionPaper.questions?.[num];
-                              return (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                                >
-                                  {num}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : activeQuestionPaper.area === "english" ? (
-                /* English: 1~45 选择, 46~50 英译汉, 51~52 写作 */
-                <div className="q-subjective-container">
-                  {/* Part 1: 选择题 (1~45, 完形、传统阅读、新题型) */}
-                  <div className="q-type-block">
-                    <div className="q-type-header">
-                      <div className="q-type-header-left">
-                        <span className="q-type-title">选择题</span>
-                        <span className="q-type-subtitle">第 1 ~ 45 题 · 共 60 分</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-choice-all-correct"
-                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
-                        title="将选择题设为全部正确"
-                      >
-                        一键全对
-                      </button>
-                    </div>
-                    <div className="q-type-rows">
-                      {modalChoiceGroups(activeQuestionPaper.area).map((grp) => (
-                        <div className="q-heatmap-row" key={grp.name}>
-                          <div className="q-subject-label">
-                            <strong className="q-label-name">{grp.name}</strong>
-                            <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                          </div>
-                          <div className="q-heatmap-chips">
-                            {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                              const state = activeQuestionPaper.questions?.[num];
-                              return (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                  title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                                  onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                                >
-                                  {num}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Part 2: 翻译 (46~50) */}
-                  <div className="q-type-block q-type-block--comprehensive">
-                    <div className="q-type-header">
-                      <span className="q-type-title">翻译</span>
-                      <span className="q-type-subtitle">第 46 ~ 50 题 · 共 10 分</span>
-                    </div>
-                    <div className="q-rating-grid">
-                      {[
-                        { num: 46, label: "翻译 1", max: 2 },
-                        { num: 47, label: "翻译 2", max: 2 },
-                        { num: 48, label: "翻译 3", max: 2 },
-                        { num: 49, label: "翻译 4", max: 2 },
-                        { num: 50, label: "翻译 5", max: 2 },
-                      ].map((item) => {
-                        const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
-                        return (
-                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
-                            <div className="q-rating-label">
-                              <span className="q-rating-badge">{item.label}</span>
-                              <strong className="q-rating-title">第 {item.num} 题</strong>
-                            </div>
-                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 · 满分（再次点击取消）"
-                              >
-                                优
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 · 部分分（再次点击取消）"
-                              >
-                                良
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 · 失分（再次点击取消）"
-                              >
-                                差
-                              </button>
-                            </div>
-                            <div className="q-score-input-wrap">
-                              <input
-                                type="number"
-                                min={0}
-                                max={item.max}
-                                step={0.5}
-                                placeholder="0"
-                                value={score ?? ""}
-                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
-                              />
-                              <span className="q-score-unit">分</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Part 3: 写作 (51~52) */}
-                  <div className="q-type-block q-type-block--comprehensive">
-                    <div className="q-type-header">
-                      <span className="q-type-title">写作</span>
-                      <span className="q-type-subtitle">第 51 ~ 52 题 · 共 30 分</span>
-                    </div>
-                    <div className="q-rating-grid">
-                      {[
-                        { num: 51, label: "小作文", max: 10 },
-                        { num: 52, label: "大作文", max: 20 },
-                      ].map((item) => {
-                        const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
-                        return (
-                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
-                            <div className="q-rating-label">
-                              <span className="q-rating-badge">{item.label}</span>
-                              <strong className="q-rating-title">第 {item.num} 题</strong>
-                            </div>
-                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 · 满分（再次点击取消）"
-                              >
-                                优
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 · 部分分（再次点击取消）"
-                              >
-                                良
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 · 失分（再次点击取消）"
-                              >
-                                差
-                              </button>
-                            </div>
-                            <div className="q-score-input-wrap">
-                              <input
-                                type="number"
-                                min={0}
-                                max={item.max}
-                                step={0.5}
-                                placeholder="0"
-                                value={score ?? ""}
-                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
-                              />
-                              <span className="q-score-unit">分</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* 408: 1~40 选择 (每题 2 分), 41~47 综合题 */
-                <div className="q-subjective-container">
-                  {/* Part 1: 选择题 (1~40) */}
-                  <div className="q-type-block">
-                    <div className="q-type-header">
-                      <div className="q-type-header-left">
-                        <span className="q-type-title">选择题</span>
-                        <span className="q-type-subtitle">第 1 ~ 40 题 · 每题 2 分 · 共 80 分</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-choice-all-correct"
-                        onClick={() => markAllPaperQuestions(activeQuestionPaper.id, "correct")}
-                        title="将选择题设为全部正确"
-                      >
-                        一键全对
-                      </button>
-                    </div>
-                    <div className="q-type-rows">
-                      {CS408_PAPER_STRUCTURE.groups.filter((g) => g.type === "选择题").map((grp) => {
-                        const numbers = Array.from({ length: grp.count }, (_, i) => grp.start + i);
-                        const abbrMap: Record<string, string> = {
-                          "数据结构": "DS",
-                          "计算机组成原理": "CO",
-                          "操作系统": "OS",
-                          "计算机网络": "CN",
-                        };
-                        const subjectAbbr = abbrMap[grp.subject ?? ""] ?? grp.subject;
-                        return (
-                          <div className="q-heatmap-row" key={`choice-${grp.subject}`}>
-                            <div className="q-subject-label">
-                              <strong className="q-label-name">{subjectAbbr}</strong>
-                              <span className="q-label-range">{grp.start}~{grp.end}</span>
-                            </div>
-                            <div className="q-heatmap-chips">
-                              {numbers.map((num) => {
-                                const state = activeQuestionPaper.questions?.[num];
-                                return (
-                                  <button
-                                    key={num}
-                                    type="button"
-                                    className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                    title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 / 错题 / 取消`}
-                                    onClick={() => togglePaperQuestion(activeQuestionPaper.id, num, true)}
-                                  >
-                                    {num}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Part 2: 综合应用题 (41~47) */}
-                  <div className="q-type-block q-type-block--comprehensive">
-                    <div className="q-type-header">
-                      <span className="q-type-title">综合应用题</span>
-                      <span className="q-type-subtitle">第 41 ~ 47 题 · 共 70 分</span>
-                    </div>
-                    <div className="q-rating-grid">
-                      {[
-                        { num: 41, subj: "DS", max: 13 },
-                        { num: 42, subj: "DS", max: 13 },
-                        { num: 43, subj: "CO", max: 13 },
-                        { num: 44, subj: "CO", max: 13 },
-                        { num: 45, subj: "OS", max: 12 },
-                        { num: 46, subj: "OS", max: 12 },
-                        { num: 47, subj: "CN", max: 11 },
-                      ].map((item) => {
-                        const state = activeQuestionPaper.questions?.[item.num];
-                        const score = activeQuestionPaper.questionScores?.[item.num];
-                        return (
-                          <div className={`q-rating-item ${state ? `state-${state}` : ""}`} key={item.num}>
-                            <div className="q-rating-label">
-                              <span className="q-rating-badge">{item.subj}</span>
-                              <strong className="q-rating-title">第 {item.num} 题</strong>
-                            </div>
-                            <div className="q-rating-seg" role="radiogroup" aria-label={`第 ${item.num} 题评级`}>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "correct", item.max)}
-                                title="优 · 满分（再次点击取消）"
-                              >
-                                优
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "partial", item.max)}
-                                title="良 · 部分分（再次点击取消）"
-                              >
-                                良
-                              </button>
-                              <button
-                                type="button"
-                                className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
-                                onClick={() => handleSubjectiveRating(activeQuestionPaper.id, item.num, "wrong", item.max)}
-                                title="差 · 失分（再次点击取消）"
-                              >
-                                差
-                              </button>
-                            </div>
-                            <div className="q-score-input-wrap">
-                              <input
-                                type="number"
-                                min={0}
-                                max={item.max}
-                                step={0.5}
-                                placeholder="0"
-                                value={score ?? ""}
-                                onChange={(e) => handleSubjectiveScoreInput(activeQuestionPaper.id, item.num, e.target.value, item.max)}
-                              />
-                              <span className="q-score-unit">分</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions Footer */}
-            <div className="paper-q-modal-footer">
-              {(() => {
-                const wrongNums = Object.entries(activeQuestionPaper.questions ?? {})
-                  .filter(([_, st]) => st === "wrong")
-                  .map(([k]) => parseInt(k, 10))
-                  .sort((a, b) => a - b);
-                return (
-                  <button
-                    type="button"
-                    className="btn-create-wrong-journal"
-                    onClick={() => {
-                      const cleanTitle = activeQuestionPaper.title.replace(/^(\d{4}年)\s+/, "$1");
-                      const scoreStr = typeof activeQuestionPaper.score === "number" ? `${activeQuestionPaper.score}` : "--";
-                      const title = `【模考复盘】${cleanTitle}`;
-                      const template = `## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 做后感悟\n`;
-                      openCreateJournal({
-                        type: "paper",
-                        area: activeQuestionPaper.area,
-                        paperId: activeQuestionPaper.id,
-                        paperTitle: cleanTitle,
-                      });
-                      setEditorTitle(title);
-                      setEditorContent(template);
-                      setActivePaperQuestionModalId(null);
-                    }}
-                  >
-                    生成错题复盘日志 {wrongNums.length > 0 ? `(${wrongNums.length}道错题)` : ""}
-                  </button>
-                );
-              })()}
-
-              <button
-                type="button"
-                className="btn-confirm"
-                onClick={() => setActivePaperQuestionModalId(null)}
-              >
-                完成
-              </button>
-            </div>
-          </div>
-        </div>
+        <AnswerSheetModal
+          paper={activeQuestionPaper}
+          onClose={() => setActivePaperQuestionModalId(null)}
+          onToggleQuestion={(num, isSingleChoice) => togglePaperQuestion(activeQuestionPaper.id, num, isSingleChoice)}
+          onMarkAllQuestions={(state) => markAllPaperQuestions(activeQuestionPaper.id, state)}
+          onSubjectiveRating={(qNum, rating, maxScore) => handleSubjectiveRating(activeQuestionPaper.id, qNum, rating, maxScore)}
+          onSubjectiveScoreInput={(qNum, rawVal, maxScore) => handleSubjectiveScoreInput(activeQuestionPaper.id, qNum, rawVal, maxScore)}
+          onBatchSetWrong={(wrongStr) => batchSetWrongQuestions(activeQuestionPaper.id, wrongStr)}
+          onClearQuestions={() => clearPaperQuestions(activeQuestionPaper.id)}
+          onCreateWrongJournal={(paper) => {
+            const cleanTitle = paper.title.replace(/^(\d{4}年)\s+/, "$1");
+            const scoreStr = typeof paper.score === "number" ? `${paper.score}` : "--";
+            const title = `【模考复盘】${cleanTitle}`;
+            const template = `## 整体情况\n- **模考得分**：\${scoreStr} 分\n\n## 做后感悟\n`;
+            openCreateJournal({
+              type: "paper",
+              area: paper.area,
+              paperId: paper.id,
+              paperTitle: cleanTitle,
+            });
+            setEditorTitle(title);
+            setEditorContent(template);
+            setActivePaperQuestionModalId(null);
+          }}
+          getPaperQuestionSummary={getPaperQuestionSummary}
+        />
       )}
     </div>
   );
