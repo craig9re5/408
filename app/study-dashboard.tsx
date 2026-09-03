@@ -542,6 +542,7 @@ export function StudyDashboard() {
   const [backups, setBackups] = useState<LocalBackup[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
+  const [workspaceId, setWorkspaceId] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
@@ -586,13 +587,27 @@ export function StudyDashboard() {
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const repositoryRef = useRef<StorageRepository | null>(null);
+  const repositoryWorkspaceRef = useRef<string>("");
   const deletedJournalIdsRef = useRef<string[]>([]);
   const deletedPaperIdsRef = useRef<string[]>([]);
   const lastSavedPayloadRef = useRef<string>("");
 
   const repository = useCallback((): StorageRepository => {
-    if (!repositoryRef.current) repositoryRef.current = new StorageRepository(window.localStorage);
+    const namespace = workspaceId || "main";
+    if (!repositoryRef.current || repositoryWorkspaceRef.current !== namespace) {
+      repositoryRef.current = new StorageRepository(window.localStorage, namespace);
+      repositoryWorkspaceRef.current = namespace;
+    }
     return repositoryRef.current;
+  }, [workspaceId]);
+
+  const resetSpaceState = useCallback((namespace: string) => {
+    setWorkspaceId(namespace);
+    repositoryRef.current = new StorageRepository(window.localStorage, namespace || "main");
+    repositoryWorkspaceRef.current = namespace || "main";
+    deletedJournalIdsRef.current = [];
+    deletedPaperIdsRef.current = [];
+    lastSavedPayloadRef.current = "";
   }, []);
 
   const applyRemoteData = useCallback((body: Partial<StudyAppData>, includeLocal: boolean) => {
@@ -3615,12 +3630,22 @@ export function StudyDashboard() {
                             const paperJournals = journalsByPaper[paper.id] ?? [];
                             return (
                               <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
-                                <div className="bento-card-top">
-                                  <div className="bento-title-wrap">
-                                    {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
-                                    <strong className="bento-paper-title">{paper.title}</strong>
+                                <div className="bento-card-top bento-card-top--mock">
+                                  <div className="bento-title-row">
+                                    <div className="bento-title-wrap">
+                                      {paper.groupName && <span className="paper-group-badge">{paper.groupName}</span>}
+                                      <strong className="bento-paper-title">{paper.title}</strong>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="paper-btn-del"
+                                      title="删除该模拟卷"
+                                      onClick={() => setPendingDeletePaperId(paper.id)}
+                                    >
+                                      ✕
+                                    </button>
                                   </div>
-                                  <div className="bento-top-controls">
+                                  <div className="bento-card-actions">
                                     <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
                                       <input
                                         type="number"
@@ -3663,15 +3688,6 @@ export function StudyDashboard() {
                                       <span className="bento-check-box" />
                                       <span className="bento-check-text">二刷</span>
                                     </label>
-
-                                    <button
-                                      type="button"
-                                      className="paper-btn-del"
-                                      title="删除该模拟卷"
-                                      onClick={() => setPendingDeletePaperId(paper.id)}
-                                    >
-                                      ✕
-                                    </button>
                                   </div>
                                 </div>
 

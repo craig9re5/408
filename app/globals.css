@@ -3593,6 +3593,36 @@ input[type="number"] {
   min-width: 0;
 }
 
+/* Mock cards: title owns the first row (with delete at its tail),
+   score + status checks form a dedicated action row beneath. */
+.bento-card-top--mock {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.bento-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bento-title-row .bento-title-wrap {
+  flex: 1 1 auto;
+}
+
+.bento-title-row .paper-btn-del {
+  flex-shrink: 0;
+}
+
+.bento-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 /* Inline score field: digits and unit are one running-text group —
    same typeface, same size, shared center; the input shrink-wraps its
    content so no dead space sits between number and unit. */
