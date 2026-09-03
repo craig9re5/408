@@ -1770,6 +1770,10 @@ input[type="number"] {
   opacity: 0.85;
   background: #faf8f2;
 }
+.sprint-bento-card .section-record-btn {
+  opacity: 1;
+  background: #faf8f2;
+}
 .section-record-btn:hover {
   opacity: 1;
   color: #fff;
@@ -3514,8 +3518,10 @@ input[type="number"] {
 .bento-card-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  column-gap: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -3557,6 +3563,7 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 1 1 120px;
   overflow: hidden;
 }
 
@@ -3572,8 +3579,12 @@ input[type="number"] {
 .bento-top-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 6px;
+  column-gap: 8px;
   margin-left: auto;
+  min-width: 0;
 }
 
 /* Inline score box */
@@ -3597,6 +3608,8 @@ input[type="number"] {
 .bento-score-input {
   min-width: 44px;
   width: 50px;
+  height: 22px;
+  line-height: 22px;
   border: none;
   background: transparent;
   font-size: 14px;
@@ -3605,7 +3618,7 @@ input[type="number"] {
   text-align: center;
   color: var(--coral);
   outline: none;
-  padding: 2px 0;
+  padding: 0;
 }
 
 .bento-score-input::placeholder {
@@ -3713,6 +3726,10 @@ input[type="number"] {
 
 /* Bento Mini Heatmap Strip */
 .bento-mini-heatmap {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   background: rgba(23, 33, 41, 0.025);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -3731,11 +3748,35 @@ input[type="number"] {
   box-shadow: 0 3px 8px rgba(35, 42, 44, 0.04);
 }
 
+.bento-mini-heatmap:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
 .mini-heatmap-head {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   min-height: 18px;
+}
+
+.mini-heatmap-open-btn {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.bento-mini-heatmap:hover .mini-heatmap-open-btn {
+  border-color: var(--coral);
+  color: var(--coral);
 }
 
 .mini-heatmap-tags {
@@ -4449,10 +4490,9 @@ input[type="number"] {
 .q-rating-seg {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  background: rgba(23, 33, 41, 0.05);
-  border-radius: 8px;
+  gap: 4px;
+  background: transparent;
+  padding: 0;
 }
 
 .q-rating-btn {

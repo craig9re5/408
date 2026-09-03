@@ -795,7 +795,9 @@ export function normalizeJournalContext(value: unknown): JournalContext | null {
 
     value.sections.forEach((item) => {
       if (!isRecord(item)) return;
-      const area = item.area === "math" ? "math" : item.area === "408" ? "408" : null;
+      const area = item.area === "math" || item.area === "408" || item.area === "english" || item.area === "politics"
+        ? item.area
+        : null;
       if (!area) return;
       if (typeof item.bookId !== "string" || !item.bookId.trim()) return;
       if (typeof item.sectionId !== "string" || !item.sectionId.trim()) return;
@@ -820,7 +822,9 @@ export function normalizeJournalContext(value: unknown): JournalContext | null {
     };
   }
 
-  const area = value.area === "math" ? "math" : value.area === "408" ? "408" : null;
+  const area = value.area === "math" || value.area === "408" || value.area === "english" || value.area === "politics"
+    ? value.area
+    : null;
   if (!area) return null;
 
   if (value.type === "project") {
@@ -969,6 +973,12 @@ export function defaultPastPapers(): PaperRecord[] {
   return list;
 }
 
+export function maxPaperScore(area: StudyArea): number {
+  if (area === "politics") return 50;
+  if (area === "english") return 100;
+  return 150;
+}
+
 export function normalizePaperRecord(value: unknown): PaperRecord | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || !value.id.trim()) return null;
@@ -981,7 +991,8 @@ export function normalizePaperRecord(value: unknown): PaperRecord | null {
   const year = typeof value.year === "number" && value.year >= 2000 && value.year <= 2100 ? value.year : undefined;
   const completed = Boolean(value.completed);
   const completedAt = isDate(value.completedAt) ? value.completedAt : "";
-  const score = typeof value.score === "number" && !Number.isNaN(value.score) && value.score >= 0 && value.score <= 150
+  const maxScore = maxPaperScore(area);
+  const score = typeof value.score === "number" && !Number.isNaN(value.score) && value.score >= 0 && value.score <= maxScore
     ? Math.round(value.score * 10) / 10
     : null;
   const durationMinutes = typeof value.durationMinutes === "number" && value.durationMinutes > 0 && value.durationMinutes <= 600
@@ -1097,29 +1108,22 @@ export function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperR
         return;
       }
 
-      let questions = p.questions;
-      if (p.questions !== undefined && Object.keys(p.questions).length === 0) {
-        questions = {};
-      } else if (existing.questions || p.questions) {
-        questions = { ...(existing.questions ?? {}), ...(p.questions ?? {}) };
-      }
-
-      let questionScores = p.questionScores;
-      if (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0) {
-        questionScores = {};
-      } else if (existing.questionScores || p.questionScores) {
-        questionScores = { ...(existing.questionScores ?? {}), ...(p.questionScores ?? {}) };
-      }
+      // 本地是当前内存态（含此前远端数据），远端是轮询到的旧快照：
+      // 标量一律本地优先（早前的 `||` 会导致取消勾选/清空分数被复活）；
+      // 题库以“本地是否触碰过（!== undefined）”为准，触碰过则整体采用本地，
+      // 否则保留远端。空对象 `{}` 表示“已清空”，与“未触碰 undefined”区分。
+      let questions = p.questions !== undefined ? p.questions : existing.questions;
+      let questionScores = p.questionScores !== undefined ? p.questionScores : existing.questionScores;
 
       map.set(p.id, {
         ...existing,
         ...p,
-        completed: localExplicitClear ? (p.completed ?? false) : (p.completed || existing.completed),
-        completedAt: localExplicitClear ? (p.completedAt ?? "") : (p.completedAt || existing.completedAt),
-        score: localExplicitClear ? p.score : (p.score ?? existing.score ?? null),
-        durationMinutes: localExplicitClear ? p.durationMinutes : (p.durationMinutes ?? existing.durationMinutes ?? null),
-        secondRound: localExplicitClear ? (p.secondRound ?? false) : (p.secondRound || existing.secondRound),
-        secondRoundAt: localExplicitClear ? (p.secondRoundAt ?? "") : (p.secondRoundAt || existing.secondRoundAt),
+        completed: p.completed,
+        completedAt: p.completed ? (p.completedAt || existing.completedAt) : "",
+        score: p.score ?? null,
+        durationMinutes: p.durationMinutes ?? null,
+        secondRound: p.secondRound ?? false,
+        secondRoundAt: p.secondRound ? (p.secondRoundAt || existing.secondRoundAt) : "",
         questions,
         questionScores,
       });

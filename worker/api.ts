@@ -38,22 +38,23 @@ type ProjectSettings = {
   "408": { examDate: string };
   math: { examDate: string };
   english: { examDate: string };
+  politics: { examDate: string };
 };
 
 export type JournalProjectContext = {
   type: "project";
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
 };
 
 export type JournalSubjectContext = {
   type: "subject";
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
   bookId: string;
   bookTitle?: string;
 };
 
 export type JournalSectionItem = {
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
   bookId: string;
   sectionId: string;
   bookTitle?: string;
@@ -63,7 +64,7 @@ export type JournalSectionItem = {
 
 export type JournalSectionContext = {
   type: "section";
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
   bookId: string;
   sectionId: string;
   bookTitle?: string;
@@ -78,7 +79,7 @@ export type JournalSectionsContext = {
 
 export type JournalPaperContext = {
   type: "paper";
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
   paperId: string;
   paperTitle: string;
 };
@@ -113,7 +114,7 @@ export type QuestionState = "correct" | "partial" | "wrong";
 export type PaperRecord = {
   id: string;
   kind: PaperKind;
-  area: "408" | "math" | "english";
+  area: "408" | "math" | "english" | "politics";
   title: string;
   groupName?: string;
   year?: number;
@@ -149,6 +150,7 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   "408": { examDate: "2026-12-19" },
   math: { examDate: "2026-12-19" },
   english: { examDate: "2026-12-19" },
+  politics: { examDate: "2026-12-19" },
 };
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -326,7 +328,7 @@ function normalizeProjectSettings(value: unknown): ProjectSettings {
   const normalized = structuredClone(DEFAULT_PROJECT_SETTINGS);
   if (!value || typeof value !== "object" || Array.isArray(value)) return normalized;
   const settings = value as Record<string, unknown>;
-  (["408", "math", "english"] as const).forEach((area) => {
+  (["408", "math", "english", "politics"] as const).forEach((area) => {
     const candidate = settings[area];
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
       const examDate = (candidate as Record<string, unknown>).examDate;
@@ -370,7 +372,7 @@ function normalizeJournalContext(value: unknown): JournalContext | null {
     candidate.sections.forEach((item) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return;
       const secCandidate = item as Record<string, unknown>;
-      const area = secCandidate.area === "math" ? "math" : secCandidate.area === "english" ? "english" : secCandidate.area === "408" ? "408" : null;
+      const area = secCandidate.area === "math" || secCandidate.area === "english" || secCandidate.area === "politics" || secCandidate.area === "408" ? secCandidate.area : null;
       if (!area) return;
       if (typeof secCandidate.bookId !== "string" || !secCandidate.bookId.trim()) return;
       if (typeof secCandidate.sectionId !== "string" || !secCandidate.sectionId.trim()) return;
@@ -395,7 +397,7 @@ function normalizeJournalContext(value: unknown): JournalContext | null {
     };
   }
 
-  const area = candidate.area === "math" ? "math" : candidate.area === "english" ? "english" : candidate.area === "408" ? "408" : null;
+  const area = candidate.area === "math" || candidate.area === "english" || candidate.area === "politics" || candidate.area === "408" ? candidate.area : null;
   if (!area) return null;
 
   if (candidate.type === "project") {
@@ -549,7 +551,8 @@ function normalizePaperRecord(value: unknown): PaperRecord | null {
   const year = typeof candidate.year === "number" && candidate.year >= 2000 && candidate.year <= 2100 ? candidate.year : undefined;
   const completed = Boolean(candidate.completed);
   const completedAt = typeof candidate.completedAt === "string" && isDate(candidate.completedAt) ? candidate.completedAt : "";
-  const score = typeof candidate.score === "number" && !Number.isNaN(candidate.score) && candidate.score >= 0 && candidate.score <= 150
+  const maxScore = area === "politics" ? 50 : area === "english" ? 100 : 150;
+  const score = typeof candidate.score === "number" && !Number.isNaN(candidate.score) && candidate.score >= 0 && candidate.score <= maxScore
     ? Math.round(candidate.score * 10) / 10
     : null;
   const durationMinutes = typeof candidate.durationMinutes === "number" && candidate.durationMinutes > 0 && candidate.durationMinutes <= 600
@@ -667,29 +670,19 @@ function mergePapers(local: PaperRecord[], remote: PaperRecord[]): PaperRecord[]
         return;
       }
 
-      let questions = p.questions;
-      if (p.questions !== undefined && Object.keys(p.questions).length === 0) {
-        questions = {};
-      } else if (existing.questions || p.questions) {
-        questions = { ...(existing.questions ?? {}), ...(p.questions ?? {}) };
-      }
-
-      let questionScores = p.questionScores;
-      if (p.questionScores !== undefined && Object.keys(p.questionScores).length === 0) {
-        questionScores = {};
-      } else if (existing.questionScores || p.questionScores) {
-        questionScores = { ...(existing.questionScores ?? {}), ...(p.questionScores ?? {}) };
-      }
+      // 与前端保持一致：本地为当前内存态，标量本地优先；题库以是否触碰为准
+      const questions = p.questions !== undefined ? p.questions : existing.questions;
+      const questionScores = p.questionScores !== undefined ? p.questionScores : existing.questionScores;
 
       map.set(p.id, {
         ...existing,
         ...p,
-        completed: localExplicitClear ? (p.completed ?? false) : (p.completed || existing.completed),
-        completedAt: localExplicitClear ? (p.completedAt ?? "") : (p.completedAt || existing.completedAt),
-        score: localExplicitClear ? p.score : (p.score ?? existing.score ?? null),
-        durationMinutes: localExplicitClear ? p.durationMinutes : (p.durationMinutes ?? existing.durationMinutes ?? null),
-        secondRound: localExplicitClear ? (p.secondRound ?? false) : (p.secondRound || existing.secondRound),
-        secondRoundAt: localExplicitClear ? (p.secondRoundAt ?? "") : (p.secondRoundAt || existing.secondRoundAt),
+        completed: p.completed,
+        completedAt: p.completed ? (p.completedAt || existing.completedAt) : "",
+        score: p.score ?? null,
+        durationMinutes: p.durationMinutes ?? null,
+        secondRound: p.secondRound ?? false,
+        secondRoundAt: p.secondRound ? (p.secondRoundAt || existing.secondRoundAt) : "",
         questions,
         questionScores,
       });

@@ -45,6 +45,7 @@ import {
   defaultPastPapers,
   normalizePapers,
   mergePapers,
+  maxPaperScore,
   MATH_PAPER_STRUCTURE,
   CS408_PAPER_STRUCTURE,
   ENGLISH_PAPER_STRUCTURE,
@@ -1066,7 +1067,7 @@ export function StudyDashboard() {
       if (p.id !== id) return p;
       const nextPatch = { ...patch };
       if (typeof nextPatch.score === "number" && !Number.isNaN(nextPatch.score)) {
-        const maxScore = p.area === "politics" ? 50 : p.area === "english" ? 100 : 150;
+        const maxScore = maxPaperScore(p.area);
         const origScore = nextPatch.score;
         const clamped = Math.max(0, Math.min(maxScore, Math.round(origScore * 10) / 10));
         if (origScore > maxScore) {
@@ -1263,9 +1264,10 @@ export function StudyDashboard() {
         delete nextMap[qNum];
       }
 
+      // 空对象表示“已清空”，与“未触碰 undefined”区分，避免被 merge 复活
       return {
         ...p,
-        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+        questions: nextMap,
       };
     }));
   }
@@ -1297,8 +1299,8 @@ export function StudyDashboard() {
 
       return {
         ...p,
-        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
-        questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
+        questions: nextMap,
+        questionScores: nextScores,
       };
     }));
   }
@@ -1332,8 +1334,8 @@ export function StudyDashboard() {
 
       return {
         ...p,
-        questions: Object.keys(nextMap).length > 0 ? nextMap : undefined,
-        questionScores: Object.keys(nextScores).length > 0 ? nextScores : undefined,
+        questions: nextMap,
+        questionScores: nextScores,
       };
     }));
   }
@@ -1499,25 +1501,22 @@ export function StudyDashboard() {
     }
 
     return (
-      <div
+      <button
+        type="button"
         className="bento-mini-heatmap"
+        aria-label={`打开${paper.title}答题卡`}
         title="点击打开答题卡录入或调整做题表现"
         onClick={() => {
           setActivePaperQuestionModalId(paper.id);
           setQuickWrongInput("");
         }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            setActivePaperQuestionModalId(paper.id);
-            setQuickWrongInput("");
-          }
-        }}
       >
         <div className="mini-heatmap-head">
+          <span className="mini-heatmap-open-btn" aria-hidden="true">
+            答题卡
+          </span>
           <div className="mini-heatmap-tags">
-            {qSummary ? (
+            {qSummary && (
               <>
                 <span className={`mini-heatmap-tag ${qSummary.choiceWrongCount > 0 ? "tag-wrong" : "tag-perfect"}`}>
                   {choiceTagLabel}: {qSummary.choiceAccuracyPercent}%
@@ -1528,8 +1527,6 @@ export function StudyDashboard() {
                   </span>
                 )}
               </>
-            ) : (
-              <span className="mini-heatmap-tag tag-empty">+ 答题卡</span>
             )}
           </div>
         </div>
@@ -1574,7 +1571,7 @@ export function StudyDashboard() {
             </div>
           </div>
         </div>
-      </div>
+      </button>
     );
   }
 
