@@ -27,7 +27,9 @@ import {
   calculateVelocityAndForecast,
   calculateWeeklyTrends,
   createAppData,
+  createBlankProgress,
   dateToday,
+  buildDefaultProgress,
   defaultProjectSettings,
   extractJournalSections,
   generateJournalId,
@@ -126,26 +128,8 @@ type PlanPreview = {
   values: Record<string, string>;
 };
 
-function defaultProgress(): ProgressMap {
-  const progress: ProgressMap = {};
-
-  books.forEach((book) => {
-    book.chapters.forEach((chapter) => {
-      chapter.sections.forEach((section) => {
-        progress[section.id] = {
-          learned: book.initiallyComplete,
-          learnedAt: "",
-          reviewed: false,
-          reviewedAt: "",
-          plannedAt: section.plannedAt ?? "",
-          reviewedPlannedAt: "",
-          isCurrent: false,
-        };
-      });
-    });
-  });
-
-  return progress;
+function defaultProgress(isMain = false): ProgressMap {
+  return buildDefaultProgress(books, isMain);
 }
 
 function allSections(book: Book): Section[] {
@@ -482,7 +466,7 @@ function EditableDate({
   );
 }
 
-function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = defaultProgress()): ProgressMap {
+function mergeRemoteProgress(remote: Record<string, SectionProgress>, base = defaultProgress(false)): ProgressMap {
   const merged = { ...base };
   Object.keys(remote ?? {}).forEach((sectionId) => {
     const value = (remote as Record<string, unknown>)[sectionId];
@@ -514,7 +498,7 @@ export function StudyDashboard() {
     politics: "",
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
-  const [progress, setProgress] = useState<ProgressMap>(defaultProgress);
+  const [progress, setProgress] = useState<ProgressMap>(() => defaultProgress(false));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
   const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
   const [journals, setJournals] = useState<JournalEntry[]>([]);
@@ -543,6 +527,10 @@ export function StudyDashboard() {
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
   const [workspaceId, setWorkspaceId] = useState("");
+  const workspaceUserLabel = useMemo(() => {
+    const raw = (workspaceId || "main").trim();
+    return raw.toLowerCase() === "main" || raw === "261219" ? "Main" : raw;
+  }, [workspaceId]);
   const [inviteCode, setInviteCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
@@ -578,8 +566,6 @@ export function StudyDashboard() {
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
   const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
-  const [scoreSavedPaperId, setScoreSavedPaperId] = useState<string | null>(null);
-  const scoreSavedTimerRef = useRef<number | null>(null);
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
   const [quickWrongInput, setQuickWrongInput] = useState("");
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
@@ -593,8 +579,8 @@ export function StudyDashboard() {
   const deletedPaperIdsRef = useRef<string[]>([]);
   const lastSavedPayloadRef = useRef<string>("");
 
-  const repository = useCallback((): StorageRepository => {
-    const namespace = workspaceId || "main";
+  const repository = useCallback((targetNamespace?: string): StorageRepository => {
+    const namespace = targetNamespace ?? (repositoryWorkspaceRef.current || workspaceId || "");
     if (!repositoryRef.current || repositoryWorkspaceRef.current !== namespace) {
       repositoryRef.current = new StorageRepository(window.localStorage, namespace);
       repositoryWorkspaceRef.current = namespace;
@@ -604,43 +590,48 @@ export function StudyDashboard() {
 
   const resetSpaceState = useCallback((namespace: string) => {
     setWorkspaceId(namespace);
-    repositoryRef.current = new StorageRepository(window.localStorage, namespace || "main");
-    repositoryWorkspaceRef.current = namespace || "main";
+    repositoryRef.current = new StorageRepository(window.localStorage, namespace);
+    repositoryWorkspaceRef.current = namespace;
     deletedJournalIdsRef.current = [];
     deletedPaperIdsRef.current = [];
     lastSavedPayloadRef.current = "";
   }, []);
 
-  const applyRemoteData = useCallback((body: Partial<StudyAppData>, includeLocal: boolean) => {
-    const fallback = defaultProgress();
-    const local = includeLocal ? repository().load(fallback) : null;
-    const localIssue = repository().takeLoadIssue();
+  const applyRemoteData = useCallback((body: Partial<StudyAppData>, includeLocal: boolean, explicitWorkspaceId?: string) => {
+    const currentNamespace = explicitWorkspaceId ?? repositoryWorkspaceRef.current ?? workspaceId ?? "";
+    const isMain = currentNamespace === "main" || currentNamespace === "261219";
+    const fallback = defaultProgress(isMain);
+    const repo = repository(currentNamespace);
+    const remoteProgress = body.progress ?? {};
+    // 对于非 main 用户，如果云端没有进度记录，说明此用户是纯粹的新用户，其学习记录必须是一片空白。
+    // 绝不继承/复活此前偶然泄露在本地缓存的脏数据。
+    const isNewNonMainUser = !isMain && Object.keys(remoteProgress).length === 0;
+    const local = (includeLocal && !isNewNonMainUser) ? repo.load(fallback) : null;
+    const localIssue = repo.takeLoadIssue();
     if (localIssue) {
       setStorageLoadIssue(localIssue);
       setFeedbackMessage(localIssue.message);
     }
-    const remoteProgress = body.progress ?? {};
-    const base = Object.keys(remoteProgress).length === 0 && local ? local.progress : fallback;
+    const base = isMain
+      ? (Object.keys(remoteProgress).length === 0 && local ? local.progress : fallback)
+      : (isNewNonMainUser ? fallback : (local?.progress && Object.keys(local.progress).length > 0 ? local.progress : fallback));
     const mergedProgress = mergeRemoteProgress(remoteProgress, base);
     const mergedSettings = body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings();
     const mergedHistory = body.planHistory ?? local?.planHistory ?? [];
-    let mergedJournalsList: JournalEntry[] = [];
-    let mergedPapersList: PaperRecord[] = [];
+    const mergedJournalsList = mergeJournals(local?.journals ?? [], body.journals ?? []);
+    const mergedPapersList = mergePapers(local?.papers ?? defaultPastPapers(), body.papers ?? []);
 
     setProgress(mergedProgress);
     setProjectSettings(mergedSettings);
     setPlanHistory(mergedHistory);
-    setJournals((currentLocal) => {
-      const baseLocal = (includeLocal && currentLocal.length === 0 && local?.journals) ? local.journals : currentLocal;
-      mergedJournalsList = mergeJournals(baseLocal, body.journals ?? []);
-      return mergedJournalsList;
-    });
-    setPapers((currentLocal) => {
-      const baseLocal = (includeLocal && currentLocal.length === 0 && local?.papers) ? local.papers : currentLocal;
-      mergedPapersList = mergePapers(baseLocal, body.papers ?? []);
-      return mergedPapersList;
-    });
-    setBackups(repository().backups());
+    setJournals(mergedJournalsList);
+    setPapers(mergedPapersList);
+    setBackups(repo.backups());
+
+    // 若判定为非 main 的全新用户，立即主动覆写清洗本地缓存，确保下一次打开也彻底洁净
+    if (isNewNonMainUser) {
+      repo.save(createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList));
+    }
 
     // Record the current state payload so auto-save doesn't fire for unchanged data
     lastSavedPayloadRef.current = JSON.stringify({
@@ -648,7 +639,7 @@ export function StudyDashboard() {
       deletedJournalIds: [],
       deletedPaperIds: [],
     });
-  }, [repository]);
+  }, [repository, workspaceId]);
 
   const loadRemoteData = useCallback(async (includeLocal: boolean) => {
     const response = await fetch("/api/app-data", { cache: "no-store" });
@@ -660,10 +651,11 @@ export function StudyDashboard() {
     if (!response.ok) throw new Error("app-data-load-failed");
 
     const body = await response.json() as Partial<StudyAppData>;
-    applyRemoteData(body, includeLocal);
+    const wid = repositoryWorkspaceRef.current || workspaceId || "main";
+    applyRemoteData(body, includeLocal, wid);
     setLoaded(true);
     setSyncStatus("saved");
-  }, [applyRemoteData]);
+  }, [applyRemoteData, workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -673,9 +665,10 @@ export function StudyDashboard() {
         const body = await response.json() as { authenticated?: boolean; workspaceId?: string } & Partial<StudyAppData>;
         if (cancelled) return;
         if (!body.authenticated) return;
-        resetSpaceState(typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main");
+        const wid = typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main";
+        resetSpaceState(wid);
         setAuthState("authenticated");
-        applyRemoteData(body, true);
+        applyRemoteData(body, true, wid);
         setLoaded(true);
         setSyncStatus("saved");
       } catch {
@@ -788,9 +781,10 @@ export function StudyDashboard() {
         setIsSubmitting(false);
         return;
       }
-      resetSpaceState(typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main");
+      const wid = typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main";
+      resetSpaceState(wid);
       setAuthState("authenticated");
-      applyRemoteData(body, true);
+      applyRemoteData(body, true, wid);
       setLoaded(true);
       setSyncStatus("saved");
     } catch {
@@ -863,12 +857,12 @@ export function StudyDashboard() {
     setInviteCode("");
     setAuthError("");
     setIsSubmitting(false);
-    repositoryRef.current = null;
+    repositoryRef.current = new StorageRepository(window.localStorage, "");
     repositoryWorkspaceRef.current = "";
     deletedJournalIdsRef.current = [];
     deletedPaperIdsRef.current = [];
     lastSavedPayloadRef.current = "";
-    setProgress(defaultProgress());
+    setProgress(defaultProgress(false));
     setProjectSettings(defaultProjectSettings());
     setPlanHistory([]);
     setJournals([]);
@@ -1129,14 +1123,6 @@ export function StudyDashboard() {
     if (clampNotice) {
       setFeedbackMessage(clampNotice);
     }
-  }
-
-  function flashScoreSaved(paperId: string) {
-    setScoreSavedPaperId(paperId);
-    if (scoreSavedTimerRef.current !== null) {
-      window.clearTimeout(scoreSavedTimerRef.current);
-    }
-    scoreSavedTimerRef.current = window.setTimeout(() => setScoreSavedPaperId(null), 1500);
   }
 
   function togglePaperCompleted(id: string, completed: boolean) {
@@ -1903,7 +1889,8 @@ export function StudyDashboard() {
     }
     try {
       const parsed = JSON.parse(await file.text());
-      const normalized = normalizeAppData(parsed, defaultProgress());
+      const isMain = workspaceId === "main" || workspaceId === "261219";
+      const normalized = normalizeAppData(parsed, defaultProgress(isMain));
       if (!normalized) throw new Error("invalid-schema");
       setPendingImport({ ...normalized, appVersion: APP_VERSION });
       setFeedbackMessage("");
@@ -1914,9 +1901,10 @@ export function StudyDashboard() {
 
   async function confirmImport() {
     if (!pendingImport) return;
+    const isMain = workspaceId === "main" || workspaceId === "261219";
     setBackups(repository().createBackup(currentAppData(), "before-import"));
     if (!await replaceCloudData(pendingImport)) return;
-    setProgress(mergeRemoteProgress(pendingImport.progress));
+    setProgress(mergeRemoteProgress(pendingImport.progress, defaultProgress(isMain)));
     setProjectSettings(pendingImport.projectSettings);
     setPlanHistory(pendingImport.planHistory);
     setJournals(pendingImport.journals);
@@ -1933,10 +1921,11 @@ export function StudyDashboard() {
 
   async function confirmRestore() {
     if (!pendingRestore) return;
+    const isMain = workspaceId === "main" || workspaceId === "261219";
     setBackups(repository().createBackup(currentAppData(), "before-restore"));
-    const restored = normalizeAppData(pendingRestore.data, defaultProgress());
+    const restored = normalizeAppData(pendingRestore.data, defaultProgress(isMain));
     if (!restored || !await replaceCloudData(restored)) return;
-    setProgress(mergeRemoteProgress(restored.progress));
+    setProgress(mergeRemoteProgress(restored.progress, defaultProgress(isMain)));
     setProjectSettings(restored.projectSettings);
     setPlanHistory(restored.planHistory);
     setJournals(restored.journals);
@@ -2642,10 +2631,13 @@ export function StudyDashboard() {
             <span className="navigation-symbol navigation-symbol--settings" aria-hidden="true" />
             <span className="navigation-copy"><strong>设置</strong></span>
           </button>
-          <p className="sync-note" title="同步状态与当前数据空间">
+          <p
+            className="sync-note"
+            title={`同步状态: ${syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"} · 用户: ${workspaceUserLabel}`}
+          >
             <i className={syncStatus === "saved" ? "synced" : ""} />
-            <span>{syncStatus === "saved" ? "进度已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"}</span>
-            <em>空间 {workspaceId || "main"}</em>
+            <span>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中…" : "待同步"}</span>
+            <em>{workspaceUserLabel}</em>
           </p>
         </div>
       </aside>
@@ -3404,7 +3396,6 @@ export function StudyDashboard() {
                               );
                             })}
                           </div>
-                          <span className="stat-card-sub">目标 {MOCK_MILESTONE_TARGET} 套模拟卷</span>
                         </div>
                       </div>
                     </div>
@@ -3534,31 +3525,27 @@ export function StudyDashboard() {
                               <div className="bento-card-top">
                                 <span className="bento-year-pill">{paper.year}</span>
                                 <div className="bento-top-controls">
-                                    <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
-                                    <input
-                                      type="number"
-                                      className="bento-score-input"
-                                      min={0}
-                                      max={maxPaperScore(activeArea)}
-                                      step={0.5}
-                                      placeholder="分数"
-                                      value={paper.score ?? ""}
-                                      style={paper.score === null || paper.score === undefined
-                                        ? undefined
-                                        : { width: `${String(paper.score).length}ch` }}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
-                                      }}
-                                      onBlur={() => flashScoreSaved(paper.id)}
-                                    />
-                                    {paper.score !== null && paper.score !== undefined && (
-                                      <span className="bento-score-unit">分</span>
-                                    )}
-                                    {scoreSavedPaperId === paper.id && (
-                                      <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
-                                    )}
-                                  </div>
+                                    <div className="bento-score-inline" title="点击输入分数">
+                                      <input
+                                        type="number"
+                                        className="bento-score-input"
+                                        min={0}
+                                        max={maxPaperScore(activeArea)}
+                                        step={0.5}
+                                        placeholder="分数"
+                                        value={paper.score ?? ""}
+                                        style={paper.score === null || paper.score === undefined
+                                          ? undefined
+                                          : { width: `${String(paper.score).length}ch` }}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
+                                        }}
+                                      />
+                                      {paper.score !== null && paper.score !== undefined && (
+                                        <span className="bento-score-unit">分</span>
+                                      )}
+                                    </div>
 
                                   <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
                                     <input
@@ -3669,7 +3656,7 @@ export function StudyDashboard() {
                                     <strong className="bento-paper-title">{paper.title}</strong>
                                   </div>
                                   <div className="bento-top-controls">
-                                    <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
+                                    <div className="bento-score-inline" title="点击输入分数">
                                       <input
                                         type="number"
                                         className="bento-score-input"
@@ -3685,13 +3672,9 @@ export function StudyDashboard() {
                                           const val = e.target.value;
                                           updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
                                         }}
-                                        onBlur={() => flashScoreSaved(paper.id)}
                                       />
                                       {paper.score !== null && paper.score !== undefined && (
                                         <span className="bento-score-unit">分</span>
-                                      )}
-                                      {scoreSavedPaperId === paper.id && (
-                                        <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
                                       )}
                                     </div>
 

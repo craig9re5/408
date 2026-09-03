@@ -1,4 +1,4 @@
-import type { StudyArea } from "./data/books";
+import type { Book, StudyArea } from "./data/books";
 
 export const SCHEMA_VERSION = 2;
 export const APP_VERSION = "2.0.0";
@@ -19,6 +19,32 @@ export type SectionProgress = {
 };
 
 export type ProgressMap = Record<string, SectionProgress>;
+
+export function buildDefaultProgress(bookList: Book[], isMain = false): ProgressMap {
+  const progress: ProgressMap = {};
+
+  bookList.forEach((book) => {
+    book.chapters.forEach((chapter) => {
+      chapter.sections.forEach((section) => {
+        progress[section.id] = {
+          learned: isMain ? Boolean(book.initiallyComplete) : false,
+          learnedAt: "",
+          reviewed: false,
+          reviewedAt: "",
+          plannedAt: isMain ? (section.plannedAt ?? "") : "",
+          reviewedPlannedAt: "",
+          isCurrent: false,
+        };
+      });
+    });
+  });
+
+  return progress;
+}
+
+export function createBlankProgress(bookList: Book[]): ProgressMap {
+  return buildDefaultProgress(bookList, false);
+}
 export type PlanChangeSource = "manual" | "batchSchedule" | "shift" | "undo";
 export type ChapterPlanMode = "uniform" | "spread";
 
@@ -1338,33 +1364,41 @@ export class StorageRepository {
   private namespace: string;
   private loadIssue: StorageLoadIssue | null = null;
 
-  constructor(storage: Storage, namespace = "") {
+  constructor(storage: Storage, namespace?: string) {
     this.storage = storage;
-    this.namespace = namespace.trim();
+    // undefined 表示老单用户单测未传，保持兼容 main
+    // 显式传空字符串 "" 则表示未登录或隔离态，进入 quarantine
+    this.namespace = namespace === undefined ? "main" : namespace.trim();
+  }
+
+  private isQuarantined(): boolean {
+    return !this.namespace;
   }
 
   private appDataKey(): string {
-    // main 空间沿用老 key，免得老用户本地缓存一次全丢；
-    // 其他空间各自加后缀，同一浏览器切号不串。
-    return this.namespace && this.namespace !== "main"
+    if (this.isQuarantined()) return `${APP_DATA_KEY}:__unauthenticated__`;
+    return this.namespace !== "main"
       ? `${APP_DATA_KEY}:${this.namespace}`
       : APP_DATA_KEY;
   }
 
   private legacyProgressKey(): string {
-    return this.namespace && this.namespace !== "main"
-      ? `${LEGACY_PROGRESS_KEY}:${this.namespace}`
-      : LEGACY_PROGRESS_KEY;
+    // 只有明确为 main 空间时才允许继承和迁移单用户旧键
+    if (this.namespace === "main") return LEGACY_PROGRESS_KEY;
+    return "";
   }
 
   private backupsKey(): string {
-    return this.namespace && this.namespace !== "main"
+    if (this.isQuarantined()) return `${BACKUPS_KEY}:__unauthenticated__`;
+    return this.namespace !== "main"
       ? `${BACKUPS_KEY}:${this.namespace}`
       : BACKUPS_KEY;
   }
 
   load(fallbackProgress: ProgressMap): StudyAppData | null {
     this.loadIssue = null;
+    if (this.isQuarantined()) return null;
+
     const currentRaw = this.storage.getItem(this.appDataKey());
     if (currentRaw) {
       try {
@@ -1385,7 +1419,9 @@ export class StorageRepository {
       return null;
     }
 
-    const legacyRaw = this.storage.getItem(this.legacyProgressKey());
+    const legacyKey = this.legacyProgressKey();
+    if (!legacyKey) return null;
+    const legacyRaw = this.storage.getItem(legacyKey);
     if (!legacyRaw) return null;
     try {
       const legacy = JSON.parse(legacyRaw);
@@ -1410,6 +1446,7 @@ export class StorageRepository {
   }
 
   save(data: StudyAppData): void {
+    if (this.isQuarantined()) return;
     try {
       this.storage.setItem(this.appDataKey(), JSON.stringify(data));
     } catch {
@@ -1418,6 +1455,7 @@ export class StorageRepository {
   }
 
   backups(): LocalBackup[] {
+    if (this.isQuarantined()) return [];
     try {
       const value = JSON.parse(this.storage.getItem(this.backupsKey()) || "[]");
       if (!Array.isArray(value)) return [];
@@ -1437,6 +1475,7 @@ export class StorageRepository {
   }
 
   createBackup(data: StudyAppData, kind: BackupKind): LocalBackup[] {
+    if (this.isQuarantined()) return [];
     const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `backup-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1461,6 +1500,7 @@ export class StorageRepository {
   }
 
   deleteBackup(id: string): LocalBackup[] {
+    if (this.isQuarantined()) return [];
     const next = this.backups().filter((backup) => backup.id !== id);
     try {
       this.storage.setItem(this.backupsKey(), JSON.stringify(next));
