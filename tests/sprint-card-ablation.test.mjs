@@ -154,3 +154,113 @@ test("消融测试 4: 试卷分数与状态全排列消融 (Data & State Permuta
     "已墓碑删除的模拟卷在合并后不应出现在活跃试卷列表中",
   );
 });
+
+test("消融测试 5: 套卷冲刺容器解构与完成态视觉消融 (Container Deconstruction & Completion Visual Invariants)", async () => {
+  const css = await readFile("app/globals.css", "utf8");
+
+  // 5.1 验证外层 .sprint-section 解构：消除双重卡片嵌套与 padding 侵蚀
+  const sectionMatch = css.match(/\.sprint-section\s*\{([^}]+)\}/);
+  assert.ok(sectionMatch, "必须包含 .sprint-section 规则");
+  assert.match(sectionMatch[1], /background:\s*transparent/, "sprint-section 必须为透明背景");
+  assert.match(sectionMatch[1], /border:\s*none/, "sprint-section 必须移除边框");
+  assert.match(sectionMatch[1], /padding:\s*0/, "sprint-section 必须移除 padding 释放横向宽度");
+  assert.match(sectionMatch[1], /box-shadow:\s*none/, "sprint-section 必须移除阴影");
+
+  // 5.2 验证完成态卡片底色归正为统一白色
+  const completedCardMatch = css.match(/\.sprint-bento-card\.completed\s*\{([^}]+)\}/);
+  assert.ok(completedCardMatch, "必须包含 .sprint-bento-card.completed 规则");
+  assert.match(completedCardMatch[1], /background:\s*#ffffff/, "完成态卡片必须保持白底");
+  assert.match(completedCardMatch[1], /border-left:\s*3\.5px\s*solid\s*var\(--green\)/, "完成态卡片必须保留绿色左条微标");
+
+  // 5.3 验证废除黑底反色年份药丸，归正为灰绿低饱和标签
+  const completedYearMatch = css.match(/\.sprint-bento-card\.completed\s+\.bento-year-pill\s*\{([^}]+)\}/);
+  assert.ok(completedYearMatch, "必须包含 .sprint-bento-card.completed .bento-year-pill 规则");
+  assert.doesNotMatch(completedYearMatch[1], /var\(--sidebar-soft\)/, "完成态年份药丸严禁使用黑底反色 var(--sidebar-soft)");
+  assert.match(completedYearMatch[1], /rgba\(124,\s*172,\s*133/, "完成态年份药丸必须使用柔和灰绿背景与边框");
+
+  // 5.4 验证模拟卷进度条双色渐变收敛
+  const endlessFillMatch = css.match(/\.endless-fill\s*\{([^}]+)\}/);
+  assert.ok(endlessFillMatch, "必须包含 .endless-fill 规则");
+  assert.match(endlessFillMatch[1], /linear-gradient\(90deg,\s*var\(--blue\),\s*var\(--coral\)\)/, "模拟卷进度条必须为蓝至珊瑚平滑渐变");
+  assert.doesNotMatch(endlessFillMatch[1], /#e8b277/, "模拟卷进度条严禁出现中间黄色断层");
+
+  // 5.5 验证日期选择器平滑过渡与 Footer 稳定性
+  const footerMatch = css.match(/\.bento-card-footer\s*\{([^}]+)\}/);
+  assert.ok(footerMatch, "必须包含 .bento-card-footer 规则");
+  assert.match(footerMatch[1], /min-height:\s*28px/, "Footer 必须声明 min-height 28px 稳定排版");
+  assert.match(css, /@keyframes\s+bento-fade-in/, "必须包含 bento-fade-in 淡入关键帧动画");
+});
+
+test("消融测试 6: 答题卡交互入口收敛与热力图只读消融 (Heatmap & Open Button Affordance Invariants)", async () => {
+  const tsx = await readFile("app/study-dashboard.tsx", "utf8");
+  const css = await readFile("app/globals.css", "utf8");
+
+  // 6.1 TSX 验证：热力图容器必须为只读 <div>，禁止为外层 <button>
+  assert.match(
+    tsx,
+    /<div className="bento-mini-heatmap">/,
+    "热力图最外层容器必须使用语义化 div，不可使用 button",
+  );
+  assert.doesNotMatch(
+    tsx,
+    /<button[^>]*className="bento-mini-heatmap"/,
+    "严禁将热力图全区包裹为 button 导致误触",
+  );
+
+  // 6.2 TSX 验证：打开弹窗必须由独立的 mini-heatmap-open-btn 承载
+  assert.match(
+    tsx,
+    /<button[^>]*className="mini-heatmap-open-btn"[^>]*onClick=\{[^}]*setActivePaperQuestionModalId/,
+    "必须由独立的【答题卡 ↗】按钮显式触发弹窗",
+  );
+
+  // 6.3 CSS 验证：热力图容器默认光标，打开按钮具备独立交互样式
+  const heatmapMatch = css.match(/\.bento-mini-heatmap\s*\{([^}]+)\}/);
+  assert.ok(heatmapMatch, "必须包含 .bento-mini-heatmap 规则");
+  assert.match(heatmapMatch[1], /cursor:\s*default/, "热力图全区必须为 cursor: default");
+
+  const openBtnMatch = css.match(/\.mini-heatmap-open-btn\s*\{([^}]+)\}/);
+  assert.ok(openBtnMatch, "必须包含 .mini-heatmap-open-btn 规则");
+  assert.match(openBtnMatch[1], /cursor:\s*pointer/, "答题卡打开按钮必须为 cursor: pointer");
+
+  const openBtnHoverMatch = css.match(/\.mini-heatmap-open-btn:hover\s*\{([^}]+)\}/);
+  assert.ok(openBtnHoverMatch, "答题卡打开按钮必须具备 hover 反馈");
+});
+
+test("消融测试 7: 一刷与二刷状态机联动与级联消融 (First & Second Round Cascade Invariants)", async () => {
+  const tsx = await readFile("app/study-dashboard.tsx", "utf8");
+
+  // 7.1 取消一刷时必须级联重置二刷
+  assert.match(
+    tsx,
+    /secondRound:\s*completed\s*\?\s*p\.secondRound\s*:\s*false/,
+    "togglePaperCompleted 中取消一刷必须将 secondRound 重置为 false",
+  );
+  assert.match(
+    tsx,
+    /secondRoundAt:\s*completed\s*\?\s*p\.secondRoundAt\s*:\s*""/,
+    "togglePaperCompleted 中取消一刷必须清空 secondRoundAt",
+  );
+
+  // 7.2 勾选二刷时必须自动联动标记一刷
+  assert.match(
+    tsx,
+    /const nextCompleted = secondRound \? true : p\.completed;/,
+    "togglePaperSecondRound 中勾选二刷必须将 completed 提升为 true",
+  );
+
+  // 7.3 effectiveSprintTab 派生状态防止空白页
+  assert.match(
+    tsx,
+    /const effectiveSprintTab =\s*\(activeArea === "english" \|\| activeArea === "politics"\) && sprintTab === "mock" \? "all" : sprintTab;/,
+    "必须声明 effectiveSprintTab 消除英语与政治切换时的空白页缺陷",
+  );
+
+  // 7.4 复选框文案与提示
+  assert.match(
+    tsx,
+    /!paper\.completed \? "标记二刷（将同步标记一刷）" : "标记二刷"/,
+    "未一刷时二刷复选框必须提示用户将同步标记一刷",
+  );
+});
+
