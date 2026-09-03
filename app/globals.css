@@ -3593,26 +3593,28 @@ input[type="number"] {
   min-width: 0;
 }
 
-/* Inline score box */
+/* Inline score box: de-chromed ghost field. Empty state is just faint text;
+   chrome appears only on hover/focus, same language as EditableDate. */
 .bento-score-inline {
   display: inline-flex;
   align-items: center;
-  background: rgba(23, 33, 41, 0.03);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 1px 6px;
+  cursor: text;
   transition: all 0.15s ease;
 }
 
 .bento-score-inline:hover {
-  background: #ffffff;
-  border-color: #c3c8c4;
+  background: rgba(23, 33, 41, 0.03);
+  border-color: var(--line);
 }
 
 .bento-score-inline:focus-within {
   background: #ffffff;
-  border-color: var(--ink-soft);
-  box-shadow: 0 0 0 2px rgba(23, 33, 41, 0.08);
+  border-color: var(--line);
+  box-shadow: 0 1px 4px rgba(35, 42, 44, 0.08);
 }
 
 .bento-score-input {
