@@ -19,7 +19,7 @@
 	],
 	"secrets": {
 		"required": [
-			"INVITE_CODE",
+			"INVITE_CODES",
 			"SESSION_SECRET"
 		]
 	}

@@ -3,7 +3,7 @@
 interface __BaseEnv_Env {
 	DB: D1Database;
 	ASSETS: Fetcher;
-	INVITE_CODE: string;
+	INVITE_CODES: string;
 	SESSION_SECRET: string;
 }
 declare namespace Cloudflare {
@@ -17,5 +17,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "INVITE_CODE" | "SESSION_SECRET">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "INVITE_CODES" | "SESSION_SECRET">> {}
 }

@@ -1335,15 +1335,37 @@ export function summarizeImport(data: StudyAppData, projectCount: number, subjec
 
 export class StorageRepository {
   private storage: Storage;
+  private namespace: string;
   private loadIssue: StorageLoadIssue | null = null;
 
-  constructor(storage: Storage) {
+  constructor(storage: Storage, namespace = "") {
     this.storage = storage;
+    this.namespace = namespace.trim();
+  }
+
+  private appDataKey(): string {
+    // main 空间沿用老 key，免得老用户本地缓存一次全丢；
+    // 其他空间各自加后缀，同一浏览器切号不串。
+    return this.namespace && this.namespace !== "main"
+      ? `${APP_DATA_KEY}:${this.namespace}`
+      : APP_DATA_KEY;
+  }
+
+  private legacyProgressKey(): string {
+    return this.namespace && this.namespace !== "main"
+      ? `${LEGACY_PROGRESS_KEY}:${this.namespace}`
+      : LEGACY_PROGRESS_KEY;
+  }
+
+  private backupsKey(): string {
+    return this.namespace && this.namespace !== "main"
+      ? `${BACKUPS_KEY}:${this.namespace}`
+      : BACKUPS_KEY;
   }
 
   load(fallbackProgress: ProgressMap): StudyAppData | null {
     this.loadIssue = null;
-    const currentRaw = this.storage.getItem(APP_DATA_KEY);
+    const currentRaw = this.storage.getItem(this.appDataKey());
     if (currentRaw) {
       try {
         const parsed = JSON.parse(currentRaw);
@@ -1363,7 +1385,7 @@ export class StorageRepository {
       return null;
     }
 
-    const legacyRaw = this.storage.getItem(LEGACY_PROGRESS_KEY);
+    const legacyRaw = this.storage.getItem(this.legacyProgressKey());
     if (!legacyRaw) return null;
     try {
       const legacy = JSON.parse(legacyRaw);
@@ -1389,7 +1411,7 @@ export class StorageRepository {
 
   save(data: StudyAppData): void {
     try {
-      this.storage.setItem(APP_DATA_KEY, JSON.stringify(data));
+      this.storage.setItem(this.appDataKey(), JSON.stringify(data));
     } catch {
       // 配额满时不抛错，云端仍是真源，调用方会提示用户导出文件清理。
     }
@@ -1397,7 +1419,7 @@ export class StorageRepository {
 
   backups(): LocalBackup[] {
     try {
-      const value = JSON.parse(this.storage.getItem(BACKUPS_KEY) || "[]");
+      const value = JSON.parse(this.storage.getItem(this.backupsKey()) || "[]");
       if (!Array.isArray(value)) return [];
       const kinds: BackupKind[] = ["manual", "before-import", "before-restore", "before-migration"];
       return value.flatMap((backup): LocalBackup[] => {
@@ -1429,7 +1451,7 @@ export class StorageRepository {
     for (const keep of [MAX_BACKUPS, 10, 5, 1] as const) {
       const next = [backup, ...existing].slice(0, keep);
       try {
-        this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+        this.storage.setItem(this.backupsKey(), JSON.stringify(next));
         return next;
       } catch {
         continue;
@@ -1441,7 +1463,7 @@ export class StorageRepository {
   deleteBackup(id: string): LocalBackup[] {
     const next = this.backups().filter((backup) => backup.id !== id);
     try {
-      this.storage.setItem(BACKUPS_KEY, JSON.stringify(next));
+      this.storage.setItem(this.backupsKey(), JSON.stringify(next));
     } catch {
       // 删除时配额异常极少见，忽略以避免打断交互。
     }

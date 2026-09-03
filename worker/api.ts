@@ -1,6 +1,10 @@
-const WORKSPACE_ID = "main";
+const DEFAULT_WORKSPACE_ID = "main";
 const SESSION_COOKIE = "408_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+
+function isSafeWorkspaceId(workspaceId: string): boolean {
+  return workspaceId.length > 0 && workspaceId.length <= 64 && /^[a-z0-9-]+$/.test(workspaceId);
+}
 
 type ProgressValue = {
   learned: boolean;
@@ -193,8 +197,9 @@ async function signature(value: string, secret: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
 }
 
-async function createSession(secret: string): Promise<string> {
+async function createSession(secret: string, workspaceId: string): Promise<string> {
   const payload = base64Url(new TextEncoder().encode(JSON.stringify({
+    wid: workspaceId,
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   })));
   return `${payload}.${await signature(payload, secret)}`;
@@ -206,17 +211,22 @@ function cookieValue(request: Request, name: string): string | null {
   return match?.[1] ?? null;
 }
 
-async function hasValidSession(request: Request, secret: string | undefined): Promise<boolean> {
-  if (!secret) return false;
+async function getSessionWorkspaceId(request: Request, secret: string | undefined): Promise<string | null> {
+  if (!secret) return null;
   const token = cookieValue(request, SESSION_COOKIE);
-  if (!token) return false;
+  if (!token) return null;
 
   const [payload, providedSignature] = token.split(".");
-  if (!payload || !providedSignature) return false;
+  if (!payload || !providedSignature) return null;
 
   try {
-    const decoded = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as { exp?: number };
-    if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) return false;
+    const decoded = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as { exp?: number; wid?: unknown };
+    if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) return null;
+    // 升级前签发的老 session 没有 wid，验签通过后归入默认空间；
+    // wid 存在但格式非法则直接拒绝，防止伪造空间。
+    if (typeof decoded.wid !== "undefined"
+      && (typeof decoded.wid !== "string" || !isSafeWorkspaceId(decoded.wid))) return null;
+    const workspaceId = typeof decoded.wid === "string" ? decoded.wid : DEFAULT_WORKSPACE_ID;
 
     const key = await crypto.subtle.importKey(
       "raw",
@@ -225,9 +235,10 @@ async function hasValidSession(request: Request, secret: string | undefined): Pr
       false,
       ["verify"],
     );
-    return crypto.subtle.verify("HMAC", key, asArrayBuffer(decodeBase64Url(providedSignature)), new TextEncoder().encode(payload));
+    const valid = await crypto.subtle.verify("HMAC", key, asArrayBuffer(decodeBase64Url(providedSignature)), new TextEncoder().encode(payload));
+    return valid ? workspaceId : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -245,15 +256,37 @@ function getSessionSecret(env: Env): string {
   return env.SESSION_SECRET?.trim() || "408-default-session-secret-261219";
 }
 
-function getInviteCode(env: Env): string {
-  return env.INVITE_CODE?.trim() || "261219";
+function getWorkspaceMap(env: Env): Map<string, string> {
+  const map = new Map<string, string>();
+  const raw = (env as unknown as Record<string, string | undefined>).INVITE_CODES?.trim();
+  if (raw) {
+    raw.split(",").forEach((entry) => {
+      const trimmed = entry.trim();
+      if (!trimmed) return;
+      const separator = trimmed.indexOf(":");
+      if (separator < 0) {
+        // 允许裸码写法，默认归入 main，方便少量码快速配置。
+        if (isSafeWorkspaceId(DEFAULT_WORKSPACE_ID)) map.set(trimmed, DEFAULT_WORKSPACE_ID);
+        return;
+      }
+      const code = trimmed.slice(0, separator).trim();
+      const workspaceId = trimmed.slice(separator + 1).trim();
+      if (code && isSafeWorkspaceId(workspaceId)) map.set(code, workspaceId);
+    });
+  }
+  if (map.size === 0) {
+    const legacy = (env as unknown as Record<string, string | undefined>).INVITE_CODE?.trim() || "261219";
+    map.set(legacy, DEFAULT_WORKSPACE_ID);
+  }
+  return map;
 }
 
-async function requireSession(request: Request, env: Env): Promise<Response | null> {
-  if (!await hasValidSession(request, getSessionSecret(env))) {
+async function requireWorkspace(request: Request, env: Env): Promise<string | Response> {
+  const workspaceId = await getSessionWorkspaceId(request, getSessionSecret(env));
+  if (!workspaceId) {
     return json({ error: "请先输入邀请码" }, { status: 401 });
   }
-  return null;
+  return workspaceId;
 }
 
 function normalizeProgress(value: unknown): ProgressValue | null {
@@ -279,10 +312,10 @@ function isSafeSectionId(sectionId: string): boolean {
   return sectionId.length > 0 && sectionId.length <= 120 && /^[a-z0-9-]+$/.test(sectionId);
 }
 
-async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
+async function readProgress(env: Env, workspaceId: string): Promise<Record<string, ProgressValue>> {
   const result = await env.DB.prepare(
     "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, COALESCE(reviewed_planned_at, '') as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
-  ).bind(WORKSPACE_ID).all<ProgressRow>();
+  ).bind(workspaceId).all<ProgressRow>();
 
   return Object.fromEntries(result.results.flatMap((row: ProgressRow) => {
     const normalized = normalizeProgress({
@@ -298,7 +331,7 @@ async function readProgress(env: Env): Promise<Record<string, ProgressValue>> {
   }));
 }
 
-async function writeProgress(env: Env, values: Record<string, ProgressValue>): Promise<void> {
+async function writeProgress(env: Env, workspaceId: string, values: Record<string, ProgressValue>): Promise<void> {
   const statements = Object.entries(values)
     .filter(([sectionId]) => isSafeSectionId(sectionId))
     .map(([sectionId, value]) => env.DB.prepare(
@@ -313,7 +346,7 @@ async function writeProgress(env: Env, values: Record<string, ProgressValue>): P
          reviewed_planned_at = excluded.reviewed_planned_at,
          is_current = excluded.is_current,
          updated_at = CURRENT_TIMESTAMP`,
-    ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
+    ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
 
   if (statements.length > 0) await env.DB.batch(statements);
 }
@@ -718,18 +751,18 @@ function mergeJournals(local: JournalEntry[], remote: JournalEntry[]): JournalEn
   return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-async function readAppData(env: Env): Promise<AppData> {
+async function readAppData(env: Env, workspaceId: string): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
-    readProgress(env),
+    readProgress(env, workspaceId),
     env.DB.prepare(
       "SELECT schema_version, project_settings, plan_history, journals, papers FROM app_state WHERE workspace_id = ?",
-    ).bind(WORKSPACE_ID).all<AppStateRow>().catch(() => {
+    ).bind(workspaceId).all<AppStateRow>().catch(() => {
       return env.DB.prepare(
         "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
-      ).bind(WORKSPACE_ID).all<AppStateRow>().catch(() => {
+      ).bind(workspaceId).all<AppStateRow>().catch(() => {
         return env.DB.prepare(
           "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
-        ).bind(WORKSPACE_ID).all<AppStateRow>();
+        ).bind(workspaceId).all<AppStateRow>();
       });
     }),
   ]);
@@ -754,13 +787,14 @@ async function readAppData(env: Env): Promise<AppData> {
 
 async function writeAppData(
   env: Env,
+  workspaceId: string,
   data: AppData,
   replace: boolean,
   deletedJournalIds: string[] = [],
   deletedPaperIds: string[] = [],
 ): Promise<JournalEntry[]> {
   const statements: ReturnType<Env["DB"]["prepare"]>[] = [];
-  if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(WORKSPACE_ID));
+  if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(workspaceId));
   Object.entries(data.progress)
     .filter(([sectionId]) => isSafeSectionId(sectionId))
     .forEach(([sectionId, value]) => {
@@ -775,8 +809,8 @@ async function writeAppData(
            planned_at = excluded.planned_at,
            reviewed_planned_at = excluded.reviewed_planned_at,
            is_current = excluded.is_current,
-           updated_at = CURRENT_TIMESTAMP`,
-      ).bind(WORKSPACE_ID, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
+          updated_at = CURRENT_TIMESTAMP`,
+      ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.isCurrent ? 1 : 0));
     });
 
   let finalJournals = data.journals;
@@ -786,7 +820,7 @@ async function writeAppData(
     try {
       const stateRow = await env.DB.prepare(
         "SELECT journals, papers FROM app_state WHERE workspace_id = ?",
-      ).bind(WORKSPACE_ID).first<{ journals?: string; papers?: string }>();
+      ).bind(workspaceId).first<{ journals?: string; papers?: string }>();
       if (stateRow?.journals) {
         const existingJournals = normalizeJournals(JSON.parse(stateRow.journals));
         finalJournals = mergeJournals(data.journals, existingJournals);
@@ -823,7 +857,7 @@ async function writeAppData(
        papers = excluded.papers,
        updated_at = CURRENT_TIMESTAMP`,
   ).bind(
-    WORKSPACE_ID,
+    workspaceId,
     2,
     JSON.stringify(data.projectSettings),
     JSON.stringify(data.planHistory),
@@ -862,10 +896,10 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (!url.pathname.startsWith("/api/")) return null;
 
   if (url.pathname === "/api/auth/session" && request.method === "GET") {
-    const authenticated = await hasValidSession(request, getSessionSecret(env));
-    if (!authenticated) return json({ authenticated: false });
+    const workspaceId = await getSessionWorkspaceId(request, getSessionSecret(env));
+    if (!workspaceId) return json({ authenticated: false });
     try {
-      return json({ authenticated: true, ...(await readAppData(env)) });
+      return json({ authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) });
     } catch (err) {
       console.error("Session readAppData error:", err);
       return json({ error: "读取学习进度失败，请稍后重试", details: String(err) }, { status: 503 });
@@ -875,15 +909,15 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   if (url.pathname === "/api/auth/login" && request.method === "POST") {
     const body = await request.json().catch(() => null) as { code?: unknown } | null;
     const code = typeof body?.code === "string" ? body.code.trim() : "";
-    const configuredInviteCode = getInviteCode(env);
-    if (code !== configuredInviteCode && code !== "261219") {
+    const workspaceId = getWorkspaceMap(env).get(code);
+    if (!code || !workspaceId) {
       return json({ error: "邀请码不正确" }, { status: 401 });
     }
     const secret = getSessionSecret(env);
     try {
       return json(
-        { authenticated: true, ...(await readAppData(env)) },
-        { headers: { "set-cookie": cookieHeader(await createSession(secret), request) } },
+        { authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) },
+        { headers: { "set-cookie": cookieHeader(await createSession(secret, workspaceId), request) } },
       );
     } catch (err) {
       console.error("Login readAppData error:", err);
@@ -896,28 +930,28 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   }
 
   if (url.pathname === "/api/progress" && request.method === "GET") {
-    const unauthorized = await requireSession(request, env);
-    if (unauthorized) return unauthorized;
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
     try {
-      return json({ progress: await readProgress(env) });
+      return json({ progress: await readProgress(env, workspace) });
     } catch {
       return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
     }
   }
 
   if (url.pathname === "/api/app-data" && request.method === "GET") {
-    const unauthorized = await requireSession(request, env);
-    if (unauthorized) return unauthorized;
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
     try {
-      return json(await readAppData(env));
+      return json({ workspaceId: workspace, ...(await readAppData(env, workspace)) });
     } catch {
       return json({ error: "读取应用数据失败，请稍后重试" }, { status: 503 });
     }
   }
 
   if (url.pathname === "/api/app-data" && request.method === "PUT") {
-    const unauthorized = await requireSession(request, env);
-    if (unauthorized) return unauthorized;
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     const data = normalizeAppDataBody(body);
     if (!data) return json({ error: "应用数据格式不正确" }, { status: 400 });
@@ -929,7 +963,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       ? (body.deletedPaperIds as unknown[]).filter((id): id is string => typeof id === "string")
       : [];
     try {
-      const savedJournals = await writeAppData(env, data, replace, deletedJournalIds, deletedPaperIds);
+      const savedJournals = await writeAppData(env, workspace, data, replace, deletedJournalIds, deletedPaperIds);
       return json({ saved: true, journals: savedJournals });
     } catch {
       return json({ error: "保存应用数据失败，请稍后重试" }, { status: 503 });
@@ -937,8 +971,8 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   }
 
   if (url.pathname === "/api/progress" && request.method === "PUT") {
-    const unauthorized = await requireSession(request, env);
-    if (unauthorized) return unauthorized;
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
     const body = await request.json().catch(() => null) as { progress?: unknown } | null;
     if (!body?.progress || typeof body.progress !== "object" || Array.isArray(body.progress)) {
       return json({ error: "进度数据格式不正确" }, { status: 400 });
@@ -949,7 +983,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       if (isSafeSectionId(sectionId) && normalized) values[sectionId] = normalized;
     });
     try {
-      await writeProgress(env, values);
+      await writeProgress(env, workspace, values);
       return json({ saved: true });
     } catch {
       return json({ error: "保存学习进度失败，请稍后重试" }, { status: 503 });
@@ -957,8 +991,9 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
   }
 
   if (url.pathname === "/api/blog/publish" && request.method === "POST") {
-    const unauthorized = await requireSession(request, env);
-    if (unauthorized) return unauthorized;
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
+    void workspace;
     const body = await request.json().catch(() => null) as {
       title?: unknown;
       slug?: unknown;
