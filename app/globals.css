@@ -3655,9 +3655,7 @@ input[type="number"] {
 }
 
 .bento-score-input {
-  min-width: 38px;
-  width: 44px;
-  field-sizing: content;
+  width: 34px;
   border: none;
   background: transparent;
   font-size: 15px;
@@ -3677,46 +3675,17 @@ input[type="number"] {
   font-family: var(--sans);
 }
 
-.bento-score-unit {
-  font-family: var(--serif);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--coral);
-  margin-left: 4px;
-  user-select: none;
-}
-
-.bento-score-input {
-  min-width: 38px;
-  width: 44px;
-  field-sizing: content;
-  border: none;
-  background: transparent;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: var(--serif);
-  line-height: 1.35;
-  text-align: left;
-  color: var(--coral);
-  outline: none;
-  padding: 0;
-}
-
-.bento-score-input::placeholder {
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 12px;
-  font-family: var(--sans);
+.bento-score-input:placeholder-shown {
+  text-align: center;
 }
 
 .bento-score-unit {
   font-family: var(--serif);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
   color: var(--coral);
-  margin-left: 4px;
+  margin-left: 3px;
   user-select: none;
 }
 
@@ -3724,6 +3693,7 @@ input[type="number"] {
   color: var(--green);
   font-size: 11px;
   font-weight: 700;
+  margin-left: 5px;
   animation: score-saved-pop 1.5s ease-out both;
 }
 

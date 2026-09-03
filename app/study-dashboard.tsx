@@ -669,9 +669,10 @@ export function StudyDashboard() {
     async function initialize() {
       try {
         const response = await fetch("/api/auth/session", { cache: "no-store" });
-        const body = await response.json() as { authenticated?: boolean } & Partial<StudyAppData>;
+        const body = await response.json() as { authenticated?: boolean; workspaceId?: string } & Partial<StudyAppData>;
         if (cancelled) return;
         if (!body.authenticated) return;
+        resetSpaceState(typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main");
         setAuthState("authenticated");
         applyRemoteData(body, true);
         setLoaded(true);
@@ -683,7 +684,7 @@ export function StudyDashboard() {
     }
     void initialize();
     return () => { cancelled = true; };
-  }, [applyRemoteData]);
+  }, [applyRemoteData, resetSpaceState]);
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
@@ -784,7 +785,7 @@ export function StudyDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: codeToSubmit }),
       });
-      const body = await response.json() as { error?: string } & Partial<StudyAppData>;
+      const body = await response.json() as { error?: string; workspaceId?: string } & Partial<StudyAppData>;
       if (!response.ok) {
         setAuthError(body.error ?? "邀请码不正确");
         setIsShaking(true);
@@ -792,6 +793,7 @@ export function StudyDashboard() {
         setIsSubmitting(false);
         return;
       }
+      resetSpaceState(typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main");
       setAuthState("authenticated");
       applyRemoteData(body, true);
       setLoaded(true);
@@ -802,7 +804,7 @@ export function StudyDashboard() {
       setTimeout(() => setIsShaking(false), 500);
       setIsSubmitting(false);
     }
-  }, [applyRemoteData, isSubmitting]);
+  }, [applyRemoteData, isSubmitting, resetSpaceState]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -862,9 +864,21 @@ export function StudyDashboard() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     setAuthState("locked");
     setLoaded(false);
+    setWorkspaceId("");
+    setInviteCode("");
+    setAuthError("");
+    setIsSubmitting(false);
+    repositoryRef.current = null;
+    repositoryWorkspaceRef.current = "";
+    deletedJournalIdsRef.current = [];
+    deletedPaperIdsRef.current = [];
+    lastSavedPayloadRef.current = "";
     setProgress(defaultProgress());
     setProjectSettings(defaultProjectSettings());
     setPlanHistory([]);
+    setJournals([]);
+    setPapers(defaultPastPapers());
+    setBackups([]);
   }
 
   const areaBooks = useMemo(() => books.filter((book) => book.area === (activeArea === "english" || activeArea === "politics" ? "408" : activeArea)), [activeArea]);
@@ -2680,6 +2694,7 @@ export function StudyDashboard() {
                 ))}
               </div>
             </div>}
+            <span className="storage-note" title="当前数据空间">空间 {workspaceId || "main"}</span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
         </header>
@@ -3505,27 +3520,30 @@ export function StudyDashboard() {
                                 <span className="bento-year-pill">{paper.year}</span>
                                 <div className="bento-top-controls">
                                     <div className="bento-score-inline" title="输入试卷分数，失焦自动保存">
-                                      <input
-                                        type="number"
-                                        className="bento-score-input"
-                                        min={0}
-                                        max={maxPaperScore(activeArea)}
-                                        step={0.5}
-                                        placeholder="分数"
-                                        value={paper.score ?? ""}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
-                                        }}
-                                        onBlur={() => flashScoreSaved(paper.id)}
-                                      />
-                                      {paper.score !== null && paper.score !== undefined && (
-                                        <span className="bento-score-unit">分</span>
-                                      )}
-                                      {scoreSavedPaperId === paper.id && (
-                                        <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
-                                      )}
-                                    </div>
+                                    <input
+                                      type="number"
+                                      className="bento-score-input"
+                                      min={0}
+                                      max={maxPaperScore(activeArea)}
+                                      step={0.5}
+                                      placeholder="分数"
+                                      value={paper.score ?? ""}
+                                      style={paper.score === null || paper.score === undefined
+                                        ? undefined
+                                        : { width: `${String(paper.score).length}ch` }}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
+                                      }}
+                                      onBlur={() => flashScoreSaved(paper.id)}
+                                    />
+                                    {paper.score !== null && paper.score !== undefined && (
+                                      <span className="bento-score-unit">分</span>
+                                    )}
+                                    {scoreSavedPaperId === paper.id && (
+                                      <span className="bento-score-saved" role="status" title="分数已保存">✓</span>
+                                    )}
+                                  </div>
 
                                   <label className="bento-check-label" title={paper.completed ? "已完成一刷 (点击取消)" : "标记已做完"}>
                                     <input
@@ -3655,6 +3673,9 @@ export function StudyDashboard() {
                                         step={0.5}
                                         placeholder="分数"
                                         value={paper.score ?? ""}
+                                        style={paper.score === null || paper.score === undefined
+                                          ? undefined
+                                          : { width: `${String(paper.score).length}ch` }}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           updatePaper(paper.id, { score: val === "" ? null : parseFloat(val) });
