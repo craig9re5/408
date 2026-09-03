@@ -78,7 +78,7 @@ export function EditableDate({
 
   return (
     <button
-      className={`date-pill date-pill--${tone}`}
+      className={`date-text ${tone}${!value ? " empty" : ""}`}
       type="button"
       onClick={startEditing}
       title={`${ariaLabel}：点击修改`}
