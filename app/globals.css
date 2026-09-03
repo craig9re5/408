@@ -3604,11 +3604,15 @@ input[type="number"] {
   transition: all 0.15s ease;
 }
 
-.bento-score-inline:hover,
+.bento-score-inline:hover {
+  background: #ffffff;
+  border-color: #c3c8c4;
+}
+
 .bento-score-inline:focus-within {
   background: #ffffff;
-  border-color: var(--coral);
-  box-shadow: 0 0 0 2px rgba(239, 132, 109, 0.15);
+  border-color: var(--ink-soft);
+  box-shadow: 0 0 0 2px rgba(23, 33, 41, 0.08);
 }
 
 .bento-score-input {

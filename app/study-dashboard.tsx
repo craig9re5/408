@@ -2098,7 +2098,7 @@ export function StudyDashboard() {
       const cleanTitle = (context.paperTitle || paperRecord?.title || "").replace(/^(\d{4}年)\s+/, "$1");
       const scoreStr = typeof paperRecord?.score === "number" ? `${paperRecord.score}` : "--";
       setEditorTitle(`【模考复盘】${cleanTitle}`);
-      setEditorContent(`## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 最后感悟\n`);
+      setEditorContent(`## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 做后感悟\n`);
     } else {
       setEditorPaper(null);
       setEditorSections(extractJournalSections(context ?? null));
@@ -5469,7 +5469,7 @@ export function StudyDashboard() {
                       const cleanTitle = activeQuestionPaper.title.replace(/^(\d{4}年)\s+/, "$1");
                       const scoreStr = typeof activeQuestionPaper.score === "number" ? `${activeQuestionPaper.score}` : "--";
                       const title = `【模考复盘】${cleanTitle}`;
-                      const template = `## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 最后感悟\n`;
+                      const template = `## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 做后感悟\n`;
                       openCreateJournal({
                         type: "paper",
                         area: activeQuestionPaper.area,
