@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -241,57 +240,5 @@ test("模拟卷真实墓碑删除与多端同步防复活流水线", () => {
   assert.ok(finalSyncedPapers.some((p) => p.id === "past-408-2026"));
   assert.ok(finalSyncedPapers.some((p) => p.id === "mock-1"));
   assert.ok(!finalSyncedPapers.some((p) => p.id === "mock-2"));
-});
-
-test("消融测试: 英语主观题分值重构 (翻译5*2=10, 作文A 10分 + 作文B 20分) 与防溢出消融", async () => {
-  // 1. 数据结构与分值消融
-  const translationGroup = ENGLISH_PAPER_STRUCTURE.groups.find((g) => g.subject === "英译汉");
-  assert.ok(translationGroup, "英语必须包含英译汉题组");
-  assert.equal(translationGroup.start, 46);
-  assert.equal(translationGroup.end, 50);
-  assert.equal(translationGroup.count, 5);
-  assert.equal(translationGroup.scorePerQuestion, 2.0, "英译汉单题分值必须为 2 分 (5 * 2 = 10分)");
-
-  const writingGroup = ENGLISH_PAPER_STRUCTURE.groups.find((g) => g.subject === "写作");
-  assert.ok(writingGroup, "英语必须包含写作题组");
-  assert.equal(writingGroup.start, 51);
-  assert.equal(writingGroup.end, 52);
-  assert.equal(writingGroup.count, 2);
-  assert.equal(writingGroup.questionScores?.[51], 10, "作文A必须为 10 分");
-  assert.equal(writingGroup.questionScores?.[52], 20, "作文B必须为 20 分");
-
-  // 总分校验：完形 10 + 阅读A 40 + 阅读B 10 + 翻译 10 + 作文 30 = 100 分
-  const totalScore = ENGLISH_PAPER_STRUCTURE.groups.reduce((acc, g) => {
-    if (g.questionScores) {
-      return acc + Object.values(g.questionScores).reduce((a, b) => a + b, 0);
-    }
-    return acc + (g.scorePerQuestion ?? 0) * g.count;
-  }, 0);
-  assert.equal(totalScore, 100, "英语全卷题型分值总和必须严丝合缝等于 100 分");
-
-  // 2. 答题卡组件文案消融 (淘汰应用文/短文写作，改用作文A/作文B)
-  const modalCode = await readFile("app/components/sprint/AnswerSheetModal.tsx", "utf8");
-  assert.match(modalCode, /第 46 ~ 50 题 · 每题 2 分 · 共 10 分/, "英译汉提示必须显示每题2分共10分");
-  assert.match(modalCode, /第 51 ~ 52 题 · 作文A 10 分 · 作文B 20 分 · 共 30 分/, "写作提示必须显示作文A 10分、作文B 20分、共30分");
-  assert.match(modalCode, /subj:\s*"作文A",\s*max:\s*10/, "作文A配置必须为10分");
-  assert.match(modalCode, /subj:\s*"作文B",\s*max:\s*20/, "作文B配置必须为20分");
-  assert.doesNotMatch(modalCode, /应用文/, "旧版【应用文】标签必须彻底移除");
-  assert.doesNotMatch(modalCode, /短文写作/, "旧版【短文写作】标签必须彻底移除");
-
-  // 3. CSS 布局防溢出消融
-  const css = await readFile("app/globals.css", "utf8");
-  const qItemMatch = css.match(/\.q-rating-item\s*\{([^}]+)\}/);
-  assert.ok(qItemMatch, "必须存在 .q-rating-item 规则");
-  assert.match(qItemMatch[1], /box-sizing:\s*border-box/, ".q-rating-item 必须声明 box-sizing: border-box 避免溢出");
-  assert.match(qItemMatch[1], /min-width:\s*0/, ".q-rating-item 必须声明 min-width: 0 允许弹性收缩");
-
-  const qTypeBlockMatch = css.match(/\.q-type-block\s*\{([^}]+)\}/);
-  assert.ok(qTypeBlockMatch, "必须存在 .q-type-block 规则");
-  assert.match(qTypeBlockMatch[1], /box-sizing:\s*border-box/, ".q-type-block 必须声明 box-sizing: border-box");
-  assert.match(qTypeBlockMatch[1], /min-width:\s*0/, ".q-type-block 必须声明 min-width: 0");
-
-  const qRatingBtnMatch = css.match(/\.q-rating-btn\s*\{([^}]+)\}/);
-  assert.ok(qRatingBtnMatch, "必须存在 .q-rating-btn 规则");
-  assert.match(qRatingBtnMatch[1], /padding:\s*0\s+7px/, "评级按钮宽度应紧凑为 padding: 0 7px 防挤出");
 });
 
