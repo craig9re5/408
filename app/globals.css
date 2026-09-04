@@ -6487,13 +6487,6 @@ select,
   width: 100%;
 }
 
-.card-title-line {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
 .card-title-text {
   font-size: 13.5px;
   font-weight: 700;
@@ -6507,24 +6500,42 @@ select,
   text-align: center;
 }
 
-.card-live-pill {
+.card-live-corner-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 9.5px;
+  gap: 3.5px;
+  font-size: 9px;
   font-weight: 700;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.25);
-  padding: 2px 6px;
-  border-radius: 10px;
+  color: #1d4ed8;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  padding: 1.5px 5.5px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1);
+  pointer-events: none;
+  z-index: 2;
+  line-height: 1.2;
 }
 
-.card-live-pill .dot {
-  width: 5px;
-  height: 5px;
+.card-live-corner-badge .live-dot {
+  width: 4.5px;
+  height: 4.5px;
   border-radius: 50%;
-  background: #ffffff;
-  animation: pulse-glow 1.5s infinite;
+  background-color: #2563eb;
+  box-shadow: 0 0 5px rgba(37, 99, 235, 0.7);
+  animation: schedule-pill-blink 1.2s ease-in-out infinite;
+}
+
+.card-live-corner-badge.dot-only {
+  top: 5px;
+  right: 5px;
+  padding: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(37, 99, 235, 0.35);
 }
 
 /* 优化 cockpit 内任务行排版，避免文字被挤压截断 */

@@ -245,16 +245,20 @@ export function TransposedTimetableGrid({
               title={`${evt.title} (${timeRangeTooltip})`}
               aria-label={`${evt.title}，第 ${evt.startPeriod} 至 ${evt.endPeriod} 节，${timeRangeTooltip}`}
             >
-              <div className="timetable-transposed-card__inner">
-                <div className="card-title-line">
-                  <span className="card-title-text">{evt.title}</span>
-                  {isActive && (
-                    <span className="card-live-pill">
-                      <span className="dot" />
-                      上课中
-                    </span>
-                  )}
+              {/* 正在进行中右上角微光角标（绝对定位，绝不挤压或偏移居中标题） */}
+              {isActive && (
+                <div
+                  className={`card-live-corner-badge ${colSpan === 1 ? "dot-only" : ""}`}
+                  aria-label="正在进行中"
+                  title="当前正在上课中"
+                >
+                  <span className="live-dot" />
+                  {colSpan > 1 && <span className="live-text">上课中</span>}
                 </div>
+              )}
+
+              <div className="timetable-transposed-card__inner">
+                <span className="card-title-text">{evt.title}</span>
                 <span className="card-time-sub">{timeRangeTooltip}</span>
               </div>
             </button>
