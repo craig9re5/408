@@ -324,19 +324,19 @@ export function AnswerSheetModal({
                 </div>
               </div>
 
-              {/* Part 2: 英译汉 (46~50, 每题 3 分, 共 15 分) */}
+              {/* Part 2: 英译汉 (46~50, 每题 2 分, 共 10 分) */}
               <div className="q-type-block q-type-block--comprehensive">
                 <div className="q-type-header">
                   <span className="q-type-title">英译汉</span>
-                  <span className="q-type-subtitle">第 46 ~ 50 题 · 每题 3 分 · 共 15 分</span>
+                  <span className="q-type-subtitle">第 46 ~ 50 题 · 每题 2 分 · 共 10 分</span>
                 </div>
                 <div className="q-rating-grid">
                   {[
-                    { num: 46, max: 3 },
-                    { num: 47, max: 3 },
-                    { num: 48, max: 3 },
-                    { num: 49, max: 3 },
-                    { num: 50, max: 3 },
+                    { num: 46, max: 2 },
+                    { num: 47, max: 2 },
+                    { num: 48, max: 2 },
+                    { num: 49, max: 2 },
+                    { num: 50, max: 2 },
                   ].map((item) => {
                     const state = paper.questions?.[item.num];
                     const score = paper.questionScores?.[item.num];
@@ -390,16 +390,16 @@ export function AnswerSheetModal({
                 </div>
               </div>
 
-              {/* Part 3: 写作 (51~52, 小作文 10分 + 大作文 15分, 共 25 分) */}
+              {/* Part 3: 写作 (51~52, 作文A 10分 + 作文B 20分, 共 30 分) */}
               <div className="q-type-block q-type-block--comprehensive">
                 <div className="q-type-header">
                   <span className="q-type-title">写作</span>
-                  <span className="q-type-subtitle">第 51 ~ 52 题 · 小作文 10 分 · 大作文 15 分 · 共 25 分</span>
+                  <span className="q-type-subtitle">第 51 ~ 52 题 · 作文A 10 分 · 作文B 20 分 · 共 30 分</span>
                 </div>
                 <div className="q-rating-grid">
                   {[
-                    { num: 51, subj: "应用文", max: 10 },
-                    { num: 52, subj: "短文写作", max: 15 },
+                    { num: 51, subj: "作文A", max: 10 },
+                    { num: 52, subj: "作文B", max: 20 },
                   ].map((item) => {
                     const state = paper.questions?.[item.num];
                     const score = paper.questionScores?.[item.num];

@@ -74,8 +74,8 @@ export function PaperCard({
       { num: 48, name: "翻译 3" },
       { num: 49, name: "翻译 4" },
       { num: 50, name: "翻译 5" },
-      { num: 51, name: "小作文" },
-      { num: 52, name: "大作文" },
+      { num: 51, name: "作文A" },
+      { num: 52, name: "作文B" },
     ];
     choiceTagLabel = "选择";
     subjTagLabel = "主观";

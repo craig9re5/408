@@ -179,7 +179,7 @@ export const ENGLISH_PAPER_STRUCTURE: { total: number; groups: QuestionGroupDef[
     { type: "主观表达题", subject: "英译汉", start: 46, end: 50, count: 5, scorePerQuestion: 2.0 },
     {
       type: "主观表达题",
-      subject: "短文写作",
+      subject: "写作",
       start: 51,
       end: 52,
       count: 2,
