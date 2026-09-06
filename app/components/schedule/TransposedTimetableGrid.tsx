@@ -190,7 +190,7 @@ export function TransposedTimetableGrid({
             return (
               <div
                 key={`bg-${day.dayOfWeek}-${p.period}`}
-                className={`timetable-transposed-bg-cell ${day.isToday ? "today-row" : ""} ${
+                className={`timetable-transposed-bg-cell ${
                   isCurrentlyResting ? "timetable-transposed-bg-cell--current-rest" : ""
                 } ${!hasEvent ? "empty-slot" : ""}`}
                 style={{ gridColumn: col, gridRow: row }}

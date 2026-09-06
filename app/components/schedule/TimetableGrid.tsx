@@ -83,22 +83,17 @@ export function TimetableGrid({
           >
             <span className="day-name">{day.label}</span>
             <span className="day-date">{day.monthDay}</span>
-            {day.isToday && <span className="today-dot" aria-hidden="true" />}
           </div>
         ))}
 
         {/* ── 左侧时间轴标尺 (节次 + 起止时间) ── */}
         {schedule.periods.map((p) => {
           const row = periodToRow(p.period);
-          const isPeriodActive = activeInfo.status === "in_progress" &&
-            activeInfo.activeEvent &&
-            p.period >= activeInfo.activeEvent.startPeriod &&
-            p.period <= activeInfo.activeEvent.endPeriod;
 
           return (
             <div
               key={`ruler-${p.period}`}
-              className={`timetable-ruler-cell ${isPeriodActive ? "timetable-ruler-cell--active" : ""}`}
+              className="timetable-ruler-cell"
               style={{ gridColumn: 1, gridRow: row }}
             >
               <span className="period-num">{p.period}</span>
@@ -122,7 +117,7 @@ export function TimetableGrid({
             return (
               <div
                 key={`cell-${day.dayOfWeek}-${p.period}`}
-                className={`timetable-bg-cell ${day.isToday ? "timetable-bg-cell--today" : ""} ${
+                className={`timetable-bg-cell ${
                   isCurrentlyResting ? "timetable-bg-cell--current-rest" : ""
                 } ${!hasEvent ? "empty-slot" : ""}`}
                 style={{

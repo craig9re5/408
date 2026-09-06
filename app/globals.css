@@ -5184,22 +5184,14 @@ select,
 }
 
 .timetable-header-cell--today {
-  background: rgba(37, 99, 235, 0.07);
-  border-color: rgba(37, 99, 235, 0.3);
+  background: transparent;
+  border-color: rgba(220, 217, 208, 0.4);
 }
 
 .timetable-header-cell--today .day-name,
 .timetable-header-cell--today .day-date {
   color: #2563eb;
-  font-weight: 700;
-}
-
-.today-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #2563eb;
-  margin-top: 3px;
+  font-weight: 600;
 }
 
 /* Time Ruler (Left Column) */
@@ -5233,26 +5225,12 @@ select,
   margin-top: 1px;
 }
 
-.timetable-ruler-cell--active {
-  border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
-}
-
-.timetable-ruler-cell--active .period-num {
-  color: #2563eb;
-}
-
 /* Background Placeholder Cells */
 .timetable-bg-cell {
   border-radius: 8px;
   background: rgba(242, 239, 231, 0.35);
   border: 1px solid rgba(220, 217, 208, 0.35);
   transition: background 0.15s ease;
-}
-
-.timetable-bg-cell--today {
-  background: rgba(37, 99, 235, 0.025);
-  border-color: rgba(37, 99, 235, 0.12);
 }
 
 /* Rest Break Full-Width Rows (Lunch & Dinner) */
@@ -6443,11 +6421,6 @@ select,
   border: 1px dashed rgba(220, 217, 208, 0.4);
   overflow: hidden;
   transition: all 0.2s ease;
-}
-
-.timetable-transposed-bg-cell.today-row {
-  background: rgba(37, 99, 235, 0.02);
-  border-color: rgba(37, 99, 235, 0.15);
 }
 
 .bg-cell-idle-label {
