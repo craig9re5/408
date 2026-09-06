@@ -129,17 +129,13 @@ export function TimetableGrid({
                   gridColumn: day.dayOfWeek + 1,
                   gridRow: row,
                 }}
-                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `空隙时段：休息 (${p.start}-${p.end})`) : undefined}
+                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `${p.start}-${p.end}`) : undefined}
               >
-                {!hasEvent && (
-                  isCurrentlyResting ? (
-                    <div className="bg-cell-rest-live">
-                      <span className="live-dot live-dot--rest" />
-                      <span className="bg-cell-rest-badge">休息中</span>
-                    </div>
-                  ) : (
-                    <span className="bg-cell-idle-label">休息</span>
-                  )
+                {!hasEvent && isCurrentlyResting && (
+                  <div className="bg-cell-rest-live">
+                    <span className="live-dot live-dot--rest" />
+                    <span className="bg-cell-rest-badge">休息中</span>
+                  </div>
                 )}
               </div>
             );

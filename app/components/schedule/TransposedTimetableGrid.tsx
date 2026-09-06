@@ -194,22 +194,18 @@ export function TransposedTimetableGrid({
                   isCurrentlyResting ? "timetable-transposed-bg-cell--current-rest" : ""
                 } ${!hasEvent ? "empty-slot" : ""}`}
                 style={{ gridColumn: col, gridRow: row }}
-                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `空隙时段：休息 (${p.start}-${p.end})`) : undefined}
+                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `${p.start}-${p.end}`) : undefined}
               >
-                {!hasEvent && (
-                  isCurrentlyResting ? (
-                    <div className="bg-cell-rest-live">
-                      <div className="card-live-corner-badge dot-only" title="当前时段：休息中">
-                        <span className="live-dot live-dot--rest" />
-                      </div>
-                      <div className="bg-cell-rest-center">
-                        <span className="bg-cell-rest-title">休息中</span>
-                        <span className="bg-cell-rest-time">{p.start}-{p.end}</span>
-                      </div>
+                {!hasEvent && isCurrentlyResting && (
+                  <div className="bg-cell-rest-live">
+                    <div className="card-live-corner-badge dot-only" title="当前时段：休息中">
+                      <span className="live-dot live-dot--rest" />
                     </div>
-                  ) : (
-                    <span className="bg-cell-idle-label">休息</span>
-                  )
+                    <div className="bg-cell-rest-center">
+                      <span className="bg-cell-rest-title">休息中</span>
+                      <span className="bg-cell-rest-time">{p.start}-{p.end}</span>
+                    </div>
+                  </div>
                 )}
               </div>
             );

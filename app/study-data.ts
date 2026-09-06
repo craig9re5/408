@@ -926,12 +926,12 @@ export const DEFAULT_SCHEDULE_PERIODS: CustomPeriodConfig[] = [
 ];
 
 export const DEFAULT_SCHEDULE_EVENTS: ScheduleEvent[] = [
-  // ── 上午：周一至周五 2~4 节 (09:10 - 12:00) 数学强化 ──
-  { id: "sched_mon_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 1, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
-  { id: "sched_tue_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 2, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
-  { id: "sched_wed_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 3, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
-  { id: "sched_thu_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 4, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
-  { id: "sched_fri_math_intense", title: "数学强化", theme: "math_intense", dayOfWeek: 5, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  // ── 上午：周一至周五 2~4 节 (09:10 - 12:00) 数学 ──
+  { id: "sched_mon_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 1, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_tue_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 2, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_wed_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 3, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_thu_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 4, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_fri_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 5, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
 
   // ── 下午：周一至周六 5~8 节 (14:00 - 18:00) 408 统考 ──
   { id: "sched_mon_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
@@ -941,13 +941,16 @@ export const DEFAULT_SCHEDULE_EVENTS: ScheduleEvent[] = [
   { id: "sched_fri_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
   { id: "sched_sat_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 6, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
 
+  // ── 下午：周日 5~8 节 (14:00 - 18:00) 数学 ──
+  { id: "sched_sun_math_afternoon", title: "数学", theme: "math_intense", dayOfWeek: 7, startPeriod: 5, endPeriod: 8, linkedArea: "math" },
+
   // ── 晚间前半场：10~11 节 (19:30 - 21:20) 408 与数学交替 ──
   { id: "sched_mon_408_eve", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_tue_math_eve", title: "数学", theme: "math_regular", dayOfWeek: 2, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  { id: "sched_tue_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 2, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
   { id: "sched_wed_408_eve", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_thu_math_eve", title: "数学", theme: "math_regular", dayOfWeek: 4, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  { id: "sched_thu_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 4, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
   { id: "sched_fri_408_eve", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_sat_math_eve", title: "数学强化", theme: "math_intense", dayOfWeek: 6, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  { id: "sched_sat_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 6, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
 
   // ── 晚间后半场：13 节 (22:30 - 23:20) / 周日 12~13 节 (21:30 - 23:20) 英政 ──
   { id: "sched_mon_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 1, startPeriod: 13, endPeriod: 13 },
@@ -1070,7 +1073,7 @@ export function normalizeSchedule(value: unknown): ScheduleAppData {
   let events: ScheduleEvent[] = fallback.events;
   if (Array.isArray(value.events)) {
     const validThemes = new Set<ScheduleThemeKey>(["cs408", "math_intense", "math_regular", "english_pol", "custom"]);
-    const cleanedEvents = value.events
+    const cleanedEvents: ScheduleEvent[] = value.events
       .filter((e): e is Record<string, unknown> =>
         isRecord(e) &&
         typeof e.id === "string" &&
@@ -1081,17 +1084,44 @@ export function normalizeSchedule(value: unknown): ScheduleAppData {
         typeof e.endPeriod === "number" &&
         e.startPeriod <= e.endPeriod
       )
-      .map((e) => ({
-        id: String(e.id),
-        title: String(e.title).trim(),
-        theme: (typeof e.theme === "string" && validThemes.has(e.theme as ScheduleThemeKey) ? e.theme : "custom") as ScheduleThemeKey,
-        dayOfWeek: e.dayOfWeek as WeekdayNumber,
-        startPeriod: e.startPeriod as number,
-        endPeriod: e.endPeriod as number,
-        locationOrNotes: typeof e.locationOrNotes === "string" ? e.locationOrNotes : undefined,
-        linkedArea: (e.linkedArea === "408" || e.linkedArea === "math" || e.linkedArea === "english" || e.linkedArea === "politics") ? (e.linkedArea as "408" | "math" | "english" | "politics") : undefined,
-        applicableWeeks: Array.isArray(e.applicableWeeks) ? e.applicableWeeks.filter((w) => typeof w === "number") : undefined,
-      }));
+      .map((e) => {
+        const rawTitle = String(e.title).trim();
+        const title = rawTitle === "数学强化" ? "数学" : rawTitle;
+        let theme = (typeof e.theme === "string" && validThemes.has(e.theme as ScheduleThemeKey) ? e.theme : "custom") as ScheduleThemeKey;
+        if (title === "数学" && (theme === "math_regular" || theme === "math_intense")) {
+          theme = "math_intense";
+        }
+        return {
+          id: String(e.id),
+          title,
+          theme,
+          dayOfWeek: e.dayOfWeek as WeekdayNumber,
+          startPeriod: e.startPeriod as number,
+          endPeriod: e.endPeriod as number,
+          locationOrNotes: typeof e.locationOrNotes === "string" ? e.locationOrNotes : undefined,
+          linkedArea: (e.linkedArea === "408" || e.linkedArea === "math" || e.linkedArea === "english" || e.linkedArea === "politics")
+            ? (e.linkedArea as "408" | "math" | "english" | "politics")
+            : (title === "数学" ? "math" : undefined),
+          applicableWeeks: Array.isArray(e.applicableWeeks) ? e.applicableWeeks.filter((w) => typeof w === "number") : undefined,
+        };
+      });
+
+    // 默认排课平滑补全：若当前基于默认排课模板但尚未增设周日 5~8 节数学，自动平滑补齐
+    const isDefaultTemplate = cleanedEvents.some((e) => e.id.startsWith("sched_"));
+    const hasSundayAfternoon = cleanedEvents.some((e) => e.dayOfWeek === 7 && e.startPeriod <= 8 && e.endPeriod >= 5);
+    if (isDefaultTemplate && !hasSundayAfternoon) {
+      cleanedEvents.push({
+        id: "sched_sun_math_afternoon",
+        title: "数学",
+        theme: "math_intense",
+        dayOfWeek: 7,
+        startPeriod: 5,
+        endPeriod: 8,
+        linkedArea: "math",
+      });
+      cleanedEvents.sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startPeriod - b.startPeriod);
+    }
+
     if (cleanedEvents.length > 0 || value.events.length === 0) {
       events = cleanedEvents;
     }

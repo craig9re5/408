@@ -76,7 +76,7 @@ test("Schedule 实时「进行中」状态机判定: 100%还原截图周四20:43
   assert.equal(statusA.status, "in_progress");
   assert.ok(statusA.activeEvent);
   assert.equal(statusA.activeEvent.title, "数学");
-  assert.equal(statusA.activeEvent.theme, "math_regular");
+  assert.equal(statusA.activeEvent.theme, "math_intense");
   assert.equal(statusA.remainingMinutes, 37); // 21:20 结束，当前 20:43，剩余 37 分钟
   assert.ok(statusA.elapsedPercent > 0);
 
@@ -102,25 +102,36 @@ test("Schedule 实时「进行中」状态机判定: 100%还原截图周四20:43
   assert.equal(statusD.restBreak.label, "晚休");
   assert.equal(statusD.remainingMinutes, 20); // 18:30 结束，剩余 20 分钟
 
-  // 场景 E: 课间休整与下一节预告 (如上午 09:05，即将进入 09:10 的数学强化)
+  // 场景 E: 课间休整与下一节预告 (如上午 09:05，即将进入 09:10 的数学)
   const statusE = calculateScheduleStatus(schedule, new Date(), 1, "09:05");
   assert.equal(statusE.status, "intermission");
   assert.ok(statusE.intermissionNextEvent);
-  assert.equal(statusE.intermissionNextEvent.title, "数学强化");
+  assert.equal(statusE.intermissionNextEvent.title, "数学");
   assert.equal(statusE.startsInMinutes, 5);
 
   // 场景 F: 清晨空闲自习 (06:30)
   const statusF = calculateScheduleStatus(schedule, new Date(), 3, "06:30");
   assert.equal(statusF.status, "idle");
   assert.equal(statusF.activeEvent, null);
+
+  // 场景 G: 新增周日下午 5~8 节数学课 (周日 16:00 正在上第 5~8 节数学)
+  const statusSun = calculateScheduleStatus(schedule, new Date(), 7, "16:00");
+  assert.equal(statusSun.status, "in_progress");
+  assert.ok(statusSun.activeEvent);
+  assert.equal(statusSun.activeEvent.title, "数学");
+  assert.equal(statusSun.activeEvent.startPeriod, 5);
+  assert.equal(statusSun.activeEvent.endPeriod, 8);
 });
 
 test("Schedule 数据结构标准化与缺省容错: normalizeSchedule 自动补全默认排课与安全清洗", () => {
-  // 1. null / 空对象回退至默认预设
+  // 1. null / 空对象回退至默认预设 (含周日 5~8 节数学，共 25 项排课)
   const emptyNorm = normalizeSchedule(null);
-  assert.equal(emptyNorm.events.length, 24);
+  assert.equal(emptyNorm.events.length, 25);
   assert.equal(emptyNorm.periods.length, 13);
   assert.equal(emptyNorm.lunchBreak.start, "12:00");
+  const sunMath = emptyNorm.events.find((e) => e.dayOfWeek === 7 && e.startPeriod === 5);
+  assert.ok(sunMath);
+  assert.equal(sunMath.title, "数学");
 
   // 2. 部分字段清洗与非法节次过滤
   const custom = {
@@ -128,11 +139,15 @@ test("Schedule 数据结构标准化与缺省容错: normalizeSchedule 自动补
     activeWeek: 3,
     events: [
       { id: "e1", title: "英语模考", theme: "english_pol", dayOfWeek: 7, startPeriod: 1, endPeriod: 4 },
+      { id: "e2", title: "数学强化", theme: "math_regular", dayOfWeek: 1, startPeriod: 2, endPeriod: 4 },
       { id: "invalid_order", title: "错误节次", theme: "cs408", dayOfWeek: 1, startPeriod: 8, endPeriod: 2 }, // start > end 必须被滤除
     ],
   };
   const cleaned = normalizeSchedule(custom);
   assert.equal(cleaned.activeWeek, 3);
-  assert.equal(cleaned.events.length, 1);
+  assert.equal(cleaned.events.length, 2);
   assert.equal(cleaned.events[0].title, "英语模考");
+  // 统一命名与主题规范：数学强化 -> 数学，统一 theme 为 math_intense
+  assert.equal(cleaned.events[1].title, "数学");
+  assert.equal(cleaned.events[1].theme, "math_intense");
 });
