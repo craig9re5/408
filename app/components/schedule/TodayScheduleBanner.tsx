@@ -53,10 +53,15 @@ export function TodayScheduleBanner({
             )}
 
             {status === "idle" && (
-              <span className="idle-badge">
-                <span className="idle-icon">🌿</span>
-                自习与自由排期
-              </span>
+              <>
+                <span className="rest-badge rest-badge--idle">
+                  <span className="rest-icon">☕</span>
+                  休息中
+                </span>
+                <span className="time-countdown">
+                  {intermissionNextEvent ? `${startsInMinutes} 分钟后上课 (${intermissionNextEvent.title})` : "当前为空隙自由时段"}
+                </span>
+              </>
             )}
           </div>
 

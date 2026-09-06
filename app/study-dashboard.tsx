@@ -2711,15 +2711,22 @@ export function StudyDashboard() {
                     </div>
 
                     <div className="cockpit-schedule-controls">
-                      {activeScheduleInfo.status === "in_progress" && activeScheduleInfo.activeEvent && (
+                      {activeScheduleInfo.status === "in_progress" && activeScheduleInfo.activeEvent ? (
                         <div className="cockpit-live-indicator" title="当前时段正在进行">
                           <span className="cockpit-live-dot" />
                           <span>进行中: {activeScheduleInfo.activeEvent.title}</span>
                         </div>
-                      )}
-                      {activeScheduleInfo.status === "rest_break" && (
-                        <div className="cockpit-rest-indicator">
-                          <span>☕ {activeScheduleInfo.restBreak?.label} (剩 {activeScheduleInfo.remainingMinutes}m)</span>
+                      ) : (
+                        <div className="cockpit-rest-indicator" title="当前为空隙休息时段">
+                          <span className="cockpit-rest-dot" />
+                          <span>
+                            ☕ 休息中
+                            {activeScheduleInfo.status === "rest_break" && activeScheduleInfo.restBreak
+                              ? ` (${activeScheduleInfo.restBreak.label} · 剩 ${activeScheduleInfo.remainingMinutes}m)`
+                              : activeScheduleInfo.intermissionNextEvent && activeScheduleInfo.startsInMinutes <= 60
+                              ? ` · 距下节 ${activeScheduleInfo.intermissionNextEvent.title} 剩 ${activeScheduleInfo.startsInMinutes}m`
+                              : ""}
+                          </span>
                         </div>
                       )}
 

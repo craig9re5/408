@@ -1,5 +1,7 @@
 "use client";
 
+import type { ActiveScheduleInfo } from "../../study-data";
+
 interface ScheduleHeaderProps {
   activeWeek: number;
   currentCalculatedWeek: number;
@@ -7,6 +9,7 @@ interface ScheduleHeaderProps {
   onResetDefault: () => void;
   layoutMode?: "transposed" | "portrait";
   onChangeLayoutMode?: (mode: "transposed" | "portrait") => void;
+  activeInfo?: ActiveScheduleInfo;
 }
 
 export function ScheduleHeader({
@@ -16,6 +19,7 @@ export function ScheduleHeader({
   onResetDefault,
   layoutMode = "transposed",
   onChangeLayoutMode,
+  activeInfo,
 }: ScheduleHeaderProps) {
   const isDifferentWeek = activeWeek !== currentCalculatedWeek;
 
@@ -76,6 +80,30 @@ export function ScheduleHeader({
           </button>
         )}
       </div>
+
+      {/* ── 实时作息状态提示（进行中 / 休息中） ── */}
+      {activeInfo && (
+        <div className="schedule-header-status-indicator">
+          {activeInfo.status === "in_progress" && activeInfo.activeEvent ? (
+            <div className="header-status-pill in-progress" title="当前时段正在上课">
+              <span className="live-dot" />
+              <span>进行中: {activeInfo.activeEvent.title}</span>
+            </div>
+          ) : (
+            <div className="header-status-pill resting" title="当前为空隙休息时段">
+              <span className="rest-dot" />
+              <span>
+                ☕ 休息中
+                {activeInfo.status === "rest_break" && activeInfo.restBreak
+                  ? ` · ${activeInfo.restBreak.label} (剩 ${activeInfo.remainingMinutes}m)`
+                  : activeInfo.intermissionNextEvent && activeInfo.startsInMinutes <= 60
+                  ? ` · 距下节 ${activeInfo.intermissionNextEvent.title} 剩 ${activeInfo.startsInMinutes}m`
+                  : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 中间：横纵转置 / 竖版周课表 视图自由切换 ── */}
       {onChangeLayoutMode && (

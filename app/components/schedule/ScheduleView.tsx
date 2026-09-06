@@ -63,6 +63,7 @@ export function ScheduleView({
         onResetDefault={handleResetDefault}
         layoutMode={viewMode}
         onChangeLayoutMode={setViewMode}
+        activeInfo={activeInfo}
       />
 
       <main className="schedule-main-board">

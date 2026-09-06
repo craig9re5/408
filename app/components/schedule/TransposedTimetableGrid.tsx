@@ -175,17 +175,43 @@ export function TransposedTimetableGrid({
           );
         })}
 
-        {/* ── 背景占位格子 (7行 x 各时段) ── */}
+        {/* ── 背景占位格子 (7行 x 各时段，空隙时段支持【休息中】状态展示) ── */}
         {weekDays.map((day) => {
           const row = day.dayOfWeek + 1;
           return schedule.periods.map((p) => {
             const col = periodToCol(p.period);
+            const hasEvent = schedule.events.some(
+              (e) => e.dayOfWeek === day.dayOfWeek && p.period >= e.startPeriod && p.period <= e.endPeriod
+            );
+            const isCurrentlyResting = day.isToday && !hasEvent && (
+              activeInfo.status !== "in_progress" && activeInfo.activePeriod?.period === p.period
+            );
+
             return (
               <div
                 key={`bg-${day.dayOfWeek}-${p.period}`}
-                className={`timetable-transposed-bg-cell ${day.isToday ? "today-row" : ""}`}
+                className={`timetable-transposed-bg-cell ${day.isToday ? "today-row" : ""} ${
+                  isCurrentlyResting ? "timetable-transposed-bg-cell--current-rest" : ""
+                } ${!hasEvent ? "empty-slot" : ""}`}
                 style={{ gridColumn: col, gridRow: row }}
-              />
+                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `空隙时段：休息 (${p.start}-${p.end})`) : undefined}
+              >
+                {!hasEvent && (
+                  isCurrentlyResting ? (
+                    <div className="bg-cell-rest-live">
+                      <div className="card-live-corner-badge dot-only" title="当前时段：休息中">
+                        <span className="live-dot live-dot--rest" />
+                      </div>
+                      <div className="bg-cell-rest-center">
+                        <span className="bg-cell-rest-title">休息中</span>
+                        <span className="bg-cell-rest-time">{p.start}-{p.end}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="bg-cell-idle-label">休息</span>
+                  )
+                )}
+              </div>
             );
           });
         })}

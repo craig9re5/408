@@ -361,6 +361,8 @@ export interface ActiveScheduleInfo {
   elapsedPercent: number;
   remainingMinutes: number;
   startsInMinutes: number;
+  isRest?: boolean;
+  restTitle?: string;
 }
 
 export type StudyAppData = {
@@ -1143,6 +1145,8 @@ export function calculateScheduleStatus(
       elapsedPercent: Math.round(((currentMinutes - lunchStart) / (lunchEnd - lunchStart)) * 100),
       remainingMinutes: lunchEnd - currentMinutes,
       startsInMinutes: 0,
+      isRest: true,
+      restTitle: "午休中",
     };
   }
 
@@ -1165,6 +1169,8 @@ export function calculateScheduleStatus(
       elapsedPercent: Math.round(((currentMinutes - dinnerStart) / (dinnerEnd - dinnerStart)) * 100),
       remainingMinutes: dinnerEnd - currentMinutes,
       startsInMinutes: 0,
+      isRest: true,
+      restTitle: "晚休中",
     };
   }
 
@@ -1196,9 +1202,18 @@ export function calculateScheduleStatus(
         elapsedPercent: percent,
         remainingMinutes: endMin - currentMinutes,
         startsInMinutes: 0,
+        isRest: false,
+        restTitle: undefined,
       };
     }
   }
+
+  // 当前时间如果处于某一节课的时间区间内（但未排课），记录当前时段，标记为休息中
+  const currentPeriodSlot = schedule.periods.find((p) => {
+    const s = timeToMinutes(p.start);
+    const e = timeToMinutes(p.end);
+    return currentMinutes >= s && currentMinutes < e;
+  }) ?? null;
 
   let nextEvt: ScheduleEvent | null = null;
   let minStartDiff = Infinity;
@@ -1220,24 +1235,28 @@ export function calculateScheduleStatus(
     return {
       status: "intermission",
       activeEvent: null,
-      activePeriod: null,
+      activePeriod: currentPeriodSlot,
       restBreak: null,
       intermissionNextEvent: nextEvt,
       elapsedPercent: 0,
       remainingMinutes: 0,
       startsInMinutes: minStartDiff,
+      isRest: true,
+      restTitle: "休息中",
     };
   }
 
   return {
     status: "idle",
     activeEvent: null,
-    activePeriod: null,
+    activePeriod: currentPeriodSlot,
     restBreak: null,
     intermissionNextEvent: nextEvt,
     elapsedPercent: 0,
     remainingMinutes: 0,
     startsInMinutes: nextEvt ? minStartDiff : 0,
+    isRest: true,
+    restTitle: "休息中",
   };
 }
 

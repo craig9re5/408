@@ -108,19 +108,40 @@ export function TimetableGrid({
           );
         })}
 
-        {/* ── 背景占位格子 (7天 x 13节) ── */}
+        {/* ── 背景占位格子 (7天 x 13节，空隙时段支持【休息中】状态展示) ── */}
         {weekDays.map((day) =>
           schedule.periods.map((p) => {
             const row = periodToRow(p.period);
+            const hasEvent = schedule.events.some(
+              (e) => e.dayOfWeek === day.dayOfWeek && p.period >= e.startPeriod && p.period <= e.endPeriod
+            );
+            const isCurrentlyResting = day.isToday && !hasEvent && (
+              activeInfo.status !== "in_progress" && activeInfo.activePeriod?.period === p.period
+            );
+
             return (
               <div
                 key={`cell-${day.dayOfWeek}-${p.period}`}
-                className={`timetable-bg-cell ${day.isToday ? "timetable-bg-cell--today" : ""}`}
+                className={`timetable-bg-cell ${day.isToday ? "timetable-bg-cell--today" : ""} ${
+                  isCurrentlyResting ? "timetable-bg-cell--current-rest" : ""
+                } ${!hasEvent ? "empty-slot" : ""}`}
                 style={{
                   gridColumn: day.dayOfWeek + 1,
                   gridRow: row,
                 }}
-              />
+                title={!hasEvent ? (isCurrentlyResting ? `当前时段：休息中 (${p.start}-${p.end})` : `空隙时段：休息 (${p.start}-${p.end})`) : undefined}
+              >
+                {!hasEvent && (
+                  isCurrentlyResting ? (
+                    <div className="bg-cell-rest-live">
+                      <span className="live-dot live-dot--rest" />
+                      <span className="bg-cell-rest-badge">休息中</span>
+                    </div>
+                  ) : (
+                    <span className="bg-cell-idle-label">休息</span>
+                  )
+                )}
+              </div>
             );
           })
         )}
