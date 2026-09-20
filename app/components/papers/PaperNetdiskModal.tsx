@@ -30,7 +30,6 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
     totalBytes: DEFAULT_USER_QUOTA_BYTES,
   });
   const [loading, setLoading] = useState(true);
-  const [cloudStorageReady, setCloudStorageReady] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
@@ -71,7 +70,6 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
       const data = await fetchPaperList(selectedSubject, searchKeyword);
       setPapers(data.items);
       setQuota(data.quota);
-      setCloudStorageReady(data.cloudStorageReady);
       onQuotaUpdatedRef.current?.(data.quota, data.items.length);
     } catch (err) {
       showToast(`加载失败: ${String(err)}`);
@@ -141,17 +139,13 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
           prev.map((t) => (t.id === taskId ? { ...t, progress: 65 } : t))
         );
 
-        const result = await uploadPaper(file, defaultSubject);
+        await uploadPaper(file, defaultSubject);
 
         setUploadTasks((prev) =>
           prev.map((t) => (t.id === taskId ? { ...t, progress: 100, status: "success" } : t))
         );
 
-        if (result.isLocal) {
-          showToast(`已存入本地存储「${file.name}」（云端 R2 尚未配置）`);
-        } else {
-          showToast(`已成功上传「${file.name}」`);
-        }
+        showToast(`已成功添加试卷「${file.name}」`);
         await loadData();
 
         setTimeout(() => {
@@ -291,17 +285,6 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
             </button>
           </div>
         </header>
-
-        {!cloudStorageReady && (
-          <div className="netdisk-cloud-banner">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>云端对象存储（Cloudflare R2）暂未开启，试卷已自动保存在当前浏览器本地。如需多端云同步，请在 Cloudflare 控制台开启 R2。</span>
-          </div>
-        )}
 
         {/* Navigation & Filter Bar */}
         <div className="netdisk-toolbar">

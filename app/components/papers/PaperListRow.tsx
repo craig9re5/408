@@ -93,9 +93,6 @@ export function PaperListRow({
           <span className={`netdisk-subject-tag ${subjectMeta.badgeClass}`}>
             {subjectMeta.label}
           </span>
-          {paper.storageKey.startsWith("local://") && (
-            <span className="netdisk-badge-local" title="保存在当前浏览器本地存储中">本地</span>
-          )}
           {paper.year && (
             <span className="netdisk-year-tag">{paper.year}年</span>
           )}
