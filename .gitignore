@@ -54,3 +54,6 @@ next-env.d.ts
 .local-start*.log
 .local-worker*.log
 *.tsbuildinfo
+*.sql
+!migrations/*.sql
+*.xlsx

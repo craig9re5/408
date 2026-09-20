@@ -31,6 +31,7 @@ import {
   mergePapers,
   mergeJournals,
 } from "../shared/merge.ts";
+import { handlePapersApi } from "./papers.ts";
 
 export type {
   JournalProjectContext,
@@ -478,6 +479,13 @@ function normalizeAppDataBody(body: unknown): AppData | null {
 export async function handleApi(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/")) return null;
+
+  if (url.pathname.startsWith("/api/papers")) {
+    const workspaceId = await requireWorkspace(request, env);
+    if (typeof workspaceId !== "string") return workspaceId;
+    const papersResponse = await handlePapersApi(request, env, workspaceId);
+    if (papersResponse) return papersResponse;
+  }
 
   if (url.pathname === "/api/auth/session" && request.method === "GET") {
     let secret = "";

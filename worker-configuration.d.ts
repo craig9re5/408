@@ -5,6 +5,7 @@ interface __BaseEnv_Env {
 	ASSETS: Fetcher;
 	INVITE_CODES: string;
 	SESSION_SECRET: string;
+	PAPERS_BUCKET?: R2Bucket;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

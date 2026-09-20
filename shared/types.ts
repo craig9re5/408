@@ -130,3 +130,23 @@ export type QuestionGroupDef = {
   scorePerQuestion?: number;
   questionScores?: Record<number, number>;
 };
+
+export type ExamPaperSubject = "cs408" | "math" | "english" | "politics" | "other";
+
+export type ExamPaperItem = {
+  id: string;
+  workspaceId: string;
+  fileName: string;
+  originalName: string;
+  fileSize: number;
+  storageKey: string;
+  subject: ExamPaperSubject;
+  year?: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PaperQuotaInfo = {
+  usedBytes: number;
+  totalBytes: number;
+};

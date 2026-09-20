@@ -11,6 +11,7 @@ import { ScheduleView } from "./components/schedule/ScheduleView";
 import { TodayScheduleBanner } from "./components/schedule/TodayScheduleBanner";
 import { useScheduleTicker } from "./components/schedule/useScheduleTicker";
 import { TimetableGrid } from "./components/schedule/TimetableGrid";
+import { PaperNetdiskModal } from "./components/papers/PaperNetdiskModal";
 import {
   APP_VERSION,
   StorageRepository,
@@ -70,6 +71,7 @@ import {
   type LocalBackup,
   type PaperKind,
   type PaperRecord,
+  type PaperQuotaInfo,
   type QuestionState,
   type QuestionGroupDef,
   type PlanChangeSource,
@@ -446,6 +448,18 @@ export function StudyDashboard() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
   const [backups, setBackups] = useState<LocalBackup[]>([]);
+  const [isPaperNetdiskOpen, setIsPaperNetdiskOpen] = useState(false);
+  const [paperNetdiskSummary, setPaperNetdiskSummary] = useState<{ count: number; usedBytes: number } | null>(null);
+
+  const handlePaperQuotaUpdated = useCallback((q: PaperQuotaInfo, count: number) => {
+    setPaperNetdiskSummary((prev) => {
+      if (prev && prev.count === count && prev.usedBytes === q.usedBytes) {
+        return prev;
+      }
+      return { count, usedBytes: q.usedBytes };
+    });
+  }, []);
+
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
   const [workspaceId, setWorkspaceId] = useState("");
@@ -3716,6 +3730,35 @@ export function StudyDashboard() {
                   </div>
                 </section>
 
+                <section className="settings-card settings-card--netdisk">
+                  <header className="settings-card__header">
+                    <div>
+                      <h2>试卷云盘</h2>
+                    </div>
+                    <div className="settings-netdisk-badge">
+                      <span className="netdisk-badge-quota">
+                        {paperNetdiskSummary
+                          ? `${paperNetdiskSummary.count} 份试卷 · ${(paperNetdiskSummary.usedBytes / (1024 * 1024)).toFixed(1)} MB`
+                          : "云盘就绪"}
+                      </span>
+                    </div>
+                  </header>
+                  <div className="netdisk-card-content">
+                    <div className="settings-actions">
+                      <button
+                        type="button"
+                        className="settings-btn settings-btn--primary"
+                        onClick={() => setIsPaperNetdiskOpen(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "6px" }}>
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        进入试卷云盘
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
                 <section className="settings-card settings-card--data">
                   <header className="settings-card__header">
                     <div>
@@ -4250,6 +4293,14 @@ export function StudyDashboard() {
           getPaperQuestionSummary={getPaperQuestionSummary}
         />
       )}
+
+      {/* Paper Netdisk Modal */}
+      <PaperNetdiskModal
+        isOpen={isPaperNetdiskOpen}
+        onClose={() => setIsPaperNetdiskOpen(false)}
+        onQuotaUpdated={handlePaperQuotaUpdated}
+      />
     </div>
   );
+
 }

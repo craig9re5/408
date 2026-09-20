@@ -23,3 +23,12 @@ export function maxPaperScore(area: StudyArea): number {
   if (area === "english") return 100;
   return 150;
 }
+
+export const MAX_PAPER_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+export const DEFAULT_USER_QUOTA_BYTES = 1024 * 1024 * 1024; // 1 GB
+
+export const EXAM_PAPER_SUBJECT_MAP: Record<string, { label: string; badgeClass: string }> = {
+  cs408: { label: "408", badgeClass: "badge-cs408" },
+  math: { label: "数学", badgeClass: "badge-math" },
+  other: { label: "其他", badgeClass: "badge-other" },
+};

@@ -21,6 +21,9 @@ import type {
   QuestionState,
   QuestionGroupDef,
   PaperRecord,
+  ExamPaperItem,
+  ExamPaperSubject,
+  PaperQuotaInfo,
 } from "../shared/types.ts";
 import {
   DEFAULT_EXAM_DATE,
@@ -28,6 +31,9 @@ import {
   PAST_PAPER_YEARS,
   POLITICS_PAST_PAPER_YEARS,
   maxPaperScore,
+  MAX_PAPER_FILE_SIZE,
+  DEFAULT_USER_QUOTA_BYTES,
+  EXAM_PAPER_SUBJECT_MAP,
 } from "../shared/constants.ts";
 import {
   isRecord,
@@ -70,6 +76,9 @@ export type {
   QuestionState,
   QuestionGroupDef,
   PaperRecord,
+  ExamPaperItem,
+  ExamPaperSubject,
+  PaperQuotaInfo,
 };
 
 export {
@@ -78,6 +87,9 @@ export {
   PAST_PAPER_YEARS,
   POLITICS_PAST_PAPER_YEARS,
   maxPaperScore,
+  MAX_PAPER_FILE_SIZE,
+  DEFAULT_USER_QUOTA_BYTES,
+  EXAM_PAPER_SUBJECT_MAP,
   isRecord,
   isDate,
   addCalendarDays,
