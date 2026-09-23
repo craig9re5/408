@@ -71,7 +71,6 @@ import {
   type LocalBackup,
   type PaperKind,
   type PaperRecord,
-  type PaperQuotaInfo,
   type QuestionState,
   type QuestionGroupDef,
   type PlanChangeSource,
@@ -449,16 +448,6 @@ export function StudyDashboard() {
   const [publishError, setPublishError] = useState("");
   const [backups, setBackups] = useState<LocalBackup[]>([]);
   const [isPaperNetdiskOpen, setIsPaperNetdiskOpen] = useState(false);
-  const [paperNetdiskSummary, setPaperNetdiskSummary] = useState<{ count: number; usedBytes: number } | null>(null);
-
-  const handlePaperQuotaUpdated = useCallback((q: PaperQuotaInfo, count: number) => {
-    setPaperNetdiskSummary((prev) => {
-      if (prev && prev.count === count && prev.usedBytes === q.usedBytes) {
-        return prev;
-      }
-      return { count, usedBytes: q.usedBytes };
-    });
-  }, []);
 
   const [loaded, setLoaded] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("locked");
@@ -3193,6 +3182,32 @@ export function StudyDashboard() {
                 )}
               </div>
 
+              <button
+                type="button"
+                className="sprint-library-entry"
+                onClick={() => setIsPaperNetdiskOpen(true)}
+                aria-label="打开试卷云盘"
+              >
+                <span className="sprint-library-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7.5h5.2l2.1 2.2H21v9.1a1.7 1.7 0 0 1-1.7 1.7H4.7A1.7 1.7 0 0 1 3 18.8V7.5Z" />
+                    <path d="M3 7.5V5.2A1.7 1.7 0 0 1 4.7 3.5h4.1l2 2.1h8.5A1.7 1.7 0 0 1 21 7.3v2.4" />
+                    <path d="M8.1 14.9h7.8M8.1 17.5h5.1" />
+                  </svg>
+                </span>
+                <span className="sprint-library-copy">
+                  <span className="sprint-library-eyebrow">冲刺资料 · PDF 原件</span>
+                  <strong>试卷云盘</strong>
+                  <span className="sprint-library-desc">真题与模拟卷集中归档，需要时随手调取。</span>
+                </span>
+                <span className="sprint-library-action" aria-hidden="true">
+                  打开云盘
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 10h11m-4-4 4 4-4 4" />
+                  </svg>
+                </span>
+              </button>
+
               <div className="sprint-toolbar">
                 <div className="sprint-filter-section">
                   <span className="sprint-filter-label">类型</span>
@@ -3726,35 +3741,6 @@ export function StudyDashboard() {
                           <span className="schedule-score">150 分</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="settings-card settings-card--netdisk">
-                  <header className="settings-card__header">
-                    <div>
-                      <h2>试卷云盘</h2>
-                    </div>
-                    <div className="settings-netdisk-badge">
-                      <span className="netdisk-badge-quota">
-                        {paperNetdiskSummary
-                          ? `${paperNetdiskSummary.count} 份试卷 · ${(paperNetdiskSummary.usedBytes / (1024 * 1024)).toFixed(1)} MB`
-                          : "云盘就绪"}
-                      </span>
-                    </div>
-                  </header>
-                  <div className="netdisk-card-content">
-                    <div className="settings-actions">
-                      <button
-                        type="button"
-                        className="settings-btn settings-btn--primary"
-                        onClick={() => setIsPaperNetdiskOpen(true)}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "6px" }}>
-                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
-                        进入试卷云盘
-                      </button>
                     </div>
                   </div>
                 </section>
@@ -4298,7 +4284,6 @@ export function StudyDashboard() {
       <PaperNetdiskModal
         isOpen={isPaperNetdiskOpen}
         onClose={() => setIsPaperNetdiskOpen(false)}
-        onQuotaUpdated={handlePaperQuotaUpdated}
       />
     </div>
   );

@@ -3381,6 +3381,102 @@ button.date-text.late,
   box-shadow: 0 2px 8px rgba(35, 42, 44, 0.02);
 }
 
+.sprint-library-entry {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 82px;
+  align-items: center;
+  gap: 15px;
+  overflow: hidden;
+  padding: 13px 18px 13px 20px;
+  border: 1px solid rgba(116, 164, 181, 0.32);
+  border-radius: 14px;
+  color: var(--ink);
+  background: linear-gradient(105deg, rgba(116, 164, 181, 0.14), rgba(251, 250, 246, 0.98) 40%, var(--paper));
+  box-shadow: 0 3px 14px rgba(35, 42, 44, 0.035);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.sprint-library-entry::before {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--blue);
+  content: "";
+}
+
+.sprint-library-entry:hover {
+  border-color: rgba(81, 132, 150, 0.58);
+  box-shadow: 0 8px 22px rgba(35, 42, 44, 0.075);
+  transform: translateY(-1px);
+}
+
+.sprint-library-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border: 1px solid rgba(116, 164, 181, 0.28);
+  border-radius: 11px;
+  color: #4b7a8b;
+  background: rgba(255, 255, 255, 0.63);
+}
+
+.sprint-library-icon svg { width: 25px; height: 25px; }
+
+.sprint-library-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sprint-library-eyebrow {
+  color: #6d8c96;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.sprint-library-copy strong {
+  font: 600 17px var(--serif);
+  letter-spacing: 0.02em;
+}
+
+.sprint-library-desc {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.sprint-library-action {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 12px 7px 14px;
+  border-radius: 8px;
+  color: #f5f5f1;
+  background: var(--sidebar-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.18s ease;
+}
+
+.sprint-library-entry:hover .sprint-library-action { background: #345263; }
+.sprint-library-action svg { width: 16px; height: 16px; }
+
 .sprint-filter-section {
   display: flex;
   align-items: center;
@@ -4798,6 +4894,20 @@ button.date-text.late,
     align-items: stretch;
     gap: 10px;
     padding: 10px 12px;
+  }
+  .sprint-library-entry {
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .sprint-library-icon { width: 40px; height: 40px; flex-basis: 40px; }
+  .sprint-library-icon svg { width: 23px; height: 23px; }
+  .sprint-library-copy strong { font-size: 15px; }
+  .sprint-library-action {
+    width: calc(100% - 50px);
+    justify-content: space-between;
+    margin-left: 50px;
   }
   .sprint-filter-section {
     width: 100%;
@@ -6673,28 +6783,6 @@ select,
 /* ==========================================================================
    试卷云盘 (Paper Netdisk) 学术风视觉样式
    ========================================================================== */
-
-/* 设置页云盘入口卡片 */
-.settings-card--netdisk {
-  border-left: 4px solid var(--coral);
-}
-
-.settings-netdisk-badge .netdisk-badge-quota {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--sidebar-soft);
-  background: var(--line-soft);
-  padding: 4px 10px;
-  border-radius: 9999px;
-  border: 1px solid var(--line);
-}
-
-.netdisk-card-desc {
-  font-size: 13px;
-  color: var(--ink-soft);
-  line-height: 1.6;
-  margin: 0 0 14px 0;
-}
 
 /* 全屏模态蒙层与容器 */
 .netdisk-overlay {
