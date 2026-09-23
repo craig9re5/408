@@ -3385,11 +3385,11 @@ button.date-text.late,
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 82px;
+  min-height: 72px;
   align-items: center;
   gap: 15px;
   overflow: hidden;
-  padding: 13px 18px 13px 20px;
+  padding: 12px 18px 12px 20px;
   border: 1px solid rgba(116, 164, 181, 0.32);
   border-radius: 14px;
   color: var(--ink);
@@ -3402,8 +3402,8 @@ button.date-text.late,
 
 .sprint-library-entry::before {
   position: absolute;
-  top: 16px;
-  bottom: 16px;
+  top: 13px;
+  bottom: 13px;
   left: 0;
   width: 3px;
   border-radius: 0 3px 3px 0;
@@ -3436,14 +3436,6 @@ button.date-text.late,
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 2px;
-}
-
-.sprint-library-eyebrow {
-  color: #6d8c96;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
 }
 
 .sprint-library-copy strong {
@@ -3451,11 +3443,6 @@ button.date-text.late,
   letter-spacing: 0.02em;
 }
 
-.sprint-library-desc {
-  color: var(--ink-soft);
-  font-size: 11.5px;
-  line-height: 1.5;
-}
 
 .sprint-library-action {
   display: inline-flex;
@@ -4896,19 +4883,14 @@ button.date-text.late,
     padding: 10px 12px;
   }
   .sprint-library-entry {
-    min-height: 0;
-    flex-wrap: wrap;
+    min-height: 64px;
     gap: 10px;
-    padding: 12px 14px;
+    padding: 10px 14px;
   }
   .sprint-library-icon { width: 40px; height: 40px; flex-basis: 40px; }
   .sprint-library-icon svg { width: 23px; height: 23px; }
   .sprint-library-copy strong { font-size: 15px; }
-  .sprint-library-action {
-    width: calc(100% - 50px);
-    justify-content: space-between;
-    margin-left: 50px;
-  }
+  .sprint-library-action { gap: 6px; padding-inline: 10px; }
   .sprint-filter-section {
     width: 100%;
     justify-content: space-between;

@@ -3196,9 +3196,7 @@ export function StudyDashboard() {
                   </svg>
                 </span>
                 <span className="sprint-library-copy">
-                  <span className="sprint-library-eyebrow">冲刺资料 · PDF 原件</span>
                   <strong>试卷云盘</strong>
-                  <span className="sprint-library-desc">真题与模拟卷集中归档，需要时随手调取。</span>
                 </span>
                 <span className="sprint-library-action" aria-hidden="true">
                   打开云盘
