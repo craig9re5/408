@@ -7,6 +7,7 @@ import {
   fetchPaperList,
   uploadPaper,
   downloadPaper,
+  migrateLocalPaper,
   updatePaperMeta,
   deletePaper,
   batchDeletePapers,
@@ -30,6 +31,8 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
     totalBytes: DEFAULT_USER_QUOTA_BYTES,
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [cloudStorageReady, setCloudStorageReady] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
@@ -70,21 +73,27 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
       const data = await fetchPaperList(selectedSubject, searchKeyword);
       setPapers(data.items);
       setQuota(data.quota);
+      setCloudStorageReady(data.cloudStorageReady);
+      setLoadError("");
       onQuotaUpdatedRef.current?.(data.quota, data.items.length);
     } catch (err) {
-      showToast(`加载失败: ${String(err)}`);
+      setCloudStorageReady(false);
+      setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [selectedSubject, searchKeyword, showToast]);
+  }, [selectedSubject, searchKeyword]);
 
   useEffect(() => {
-    if (isOpen) {
-      loadData(true);
-    } else {
-      setIsBatchMode(false);
-      setSelectedIds(new Set());
-    }
+    const timer = window.setTimeout(() => {
+      if (isOpen) {
+        void loadData(true);
+      } else {
+        setIsBatchMode(false);
+        setSelectedIds(new Set());
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [isOpen, loadData]);
 
   // Quota calculation
@@ -116,6 +125,10 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
   const handleFilesSelected = async (files: File[]) => {
     if (files.length === 0) return;
 
+    if (!cloudStorageReady) {
+      showToast("云端存储尚未就绪，请先完成 R2 存储桶部署");
+      return;
+    }
     if (quotaPercent >= 100) {
       showToast("云盘空间已满，请清理部分文件后再上传");
       return;
@@ -168,6 +181,16 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
       await downloadPaper(paper);
     } catch (err) {
       showToast(`下载失败: ${String(err)}`);
+    }
+  };
+
+  const handleSyncLocal = async (paper: ExamPaperItem) => {
+    try {
+      await migrateLocalPaper(paper);
+      showToast(`已转存云端：「${paper.fileName}」`);
+      await loadData();
+    } catch (err) {
+      showToast(`转存失败：${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -269,7 +292,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
             <button
               type="button"
               className="netdisk-upload-btn"
-              disabled={quotaPercent >= 100}
+              disabled={!cloudStorageReady || quotaPercent >= 100}
               onClick={() => fileInputRef.current?.click()}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -366,6 +389,17 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
               <div className="netdisk-spinner" />
               <p>正在读取试卷列表...</p>
             </div>
+          ) : loadError ? (
+            <div className="netdisk-empty-state" role="alert">
+              <h3>读取云端试卷失败</h3>
+              <p>{loadError}</p>
+              <button type="button" className="netdisk-btn-primary" onClick={() => loadData(true)}>重试</button>
+            </div>
+          ) : !cloudStorageReady && sortedPapers.length === 0 ? (
+            <div className="netdisk-empty-state" role="alert">
+              <h3>云端存储尚未就绪</h3>
+              <p>请先创建并绑定 R2 存储桶，再部署 Worker。</p>
+            </div>
           ) : sortedPapers.length === 0 ? (
             <div className="netdisk-empty-state">
               <div className="netdisk-empty-icon" aria-hidden="true">
@@ -422,6 +456,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
                     isSelected={selectedIds.has(paper.id)}
                     onToggleSelect={handleToggleSelect}
                     onDownload={handleDownload}
+                    onSyncLocal={handleSyncLocal}
                     onRename={(p) => setEditingPaper(p)}
                     onMove={(p) => setMovingPaper(p)}
                     onDelete={(p) => setDeletingPaper(p)}

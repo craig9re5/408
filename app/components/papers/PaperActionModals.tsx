@@ -80,6 +80,7 @@ export function MoveCategoryModal({ paper, batchIds, onClose, onConfirm }: MoveC
   const [subject, setSubject] = useState<ExamPaperSubject>(paper?.subject || "cs408");
   const [yearStr, setYearStr] = useState<string>(paper?.year ? String(paper.year) : "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +89,8 @@ export function MoveCategoryModal({ paper, batchIds, onClose, onConfirm }: MoveC
     try {
       await onConfirm(targetIds, subject, parsedYear);
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -126,6 +129,7 @@ export function MoveCategoryModal({ paper, batchIds, onClose, onConfirm }: MoveC
             />
           </div>
 
+          {error && <p className="netdisk-field-error" role="alert">{error}</p>}
           <div className="confirm-actions">
             <button type="button" className="btn-cancel" onClick={onClose} disabled={isSubmitting}>取消</button>
             <button type="submit" className="btn-confirm" disabled={isSubmitting}>
@@ -147,12 +151,15 @@ interface DeleteConfirmModalProps {
 
 export function DeleteConfirmModal({ paper, batchCount, onClose, onConfirm }: DeleteConfirmModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState("");
 
   const handleConfirm = async () => {
     setIsDeleting(true);
     try {
       await onConfirm();
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsDeleting(false);
     }
@@ -169,6 +176,7 @@ export function DeleteConfirmModal({ paper, batchCount, onClose, onConfirm }: De
             ? `删除后将永久从云盘中抹除这 ${batchCount} 份试卷并释放对应云存储配额。此操作不可撤销。`
             : `确定要删除「${paper?.fileName}」吗？删除后将永久抹除并释放对应空间。`}
         </p>
+        {error && <p className="netdisk-field-error" role="alert">{error}</p>}
         <div className="confirm-actions">
           <button type="button" className="btn-cancel" onClick={onClose} disabled={isDeleting}>取消</button>
           <button

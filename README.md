@@ -167,6 +167,9 @@ npm run start
 # 本地 D1 数据库迁移
 npm run db:migrate:local
 
+# 首次启用试卷云盘：创建私有 R2 桶（名称需与 wrangler.jsonc 一致）
+npx wrangler r2 bucket create study-papers
+
 # 远程 D1 数据库迁移
 npm run db:migrate:remote
 

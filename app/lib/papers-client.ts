@@ -25,16 +25,6 @@ function openLocalDB(): Promise<IDBDatabase> {
   });
 }
 
-async function saveLocalBlob(id: string, blob: Blob): Promise<void> {
-  const db = await openLocalDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ id, blob });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
 async function getLocalBlob(id: string): Promise<Blob | null> {
   const db = await openLocalDB();
   return new Promise((resolve, reject) => {
@@ -73,89 +63,61 @@ function setLocalMetaList(list: ExamPaperItem[]): void {
   }
 }
 
-function getFilteredLocalItems(subject?: string, keyword?: string): ExamPaperItem[] {
-  let items = getLocalMetaList();
+function getFilteredLocalItems(workspaceId: string, subject?: string, keyword?: string): ExamPaperItem[] {
+  let items = getLocalMetaList().filter((item) => item.workspaceId === workspaceId && item.storageKey.startsWith("local://"));
   if (subject && subject !== "all") {
-    items = items.filter((i) => i.subject === subject);
+    items = items.filter((item) => item.subject === subject);
   }
   if (keyword) {
-    const kw = keyword.toLowerCase();
-    items = items.filter((i) => i.fileName.toLowerCase().includes(kw));
+    const search = keyword.toLowerCase();
+    items = items.filter((item) => item.fileName.toLowerCase().includes(search));
   }
   return items;
 }
 
+async function paperApiError(response: Response): Promise<Error> {
+  const body = await response.json().catch(() => null) as { error?: string } | null;
+  return new Error(body?.error || `云盘请求失败（HTTP ${response.status}）`);
+}
+
 /**
- * Fetch paper list with filtering (unifies cloud and local offline items)
+ * Fetch cloud papers and include legacy browser-only files from the current workspace.
  */
 export async function fetchPaperList(
   subject?: string,
   keyword?: string,
 ): Promise<{ items: ExamPaperItem[]; quota: PaperQuotaInfo; cloudStorageReady: boolean }> {
-  let cloudItems: ExamPaperItem[] = [];
-  let cloudQuota: PaperQuotaInfo = { usedBytes: 0, totalBytes: DEFAULT_USER_QUOTA_BYTES };
-  let cloudStorageReady = false;
-  let apiSucceeded = false;
+  const params = new URLSearchParams();
+  if (subject && subject !== "all") params.set("subject", subject);
+  if (keyword) params.set("keyword", keyword);
+  const response = await fetch(`/api/papers?${params.toString()}`);
+  if (!response.ok) throw await paperApiError(response);
 
-  try {
-    const params = new URLSearchParams();
-    if (subject && subject !== "all") params.set("subject", subject);
-    if (keyword) params.set("keyword", keyword);
-
-    const res = await fetch(`/api/papers?${params.toString()}`);
-    if (res.ok) {
-      const data = await res.json();
-      cloudItems = data.items || [];
-      cloudQuota = data.quota || cloudQuota;
-      cloudStorageReady = Boolean(data.cloudStorageReady);
-      apiSucceeded = true;
-    }
-  } catch {
-    // Network / dev fallback
-  }
-
-  // Local storage items
-  const localFiltered = getFilteredLocalItems(subject, keyword);
-
-  if (!apiSucceeded) {
-    const allLocal = getLocalMetaList();
-    const usedBytes = allLocal.reduce((acc, curr) => acc + (curr.fileSize || 0), 0);
-    return {
-      items: localFiltered,
-      quota: { usedBytes, totalBytes: DEFAULT_USER_QUOTA_BYTES },
-      cloudStorageReady: false,
-    };
-  }
-
-  // Combine cloud items with any local items
+  const data = await response.json() as {
+    items: ExamPaperItem[];
+    quota: PaperQuotaInfo;
+    workspaceId: string;
+    cloudStorageReady: boolean;
+  };
+  const cloudItems = data.items ?? [];
+  const workspaceId = data.workspaceId ?? "main";
+  const localItems = getFilteredLocalItems(workspaceId, subject, keyword);
   const itemMap = new Map<string, ExamPaperItem>();
-  cloudItems.forEach((it) => itemMap.set(it.id, it));
-  localFiltered.forEach((it) => {
-    if (!itemMap.has(it.id)) {
-      itemMap.set(it.id, it);
-    }
+  cloudItems.forEach((item) => itemMap.set(item.id, item));
+  localItems.forEach((item) => {
+    if (!itemMap.has(item.id)) itemMap.set(item.id, item);
   });
-
-  const merged = Array.from(itemMap.values());
-  merged.sort((a, b) => b.createdAt - a.createdAt);
-
-  const allLocal = getLocalMetaList();
-  const localUniqueBytes = allLocal
-    .filter((l) => !cloudItems.some((c) => c.id === l.id))
-    .reduce((acc, curr) => acc + (curr.fileSize || 0), 0);
-
+  const items = [...itemMap.values()].sort((a, b) => b.createdAt - a.createdAt);
+  const quota = data.quota ?? { usedBytes: 0, totalBytes: DEFAULT_USER_QUOTA_BYTES };
   return {
-    items: merged,
-    quota: {
-      usedBytes: (cloudQuota.usedBytes || 0) + localUniqueBytes,
-      totalBytes: cloudQuota.totalBytes || DEFAULT_USER_QUOTA_BYTES,
-    },
-    cloudStorageReady,
+    items,
+    quota,
+    cloudStorageReady: Boolean(data.cloudStorageReady),
   };
 }
 
 /**
- * Upload single paper PDF
+ * Upload a PDF to R2 through the authenticated Worker API.
  */
 export async function uploadPaper(
   file: File,
@@ -169,64 +131,28 @@ export async function uploadPaper(
     throw new Error("仅支持上传 PDF 格式的试卷文件");
   }
 
-  let cleanName = file.name.trim().replace(/[\\/:*?"<>|]/g, "_");
-  if (cleanName.toLowerCase().endsWith(".pdf")) {
-    cleanName = cleanName.slice(0, -4) + ".pdf";
-  } else {
-    cleanName += ".pdf";
-  }
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("subject", subject);
+  if (year) formData.append("year", String(year));
+  const response = await fetch("/api/papers/upload", { method: "POST", body: formData });
+  if (!response.ok) throw await paperApiError(response);
+  const data = await response.json() as { item?: ExamPaperItem };
+  if (!data.item) throw new Error("云端未返回已保存的试卷信息");
+  return { item: data.item, isLocal: false };
+}
 
-  // Try API upload first
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("subject", subject);
-    if (year) formData.append("year", String(year));
-
-    const res = await fetch("/api/papers/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.item) return { item: data.item, isLocal: false };
-    } else {
-      const errJson = await res.json().catch(() => ({}));
-      if (res.status === 400 && errJson.error) {
-        throw new Error(errJson.error);
-      }
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message && !err.message.includes("fetch")) {
-      throw err;
-    }
-  }
-
-  // Fallback: Save to local IndexedDB + LocalStorage
-  const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `local-paper-${Date.now()}`;
-
-  await saveLocalBlob(id, file);
-
-  const now = Date.now();
-  const newItem: ExamPaperItem = {
-    id,
-    workspaceId: "main",
-    fileName: cleanName,
-    originalName: file.name,
-    fileSize: file.size,
-    storageKey: `local://${id}`,
-    subject,
-    year,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const list = getLocalMetaList();
-  setLocalMetaList([newItem, ...list]);
-  return { item: newItem, isLocal: true };
+/**
+ * Copy a legacy browser-only PDF to R2 before removing its local copy.
+ */
+export async function migrateLocalPaper(paper: ExamPaperItem): Promise<void> {
+  if (!paper.storageKey.startsWith("local://")) return;
+  const blob = await getLocalBlob(paper.id);
+  if (!blob) throw new Error("当前浏览器未找到这份试卷原件");
+  const file = new File([blob], paper.fileName, { type: "application/pdf" });
+  await uploadPaper(file, paper.subject, paper.year ?? undefined);
+  await deleteLocalBlob(paper.id);
+  setLocalMetaList(getLocalMetaList().filter((item) => item.id !== paper.id));
 }
 
 /**
@@ -274,7 +200,7 @@ export async function updatePaperMeta(
   payload: { fileName?: string; subject?: string; year?: number | null },
 ): Promise<void> {
   const list = getLocalMetaList();
-  const index = list.findIndex((i) => i.id === id);
+  const index = list.findIndex((item) => item.id === id && item.storageKey.startsWith("local://"));
   if (index !== -1) {
     let cleanName = payload.fileName ? payload.fileName.trim().replace(/[\\/:*?"<>|]/g, "_") : list[index].fileName;
     if (cleanName.toLowerCase().endsWith(".pdf")) {
@@ -282,7 +208,6 @@ export async function updatePaperMeta(
     } else {
       cleanName += ".pdf";
     }
-
     list[index] = {
       ...list[index],
       fileName: cleanName,
@@ -291,50 +216,43 @@ export async function updatePaperMeta(
       updatedAt: Date.now(),
     };
     setLocalMetaList(list);
+    return;
   }
 
-  try {
-    await fetch(`/api/papers/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // Fallback
-  }
+  const response = await fetch(`/api/papers/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await paperApiError(response);
 }
 
-/**
- * Delete single paper
- */
+/** Delete one cloud or legacy browser-only paper. */
 export async function deletePaper(id: string): Promise<void> {
-  await deleteLocalBlob(id).catch(() => null);
-  const list = getLocalMetaList().filter((i) => i.id !== id);
-  setLocalMetaList(list);
-
-  try {
-    await fetch(`/api/papers/${id}`, { method: "DELETE" });
-  } catch {
-    // Fallback
+  const list = getLocalMetaList();
+  const localOnly = list.some((item) => item.id === id && item.storageKey.startsWith("local://"));
+  if (!localOnly) {
+    const response = await fetch(`/api/papers/${id}`, { method: "DELETE" });
+    if (!response.ok) throw await paperApiError(response);
   }
+  if (localOnly) await deleteLocalBlob(id);
+  setLocalMetaList(list.filter((item) => item.id !== id));
 }
 
-/**
- * Batch delete papers
- */
+/** Delete selected cloud and legacy browser-only papers. */
 export async function batchDeletePapers(ids: string[]): Promise<void> {
   const idSet = new Set(ids);
-  await Promise.all(ids.map((id) => deleteLocalBlob(id).catch(() => null)));
-  const list = getLocalMetaList().filter((i) => !idSet.has(i.id));
-  setLocalMetaList(list);
-
-  try {
-    await fetch("/api/papers/batch-delete", {
+  const localItems = getLocalMetaList();
+  const localIds = new Set(localItems.filter((item) => idSet.has(item.id) && item.storageKey.startsWith("local://")).map((item) => item.id));
+  const cloudIds = ids.filter((id) => !localIds.has(id));
+  if (cloudIds.length > 0) {
+    const response = await fetch("/api/papers/batch-delete", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids: cloudIds }),
     });
-  } catch {
-    // Fallback
+    if (!response.ok) throw await paperApiError(response);
   }
+  await Promise.all([...localIds].map((id) => deleteLocalBlob(id)));
+  setLocalMetaList(localItems.filter((item) => !idSet.has(item.id)));
 }

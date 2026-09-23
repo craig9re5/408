@@ -17,7 +17,8 @@
       "database_id": "0014480c-e13a-46fa-abb8-84732288519d"
 		}
 	],
-	"secrets": {
+  "r2_buckets": [{ "binding": "PAPERS_BUCKET", "bucket_name": "study-papers" }],
+  "secrets": {
 		"required": [
 			"INVITE_CODES",
 			"SESSION_SECRET"

@@ -10,6 +10,7 @@ interface PaperListRowProps {
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onDownload: (paper: ExamPaperItem) => void;
+  onSyncLocal: (paper: ExamPaperItem) => void;
   onRename: (paper: ExamPaperItem) => void;
   onMove: (paper: ExamPaperItem) => void;
   onDelete: (paper: ExamPaperItem) => void;
@@ -34,6 +35,7 @@ export function PaperListRow({
   isSelected,
   onToggleSelect,
   onDownload,
+  onSyncLocal,
   onRename,
   onMove,
   onDelete,
@@ -96,6 +98,9 @@ export function PaperListRow({
           {paper.year && (
             <span className="netdisk-year-tag">{paper.year}年</span>
           )}
+          {paper.storageKey.startsWith("local://") && (
+            <span className="netdisk-year-tag" title="这份文件只保存在当前浏览器，尚未上传到云端">仅本机</span>
+          )}
         </div>
       </div>
 
@@ -141,6 +146,18 @@ export function PaperListRow({
 
           {isMenuOpen && (
             <div className="netdisk-dropdown-menu">
+              {paper.storageKey.startsWith("local://") && (
+                <button
+                  type="button"
+                  className="netdisk-dropdown-item"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onSyncLocal(paper);
+                  }}
+                >
+                  转存云端
+                </button>
+              )}
               <button
                 type="button"
                 className="netdisk-dropdown-item"

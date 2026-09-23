@@ -74,8 +74,8 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
 
     try {
       const [listResult, quotaResult] = await Promise.all([
-        env.DB.prepare(query).bind(...bindings).all<ExamPaperRow>().catch(() => ({ results: [] as ExamPaperRow[] })),
-        env.DB.prepare("SELECT COALESCE(SUM(file_size), 0) as used_bytes FROM exam_papers WHERE workspace_id = ?").bind(workspaceId).first<{ used_bytes: number }>().catch(() => ({ used_bytes: 0 })),
+        env.DB.prepare(query).bind(...bindings).all<ExamPaperRow>(),
+        env.DB.prepare("SELECT COALESCE(SUM(file_size), 0) as used_bytes FROM exam_papers WHERE workspace_id = ?").bind(workspaceId).first<{ used_bytes: number }>(),
       ]);
 
       const items = (listResult.results ?? []).map(rowToItem);
@@ -83,6 +83,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
 
       return json({
         items,
+        workspaceId,
         quota: {
           usedBytes,
           totalBytes: DEFAULT_USER_QUOTA_BYTES,
@@ -98,6 +99,9 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
   // 2. POST /api/papers/upload - Upload single PDF
   if (path === "/api/papers/upload" && request.method === "POST") {
     try {
+      if (!env.PAPERS_BUCKET) {
+        return json({ error: "云端对象存储桶未就绪，请检查 PAPERS_BUCKET 绑定" }, { status: 503 });
+      }
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
       const rawSubject = (formData.get("subject") as string)?.trim() || "other";
@@ -122,7 +126,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       // Check storage quota
       const quotaRow = await env.DB.prepare(
         "SELECT COALESCE(SUM(file_size), 0) as used_bytes FROM exam_papers WHERE workspace_id = ?",
-      ).bind(workspaceId).first<{ used_bytes: number }>().catch(() => ({ used_bytes: 0 }));
+      ).bind(workspaceId).first<{ used_bytes: number }>();
 
       const currentUsed = quotaRow?.used_bytes ?? 0;
       if (currentUsed + file.size > DEFAULT_USER_QUOTA_BYTES) {
@@ -132,11 +136,6 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       const paperId = crypto.randomUUID();
       const storageKey = `papers/${workspaceId}/${paperId}.pdf`;
       const cleanName = sanitizeFileName(file.name);
-
-      // Check R2 bucket availability
-      if (!env.PAPERS_BUCKET) {
-        return json({ error: "云端对象存储桶未就绪，请在 Cloudflare 控制台开启 R2" }, { status: 503 });
-      }
 
       await env.PAPERS_BUCKET.put(storageKey, file.stream(), {
         httpMetadata: {
@@ -150,21 +149,27 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       });
 
       const now = Date.now();
-      await env.DB.prepare(
-        `INSERT INTO exam_papers (id, workspace_id, file_name, original_name, file_size, storage_key, subject, year, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        paperId,
-        workspaceId,
-        cleanName,
-        file.name,
-        file.size,
-        storageKey,
-        rawSubject,
-        year,
-        now,
-        now,
-      ).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO exam_papers (id, workspace_id, file_name, original_name, file_size, storage_key, subject, year, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          paperId,
+          workspaceId,
+          cleanName,
+          file.name,
+          file.size,
+          storageKey,
+          rawSubject,
+          year,
+          now,
+          now,
+        ).run();
+      } catch (err) {
+        await env.PAPERS_BUCKET.delete(storageKey).catch((cleanupError: unknown) =>
+          console.error("Failed to clean up orphaned paper:", cleanupError));
+        throw err;
+      }
 
       const newItem: ExamPaperItem = {
         id: paperId,
@@ -282,9 +287,8 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       ).bind(workspaceId, paperId).first<{ storage_key: string }>();
 
       if (row) {
-        if (env.PAPERS_BUCKET && row.storage_key) {
-          await env.PAPERS_BUCKET.delete(row.storage_key).catch((err: unknown) => console.warn("R2 delete error:", err));
-        }
+        if (!env.PAPERS_BUCKET) return json({ error: "云端对象存储桶未就绪" }, { status: 503 });
+        await env.PAPERS_BUCKET.delete(row.storage_key);
         await env.DB.prepare("DELETE FROM exam_papers WHERE workspace_id = ? AND id = ?").bind(workspaceId, paperId).run();
       }
 
@@ -299,7 +303,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
   if (path === "/api/papers/batch-delete" && request.method === "POST") {
     try {
       const body = await request.json().catch(() => null) as { ids?: string[] } | null;
-      const ids = Array.isArray(body?.ids) ? body!.ids.filter((id) => typeof id === "string" && id.length > 0) : [];
+      const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.filter((id) => typeof id === "string" && id.length > 0))] : [];
 
       if (ids.length === 0) {
         return json({ error: "请选择要删除的试卷" }, { status: 400 });
@@ -309,18 +313,19 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       const placeholders = ids.map(() => "?").join(",");
       const rows = await env.DB.prepare(
         `SELECT storage_key FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
-      ).bind(workspaceId, ...ids).all<{ storage_key: string }>().catch(() => ({ results: [] as { storage_key: string }[] }));
+      ).bind(workspaceId, ...ids).all<{ storage_key: string }>();
 
-      if (env.PAPERS_BUCKET && rows.results.length > 0) {
+      if (rows.results.length > 0) {
+        if (!env.PAPERS_BUCKET) return json({ error: "云端对象存储桶未就绪" }, { status: 503 });
         const keys = rows.results.map((r: { storage_key: string }) => r.storage_key).filter(Boolean);
-        await Promise.all(keys.map((k: string) => env.PAPERS_BUCKET!.delete(k).catch(() => null)));
+        await Promise.all(keys.map((k: string) => env.PAPERS_BUCKET!.delete(k)));
       }
 
       await env.DB.prepare(
         `DELETE FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
       ).bind(workspaceId, ...ids).run();
 
-      return json({ success: true, deletedCount: ids.length });
+      return json({ success: true, deletedCount: rows.results.length });
     } catch (err) {
       console.error("Batch delete error:", err);
       return json({ error: "批量删除失败", details: String(err) }, { status: 500 });
