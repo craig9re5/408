@@ -119,8 +119,6 @@ const mobileNavigation: { page: AppPage; label: string }[] = [
   { page: "sprint", label: "冲刺" },
   { page: "today", label: "今日" },
   { page: "schedule", label: "课表" },
-  { page: "analytics", label: "分析" },
-  { page: "settings", label: "设置" },
 ];
 
 function MobileNavIcon({ page }: { page: AppPage }) {
@@ -431,6 +429,8 @@ function ProgressRing({ value }: { value: number }) {
 
 export function StudyDashboard() {
   const [activePage, setActivePage] = useState<AppPage>("progress");
+  const [topbarMoreOpen, setTopbarMoreOpen] = useState(false);
+  const [catalogMoreOpen, setCatalogMoreOpen] = useState(false);
   const [activeArea, setActiveArea] = useState<StudyArea>("408");
   const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>({
     "408": "operating-system",
@@ -527,6 +527,10 @@ export function StudyDashboard() {
   const [pendingClearAllPapers, setPendingClearAllPapers] = useState(false);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const topbarMoreRef = useRef<HTMLDivElement>(null);
+  const topbarMoreButtonRef = useRef<HTMLButtonElement>(null);
+  const catalogMoreRef = useRef<HTMLDivElement>(null);
+  const catalogMoreButtonRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const repositoryRef = useRef<StorageRepository | null>(null);
   const repositoryWorkspaceRef = useRef<string>("");
@@ -540,6 +544,33 @@ export function StudyDashboard() {
   const saveInFlightRef = useRef(false);
   const syncBlockedRef = useRef(false);
   const workspaceEpochRef = useRef(0);
+
+  useEffect(() => {
+    if (!topbarMoreOpen && !catalogMoreOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (topbarMoreOpen && !topbarMoreRef.current?.contains(event.target as Node)) setTopbarMoreOpen(false);
+      if (catalogMoreOpen && !catalogMoreRef.current?.contains(event.target as Node)) setCatalogMoreOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (topbarMoreOpen) {
+        setTopbarMoreOpen(false);
+        topbarMoreButtonRef.current?.focus();
+      }
+      if (catalogMoreOpen) {
+        setCatalogMoreOpen(false);
+        catalogMoreButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [topbarMoreOpen, catalogMoreOpen]);
 
   useEffect(() => {
     if (hasLoadedRef.current) {
@@ -1624,6 +1655,31 @@ export function StudyDashboard() {
     setCatalogFilter("all");
   }
 
+  function selectBookAcrossAreas(bookId: string) {
+    const book = books.find((candidate) => candidate.id === bookId);
+    if (!book) return;
+    setActiveArea(book.area);
+    setSelectedBookByArea((current) => ({ ...current, [book.area]: book.id }));
+    setExpandedChapters([]);
+    setCatalogFilter("all");
+  }
+
+  function navigateMobile(page: AppPage) {
+    setActivePage(page);
+    setTopbarMoreOpen(false);
+    setCatalogMoreOpen(false);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    window.requestAnimationFrame(() => document.getElementById(`${page}-title`)?.focus({ preventScroll: true }));
+  }
+
+  function toggleCatalogExpansion() {
+    if (catalogFilter === "all") {
+      setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id));
+    } else {
+      setFilterChaptersCollapsed((value) => !value);
+    }
+  }
+
   function clearLearned(sectionId: string) {
     updateProgress(sectionId, {
       learned: false,
@@ -2449,7 +2505,7 @@ export function StudyDashboard() {
 
       <main className="workspace">
         <header className="topbar" aria-label="全局操作">
-          <h1 className="topbar-title" id={`${activePage}-title`}>{pageTitles[activePage]}</h1>
+          <h1 className="topbar-title" id={`${activePage}-title`} tabIndex={-1}>{pageTitles[activePage]}</h1>
           <div className="topbar-actions">
             {activePage === "progress" && <div className="study-switchers">
               <nav className="book-switcher" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
@@ -2466,13 +2522,18 @@ export function StudyDashboard() {
                 ))}
               </nav>
               <label className="book-select">
-                <span className="visually-hidden">切换{activeArea === "408" ? "408" : "数学"}科目</span>
+                <span className="visually-hidden">切换学科</span>
                 <span className="book-select__surface" aria-hidden="true">
                   <strong>{selectedBook.title}</strong>
                   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </span>
-                <select value={selectedBook.id} onChange={(event) => selectBook(event.target.value)}>
-                  {areaBooks.map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
+                <select value={selectedBook.id} onChange={(event) => selectBookAcrossAreas(event.target.value)}>
+                  <optgroup label="408">
+                    {books.filter((book) => book.area === "408").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
+                  </optgroup>
+                  <optgroup label="数学">
+                    {books.filter((book) => book.area === "math").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
+                  </optgroup>
                 </select>
               </label>
               <div className="area-switcher" role="group" aria-label="切换学习领域">
@@ -2519,6 +2580,29 @@ export function StudyDashboard() {
               <i aria-hidden="true" />
               <span>{syncMeta.label}</span>
             </span>
+            <div className="topbar-more-wrap" ref={topbarMoreRef}>
+              <button
+                className={`topbar-more${activePage === "analytics" || activePage === "settings" ? " active" : ""}`}
+                type="button"
+                ref={topbarMoreButtonRef}
+                aria-label={`更多页面，同步状态：${syncMeta.label}`}
+                aria-expanded={topbarMoreOpen}
+                aria-controls="mobile-more-pages"
+                onClick={() => { setTopbarMoreOpen((open) => !open); setCatalogMoreOpen(false); }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+                <i className={`topbar-more-dot topbar-more-dot--${syncMeta.cls}`} aria-hidden="true" />
+              </button>
+              <div className="topbar-more-panel" id="mobile-more-pages" role="group" aria-label="更多页面" hidden={!topbarMoreOpen}>
+                {(["analytics", "settings"] as AppPage[]).map((page) => (
+                  <button type="button" key={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
+                    <MobileNavIcon page={page} />
+                    <span>{pageTitles[page]}</span>
+                  </button>
+                ))}
+                <span className={`topbar-more-status topbar-more-status--${syncMeta.cls}`} role="status"><i aria-hidden="true" />{syncMeta.label}</span>
+              </div>
+            </div>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
         </header>
@@ -2599,7 +2683,7 @@ export function StudyDashboard() {
 
           <section className="catalog">
             <div className="catalog-heading">
-              <div><h2>目录</h2><span>{filteredChapters.length} 章 · {filteredSectionCount} 小节</span></div>
+              <div><h2>目录</h2><span>{filteredChapters.length} 章 · {filteredSectionCount} 小节{planEditMode ? " · 编辑中" : ""}</span></div>
               <div className="catalog-tools">
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
@@ -2608,18 +2692,35 @@ export function StudyDashboard() {
                     ["unreviewed", "未复习"],
                     ["overdue", "逾期"],
                   ] as [CatalogFilter, string][]).map(([value, label]) => (
-                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}>{label}</button>
+                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}><span>{label}</span></button>
                   ))}
                 </div>
-                <button className={`catalog-action${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
+                <button className={`catalog-action catalog-action--desktop${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
                 <button
-                  className="catalog-action"
+                  className="catalog-action catalog-action--desktop"
                   type="button"
                   disabled={filteredChapters.length === 0}
-                  onClick={() => catalogFilter === "all" ? setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id)) : setFilterChaptersCollapsed((value) => !value)}
+                  onClick={toggleCatalogExpansion}
                 >
                   {effectiveAllExpanded ? "全部折叠" : "全部展开"}
                 </button>
+                <div className="catalog-more" ref={catalogMoreRef}>
+                  <button
+                    className={`catalog-more-trigger${planEditMode ? " active" : ""}`}
+                    type="button"
+                    ref={catalogMoreButtonRef}
+                    aria-label={planEditMode ? "目录操作，正在编辑计划" : "目录操作"}
+                    aria-expanded={catalogMoreOpen}
+                    aria-controls="catalog-more-options"
+                    onClick={() => { setCatalogMoreOpen((open) => !open); setTopbarMoreOpen(false); }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+                  </button>
+                  <div className="catalog-more-list" id="catalog-more-options" role="group" aria-label="目录操作" hidden={!catalogMoreOpen}>
+                    <button type="button" onClick={() => { setPlanEditMode((value) => !value); setCatalogMoreOpen(false); catalogMoreButtonRef.current?.focus(); }}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
+                    <button type="button" disabled={filteredChapters.length === 0} onClick={() => { toggleCatalogExpansion(); setCatalogMoreOpen(false); catalogMoreButtonRef.current?.focus(); }}>{effectiveAllExpanded ? "全部折叠" : "全部展开"}</button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3873,10 +3974,7 @@ export function StudyDashboard() {
             type="button"
             key={page}
             aria-current={activePage === page ? "page" : undefined}
-            onClick={() => {
-              setActivePage(page);
-              window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-            }}
+            onClick={() => navigateMobile(page)}
           >
             <span className="mobile-nav-symbol"><MobileNavIcon page={page} /></span>
             <strong>{label}</strong>
