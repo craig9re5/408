@@ -1,0 +1,99 @@
+/* ==========================================================================
+   iPad & Touch Ergonomics (Phase 1: Zero Desktop Visual Impact)
+   ========================================================================== */
+
+/* 1. Root iOS Safari Auto-Zoom Prevention & Invisible Hit Target Expansions */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Prevents iOS Safari from zooming into the viewport */
+  }
+
+  /* Expand touch target hit-boxes via invisible ::after pseudo elements */
+  .q-chip-btn {
+    position: relative;
+  }
+  .q-chip-btn::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    z-index: 1;
+  }
+
+  .q-rating-btn {
+    position: relative;
+  }
+  .q-rating-btn::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 1;
+  }
+
+  .btn-choice-all-correct,
+  .sprint-sort-btn {
+    position: relative;
+  }
+  .btn-choice-all-correct::after,
+  .sprint-sort-btn::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    z-index: 1;
+  }
+
+  .bento-check-label {
+    padding: 4px 6px;
+    margin: -4px -6px;
+  }
+}
+
+/* 2. Global Touch Callout & Tap Feedback (Safe on all devices, 0 visual impact on desktop) */
+button,
+input,
+select,
+.q-chip-btn,
+.q-rating-btn,
+.sprint-bento-card,
+.sprint-tab-group button,
+.sprint-status-filters button,
+.sprint-sort-btn,
+.sidebar-link,
+.bento-check-label,
+.macro-badge,
+.tab-btn {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* Eliminates 300ms double-tap delay and accidental double-tap zoom */
+}
+
+/* Ensure study text and Markdown content remain cleanly selectable and copyable */
+.journal-view-content,
+.markdown-body,
+.journal-item-body,
+.chapter-name,
+.section-title {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 3. Modal & Drawer Overscroll Containment (Smooth iOS touch physics without background rubberbanding) */
+.paper-q-modal-overlay,
+.journal-modal-overlay,
+.confirm-overlay,
+.drawer-overlay {
+  overscroll-behavior: contain;
+}
+
+.paper-q-modal-dialog,
+.journal-modal-dialog,
+.section-journal-drawer {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}

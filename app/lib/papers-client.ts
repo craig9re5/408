@@ -131,11 +131,17 @@ export async function uploadPaper(
     throw new Error("仅支持上传 PDF 格式的试卷文件");
   }
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("subject", subject);
-  if (year) formData.append("year", String(year));
-  const response = await fetch("/api/papers/upload", { method: "POST", body: formData });
+  const response = await fetch("/api/papers/upload", {
+    method: "POST",
+    headers: {
+      "content-type": "application/pdf",
+      "x-file-name": encodeURIComponent(file.name),
+      "x-file-size": String(file.size),
+      "x-paper-subject": subject,
+      ...(year ? { "x-paper-year": String(year) } : {}),
+    },
+    body: file,
+  });
   if (!response.ok) throw await paperApiError(response);
   const data = await response.json() as { item?: ExamPaperItem };
   if (!data.item) throw new Error("云端未返回已保存的试卷信息");

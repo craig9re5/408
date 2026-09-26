@@ -1,9 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import "katex/dist/katex.min.css";
 import "./globals.css";
+import "./analytics.css";
+import "./journal.css";
+import "./sprint.css";
+import "./touch.css";
+import "./schedule.css";
+import "./paper-netdisk.css";
 
 export const metadata: Metadata = {
   title: "学习进度",
   description: "记录数学与 408 各科目章节的学习、复习和计划进度。",
+  icons: {
+    icon: [{ url: "/pku-logo.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/pku-logo.svg", type: "image/svg+xml" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "学习进度",
+  },
 };
 
 export const viewport: Viewport = {
@@ -17,13 +33,6 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <head>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"
-          crossOrigin="anonymous"
-        />
-      </head>
       <body>{children}</body>
     </html>
   );

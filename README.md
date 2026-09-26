@@ -8,7 +8,7 @@
 
 - **全流程一站式备考工作台**：贯通「基础轮次知识大纲推进 → 每日任务执行与沉淀 → 冲刺套卷全真模考 → 错题归因与复盘日志 → 多维学情数据分析」的完整考研复习闭环。
 - **学术人文视觉美学**：采用经典学术人文风格排版（Noto Serif SC 衬线体标题、暖米纸色底色 `--paper: #fbfaf6`、深青墨黑 `--sidebar: #111b24`、珊瑚朱红 `--coral: #ef846d`），纯原生 CSS 精雕细琢，无庞大 UI 库负担，兼顾桌面端侧边栏与移动端底部 Dock 栏。
-- **双层存储与边缘多端协同**：本地 LocalStorage 毫秒级持久化响应 + Cloudflare D1 边缘数据库 350ms 防抖同步，辅以基于 ID-level Last-Write-Wins (LWW) 的多设备无损合并机制，离线可用且多端并发不丢记录。
+- **双层存储与边缘多端协同**：本地 LocalStorage 持久化响应 + Cloudflare D1 边缘数据库防抖同步；日常修改走增量请求，写入使用版本检查，发生冲突时按已同步快照合并不同字段的修改。
 
 ---
 
@@ -122,10 +122,10 @@
 ## 🔒 数据同步与安全机制
 
 - **零秘钥泄露架构**：所有外部调用（如 GitHub API 发布文章）与数据库访问均由 Cloudflare Worker Serverless 网关代理，私密 Token 仅保存在 Worker 环境变量 Secrets 中，前端绝不接触鉴权密钥。
-- **6 位数字 OTP 安全门禁**：进入系统需输入 6 位访问码，提供分格输入体验、HttpOnly 安全 Cookie 与常量时间比对防时序攻击。
-- **多设备无损合并 (ID-level LWW Merge)**：
-  - 多端并发或离线创建日志/试卷记录时，以 ID 全集联合 + `updatedAt` 时间戳进行合并，保证两端新建记录完整保留。
-  - 客户端通过墓碑队列显式上报主动删除的记录 ID，Worker 在持久化前精确剔除，杜绝已删除项被错误复活。
+- **访问码门禁**：提供分格输入体验、HttpOnly 安全 Cookie 与服务端 15 分钟窗口登录限流。
+- **多设备同步**：
+  - 客户端提交服务器版本号；旧版本写入返回冲突，客户端按上次同步快照将本地修改应用到最新云端数据。
+  - 不同记录和字段的修改可同时保留；同一字段并发修改时采用本地优先策略。
 
 ---
 
@@ -134,7 +134,7 @@
 - **前端框架**：Next.js (React 19) + TypeScript
 - **构建工具链**：Vinext / Vite 8 + Tailwind CSS
 - **数学公式与富文本**：KaTeX + Marked
-- **边缘计算与数据库**：Cloudflare Workers + Cloudflare D1 (SQLite) + Drizzle ORM
+- **边缘计算与数据库**：Cloudflare Workers + Cloudflare D1 (SQLite) + 原生 SQL
 - **本地存储与快照**：LocalStorage 本地双写与多版本快照容灾层
 
 ---
@@ -151,6 +151,7 @@ Node.js `>= 22.13.0`
 npm install
 
 # 2. 启动本地开发服务
+npm run db:migrate:local
 npm run dev
 
 # 3. 运行全套自动化测试
@@ -176,6 +177,8 @@ npm run db:migrate:remote
 # 部署至 Cloudflare Workers
 npm run deploy
 ```
+
+博客发布默认只允许 `main` 空间。若需将发布权限授予其他空间，在 Worker 环境中配置 `BLOG_PUBLISH_WORKSPACE_ID`；未配置 `GITHUB_TOKEN` 时接口只做模拟发布。生产部署须先执行数据库迁移（包括同步版本、试卷配额和待删除文件队列表）。R2 临时不可用时，试卷删除会保留待清理记录，并在后续打开云盘时重试；清理成功后释放配额。
 
 ---
 

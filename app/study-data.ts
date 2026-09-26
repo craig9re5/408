@@ -388,6 +388,83 @@ export type StudyAppData = {
   schedule?: ScheduleAppData;
 };
 
+function sameSyncValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function hasStringId(value: unknown): value is { id: string } {
+  return isRecord(value) && typeof value.id === "string";
+}
+
+/** Apply only local changes made since base on top of the newest server state. */
+function rebaseSyncValue(base: unknown, local: unknown, remote: unknown): unknown {
+  if (sameSyncValue(local, base)) return remote;
+  if (sameSyncValue(remote, base)) return local;
+  if (Array.isArray(local) && Array.isArray(remote) && Array.isArray(base)
+    && [...base, ...local, ...remote].every(hasStringId)) {
+    const baseMap = new Map(base.map((entry) => [entry.id, entry]));
+    const localMap = new Map(local.map((entry) => [entry.id, entry]));
+    const remoteMap = new Map(remote.map((entry) => [entry.id, entry]));
+    const result: unknown[] = [];
+    for (const id of new Set([...remoteMap.keys(), ...localMap.keys(), ...baseMap.keys()])) {
+      if (!localMap.has(id) && baseMap.has(id)) continue;
+      if (!remoteMap.has(id) && !localMap.has(id)) continue;
+      const merged = rebaseSyncValue(baseMap.get(id), localMap.get(id), remoteMap.get(id));
+      if (merged !== undefined) result.push(merged);
+    }
+    return result;
+  }
+  if (isRecord(local) && isRecord(remote) && isRecord(base)) {
+    return Object.fromEntries(Array.from(new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]))
+      .filter((key) => {
+        if (!Object.hasOwn(local, key) && Object.hasOwn(base, key)) return false;
+        return Object.hasOwn(local, key) || Object.hasOwn(remote, key);
+      }).map((key) => [key, rebaseSyncValue(base[key], local[key], remote[key])]));
+  }
+  return local;
+}
+
+export function rebaseAppData(base: StudyAppData, local: StudyAppData, remote: StudyAppData): StudyAppData {
+  const merged = rebaseSyncValue(base, local, remote);
+  return normalizeAppData(merged, remote.progress) ?? remote;
+}
+
+export type AppDataPatch = {
+  progressChanges: ProgressMap;
+  journalChanges: JournalEntry[];
+  deletedJournalIds: string[];
+  paperChanges: PaperRecord[];
+  deletedPaperIds: string[];
+  projectSettings?: ProjectSettings;
+  planHistory?: PlanHistoryEntry[];
+  schedule?: ScheduleAppData;
+};
+
+export function createAppDataPatch(base: StudyAppData, current: StudyAppData): AppDataPatch {
+  const progressChanges = Object.fromEntries(Object.entries(current.progress)
+    .filter(([id, value]) => !sameSyncValue(value, base.progress[id])));
+  const changedRecords = <T extends { id: string }>(before: T[], after: T[]) => {
+    const beforeMap = new Map(before.map((entry) => [entry.id, entry]));
+    const afterIds = new Set(after.map((entry) => entry.id));
+    return {
+      changed: after.filter((entry) => !sameSyncValue(entry, beforeMap.get(entry.id))),
+      deleted: before.filter((entry) => !afterIds.has(entry.id)).map((entry) => entry.id),
+    };
+  };
+  const journals = changedRecords(base.journals, current.journals);
+  const papers = changedRecords(base.papers, current.papers);
+  return {
+    progressChanges,
+    journalChanges: journals.changed,
+    deletedJournalIds: journals.deleted,
+    paperChanges: papers.changed,
+    deletedPaperIds: papers.deleted,
+    ...(!sameSyncValue(base.projectSettings, current.projectSettings) ? { projectSettings: current.projectSettings } : {}),
+    ...(!sameSyncValue(base.planHistory, current.planHistory) ? { planHistory: current.planHistory } : {}),
+    ...(!sameSyncValue(base.schedule, current.schedule) ? { schedule: current.schedule } : {}),
+  };
+}
+
 export type BackupKind = "manual" | "before-import" | "before-restore" | "before-migration";
 
 export type LocalBackup = {
@@ -1377,6 +1454,28 @@ export class StorageRepository {
     return this.namespace !== "main"
       ? `${APP_DATA_KEY}:${this.namespace}`
       : APP_DATA_KEY;
+  }
+
+  private syncBaseKey(): string {
+    return `${this.appDataKey()}:sync-base`;
+  }
+
+  loadSyncBase(fallbackProgress: ProgressMap): StudyAppData | null {
+    if (this.isQuarantined()) return null;
+    try {
+      return normalizeAppData(JSON.parse(this.storage.getItem(this.syncBaseKey()) || "null"), fallbackProgress);
+    } catch {
+      return null;
+    }
+  }
+
+  saveSyncBase(data: StudyAppData): void {
+    if (this.isQuarantined()) return;
+    try {
+      this.storage.setItem(this.syncBaseKey(), JSON.stringify(data));
+    } catch {
+      // The remote copy remains authoritative if local storage is full.
+    }
   }
 
   private legacyProgressKey(): string {

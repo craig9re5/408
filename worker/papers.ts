@@ -1,5 +1,6 @@
 import type { ExamPaperItem, ExamPaperSubject } from "../shared/types.ts";
 import { DEFAULT_USER_QUOTA_BYTES, MAX_PAPER_FILE_SIZE } from "../shared/constants.ts";
+import { readJsonBody } from "./request.ts";
 
 function json(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -50,6 +51,46 @@ function sanitizeFileName(name: string): string {
   return cleaned;
 }
 
+class UploadValidationError extends Error {}
+
+async function reserveQuota(env: Env, workspaceId: string, bytes: number): Promise<boolean> {
+  await env.DB.prepare("INSERT OR IGNORE INTO paper_quota (workspace_id, used_bytes) VALUES (?, 0)").bind(workspaceId).run();
+  const result = await env.DB.prepare(
+    "UPDATE paper_quota SET used_bytes = used_bytes + ? WHERE workspace_id = ? AND used_bytes + ? <= ?",
+  ).bind(bytes, workspaceId, bytes, DEFAULT_USER_QUOTA_BYTES).run();
+  return result.meta.changes === 1;
+}
+
+async function releaseQuota(env: Env, workspaceId: string, bytes: number): Promise<void> {
+  await env.DB.prepare("UPDATE paper_quota SET used_bytes = MAX(0, used_bytes - ?) WHERE workspace_id = ?")
+    .bind(bytes, workspaceId).run();
+}
+
+type PendingDeletion = { storage_key: string; file_size: number };
+
+async function cleanPendingDeletions(env: Env, workspaceId: string, limit = 25): Promise<number> {
+  if (!env.PAPERS_BUCKET) return 0;
+  const pending = await env.DB.prepare(
+    "SELECT storage_key, file_size FROM pending_paper_deletions WHERE workspace_id = ? ORDER BY created_at LIMIT ?",
+  ).bind(workspaceId, limit).all<PendingDeletion>();
+  for (const row of pending.results) {
+    try {
+      await env.PAPERS_BUCKET.delete(row.storage_key);
+      await env.DB.batch([
+        env.DB.prepare(
+          "UPDATE paper_quota SET used_bytes = MAX(0, used_bytes - ?) WHERE workspace_id = ? AND EXISTS (SELECT 1 FROM pending_paper_deletions WHERE storage_key = ?)",
+        ).bind(row.file_size, workspaceId, row.storage_key),
+        env.DB.prepare("DELETE FROM pending_paper_deletions WHERE storage_key = ?").bind(row.storage_key),
+      ]);
+    } catch (error) {
+      console.error("Pending paper cleanup failed:", error);
+    }
+  }
+  const next = await env.DB.prepare("SELECT storage_key FROM pending_paper_deletions WHERE workspace_id = ? LIMIT 1")
+    .bind(workspaceId).first<{ storage_key: string }>();
+  return next ? 1 : 0;
+}
+
 export async function handlePapersApi(request: Request, env: Env, workspaceId: string): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -57,7 +98,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
   // 1. GET /api/papers - List papers & get quota
   if (path === "/api/papers" && request.method === "GET") {
     const subject = url.searchParams.get("subject")?.trim();
-    const keyword = url.searchParams.get("keyword")?.trim().toLowerCase();
+    const keyword = url.searchParams.get("keyword")?.trim().toLowerCase().slice(0, 100);
 
     let query = "SELECT id, workspace_id, file_name, original_name, file_size, storage_key, subject, year, created_at, updated_at FROM exam_papers WHERE workspace_id = ?";
     const bindings: (string | number)[] = [workspaceId];
@@ -73,9 +114,11 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
     query += " ORDER BY created_at DESC";
 
     try {
+      await cleanPendingDeletions(env, workspaceId).catch((error: unknown) =>
+        console.error("Pending paper cleanup query failed:", error));
       const [listResult, quotaResult] = await Promise.all([
         env.DB.prepare(query).bind(...bindings).all<ExamPaperRow>(),
-        env.DB.prepare("SELECT COALESCE(SUM(file_size), 0) as used_bytes FROM exam_papers WHERE workspace_id = ?").bind(workspaceId).first<{ used_bytes: number }>(),
+        env.DB.prepare("SELECT used_bytes FROM paper_quota WHERE workspace_id = ?").bind(workspaceId).first<{ used_bytes: number }>(),
       ]);
 
       const items = (listResult.results ?? []).map(rowToItem);
@@ -92,91 +135,98 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       });
     } catch (err) {
       console.error("List papers error:", err);
-      return json({ error: "获取试卷列表失败", details: String(err) }, { status: 500 });
+      return json({ error: "获取试卷列表失败" }, { status: 500 });
     }
   }
 
   // 2. POST /api/papers/upload - Upload single PDF
   if (path === "/api/papers/upload" && request.method === "POST") {
+    let reservedBytes = 0;
+    let storageKey = "";
     try {
       if (!env.PAPERS_BUCKET) {
         return json({ error: "云端对象存储桶未就绪，请检查 PAPERS_BUCKET 绑定" }, { status: 503 });
       }
-      const formData = await request.formData();
-      const file = formData.get("file") as File | null;
-      const rawSubject = (formData.get("subject") as string)?.trim() || "other";
-      const yearRaw = formData.get("year") as string | null;
-      const year = yearRaw && !isNaN(parseInt(yearRaw, 10)) ? parseInt(yearRaw, 10) : null;
-
-      if (!file || typeof file === "string") {
-        return json({ error: "未找到待上传的 PDF 文件" }, { status: 400 });
+      if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/pdf" || !request.body) {
+        throw new UploadValidationError("仅支持直接上传 PDF 文件");
+      }
+      let originalName = "";
+      try { originalName = decodeURIComponent(request.headers.get("x-file-name") ?? ""); }
+      catch { throw new UploadValidationError("文件名编码无效"); }
+      if (!originalName.toLowerCase().endsWith(".pdf") || originalName.length > 255) {
+        throw new UploadValidationError("文件名必须以 .pdf 结尾且不超过 255 字符");
+      }
+      const fileSize = Number(request.headers.get("x-file-size"));
+      const contentLength = request.headers.get("content-length");
+      if (!Number.isSafeInteger(fileSize) || fileSize < 5 || fileSize > MAX_PAPER_FILE_SIZE
+        || (contentLength !== null && Number(contentLength) !== fileSize)) {
+        throw new UploadValidationError("文件大小无效或超过 100MB 上限");
+      }
+      const rawSubject = request.headers.get("x-paper-subject") ?? "other";
+      if (!["cs408", "math", "english", "politics", "other"].includes(rawSubject)) {
+        throw new UploadValidationError("试卷科目无效");
+      }
+      const yearHeader = request.headers.get("x-paper-year");
+      const year = yearHeader === null ? null : Number(yearHeader);
+      if (year !== null && (!Number.isInteger(year) || year < 2000 || year > 2100)) {
+        throw new UploadValidationError("试卷年份无效");
       }
 
-      // Format validation
-      const fileNameLower = file.name.toLowerCase();
-      if (!fileNameLower.endsWith(".pdf") && file.type !== "application/pdf") {
-        return json({ error: "仅支持上传 PDF 格式的试卷文件" }, { status: 400 });
-      }
-
-      // Size limit validation (100MB)
-      if (file.size > MAX_PAPER_FILE_SIZE) {
-        return json({ error: "文件体积超过 100MB 上限，请压缩后再试" }, { status: 400 });
-      }
-
-      // Check storage quota
-      const quotaRow = await env.DB.prepare(
-        "SELECT COALESCE(SUM(file_size), 0) as used_bytes FROM exam_papers WHERE workspace_id = ?",
-      ).bind(workspaceId).first<{ used_bytes: number }>();
-
-      const currentUsed = quotaRow?.used_bytes ?? 0;
-      if (currentUsed + file.size > DEFAULT_USER_QUOTA_BYTES) {
+      if (!await reserveQuota(env, workspaceId, fileSize)) {
         return json({ error: "云盘存储容量已满（最大 1GB），请清理不需要的试卷后再上传" }, { status: 400 });
       }
+      reservedBytes = fileSize;
 
       const paperId = crypto.randomUUID();
-      const storageKey = `papers/${workspaceId}/${paperId}.pdf`;
-      const cleanName = sanitizeFileName(file.name);
+      storageKey = `papers/${workspaceId}/${paperId}.pdf`;
+      const cleanName = sanitizeFileName(originalName);
 
-      await env.PAPERS_BUCKET.put(storageKey, file.stream(), {
+      let receivedBytes = 0;
+      const signature: number[] = [];
+      const boundedStream = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          receivedBytes += chunk.byteLength;
+          if (receivedBytes > fileSize || receivedBytes > MAX_PAPER_FILE_SIZE) {
+            throw new UploadValidationError("实际文件大小与声明不符");
+          }
+          for (const byte of chunk) {
+            if (signature.length < 5) signature.push(byte);
+            else break;
+          }
+          if (signature.length === 5 && String.fromCharCode(...signature) !== "%PDF-") {
+            throw new UploadValidationError("文件内容不是 PDF");
+          }
+          controller.enqueue(chunk);
+        },
+      }));
+
+      await env.PAPERS_BUCKET.put(storageKey, boundedStream, {
         httpMetadata: {
           contentType: "application/pdf",
           contentDisposition: `attachment; filename="${encodeURIComponent(cleanName)}"`,
         },
         customMetadata: {
-          originalName: file.name,
+          originalName,
           workspaceId,
         },
       });
+      if (receivedBytes !== fileSize || signature.length !== 5) {
+        throw new UploadValidationError("实际文件大小与声明不符");
+      }
 
       const now = Date.now();
-      try {
-        await env.DB.prepare(
-          `INSERT INTO exam_papers (id, workspace_id, file_name, original_name, file_size, storage_key, subject, year, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).bind(
-          paperId,
-          workspaceId,
-          cleanName,
-          file.name,
-          file.size,
-          storageKey,
-          rawSubject,
-          year,
-          now,
-          now,
-        ).run();
-      } catch (err) {
-        await env.PAPERS_BUCKET.delete(storageKey).catch((cleanupError: unknown) =>
-          console.error("Failed to clean up orphaned paper:", cleanupError));
-        throw err;
-      }
+      await env.DB.prepare(
+        `INSERT INTO exam_papers (id, workspace_id, file_name, original_name, file_size, storage_key, subject, year, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(paperId, workspaceId, cleanName, originalName, fileSize, storageKey, rawSubject, year, now, now).run();
+      reservedBytes = 0;
 
       const newItem: ExamPaperItem = {
         id: paperId,
         workspaceId,
         fileName: cleanName,
-        originalName: file.name,
-        fileSize: file.size,
+        originalName,
+        fileSize,
         storageKey,
         subject: (rawSubject as ExamPaperSubject) || "other",
         year: year ?? undefined,
@@ -186,8 +236,14 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
 
       return json({ success: true, item: newItem });
     } catch (err) {
+      if (storageKey && env.PAPERS_BUCKET) {
+        await env.PAPERS_BUCKET.delete(storageKey).catch((cleanupError: unknown) =>
+          console.error("Failed to clean up uploaded paper:", cleanupError));
+      }
+      if (reservedBytes) await releaseQuota(env, workspaceId, reservedBytes).catch((cleanupError: unknown) =>
+        console.error("Failed to release reserved quota:", cleanupError));
       console.error("Upload paper error:", err);
-      return json({ error: "上传试卷失败", details: String(err) }, { status: 500 });
+      return json({ error: err instanceof UploadValidationError ? err.message : "上传试卷失败" }, { status: err instanceof UploadValidationError ? 400 : 500 });
     }
   }
 
@@ -224,7 +280,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       return new Response(object.body, { headers });
     } catch (err) {
       console.error("Download paper error:", err);
-      return json({ error: "下载试卷失败", details: String(err) }, { status: 500 });
+      return json({ error: "下载试卷失败" }, { status: 500 });
     }
   }
 
@@ -233,7 +289,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
   if (updateMatch && request.method === "PATCH") {
     const paperId = updateMatch[1];
     try {
-      const body = await request.json().catch(() => null) as {
+      const body = await readJsonBody(request, 4096).catch(() => null) as {
         fileName?: string;
         subject?: string;
         year?: number | null;
@@ -241,6 +297,16 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
 
       if (!body) {
         return json({ error: "无效的修改请求" }, { status: 400 });
+      }
+      if (body.fileName !== undefined && (typeof body.fileName !== "string" || !body.fileName.trim() || body.fileName.length > 255)) {
+        return json({ error: "文件名无效" }, { status: 400 });
+      }
+      if (body.subject !== undefined && !["cs408", "math", "english", "politics", "other"].includes(body.subject)) {
+        return json({ error: "试卷科目无效" }, { status: 400 });
+      }
+      if (body.year !== undefined && body.year !== null
+        && (!Number.isInteger(body.year) || body.year < 2000 || body.year > 2100)) {
+        return json({ error: "试卷年份无效" }, { status: 400 });
       }
 
       const existing = await env.DB.prepare(
@@ -274,7 +340,7 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
       });
     } catch (err) {
       console.error("Update paper error:", err);
-      return json({ error: "修改试卷信息失败", details: String(err) }, { status: 500 });
+      return json({ error: "修改试卷信息失败" }, { status: 500 });
     }
   }
 
@@ -283,52 +349,66 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
     const paperId = updateMatch[1];
     try {
       const row = await env.DB.prepare(
-        "SELECT storage_key FROM exam_papers WHERE workspace_id = ? AND id = ?",
-      ).bind(workspaceId, paperId).first<{ storage_key: string }>();
+        "SELECT storage_key, file_size FROM exam_papers WHERE workspace_id = ? AND id = ?",
+      ).bind(workspaceId, paperId).first<PendingDeletion>();
 
       if (row) {
         if (!env.PAPERS_BUCKET) return json({ error: "云端对象存储桶未就绪" }, { status: 503 });
-        await env.PAPERS_BUCKET.delete(row.storage_key);
-        await env.DB.prepare("DELETE FROM exam_papers WHERE workspace_id = ? AND id = ?").bind(workspaceId, paperId).run();
+        await env.DB.batch([
+          env.DB.prepare(
+            "INSERT OR IGNORE INTO pending_paper_deletions (storage_key, workspace_id, file_size, created_at) SELECT storage_key, workspace_id, file_size, ? FROM exam_papers WHERE workspace_id = ? AND id = ?",
+          ).bind(Date.now(), workspaceId, paperId),
+          env.DB.prepare("DELETE FROM exam_papers WHERE workspace_id = ? AND id = ?").bind(workspaceId, paperId),
+        ]);
       }
 
-      return json({ success: true, id: paperId });
+      const cleanupPending = await cleanPendingDeletions(env, workspaceId).then((count) => count > 0).catch((error: unknown) => {
+        console.error("Pending paper cleanup query failed:", error);
+        return true;
+      });
+      return json({ success: true, id: paperId, cleanupPending });
     } catch (err) {
       console.error("Delete paper error:", err);
-      return json({ error: "删除试卷失败", details: String(err) }, { status: 500 });
+      return json({ error: "删除试卷失败" }, { status: 500 });
     }
   }
 
   // 6. POST /api/papers/batch-delete - Delete multiple papers
   if (path === "/api/papers/batch-delete" && request.method === "POST") {
     try {
-      const body = await request.json().catch(() => null) as { ids?: string[] } | null;
-      const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.filter((id) => typeof id === "string" && id.length > 0))] : [];
+      const body = await readJsonBody(request, 32 * 1024).catch(() => null) as { ids?: string[] } | null;
+      const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.filter((id) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id)))] : [];
 
       if (ids.length === 0) {
         return json({ error: "请选择要删除的试卷" }, { status: 400 });
       }
+      if (ids.length > 100) return json({ error: "单次最多删除 100 份试卷" }, { status: 400 });
 
       // Fetch storage keys for R2 deletion
       const placeholders = ids.map(() => "?").join(",");
       const rows = await env.DB.prepare(
-        `SELECT storage_key FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
-      ).bind(workspaceId, ...ids).all<{ storage_key: string }>();
+        `SELECT storage_key, file_size FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
+      ).bind(workspaceId, ...ids).all<PendingDeletion>();
 
       if (rows.results.length > 0) {
         if (!env.PAPERS_BUCKET) return json({ error: "云端对象存储桶未就绪" }, { status: 503 });
-        const keys = rows.results.map((r: { storage_key: string }) => r.storage_key).filter(Boolean);
-        await Promise.all(keys.map((k: string) => env.PAPERS_BUCKET!.delete(k)));
+        await env.DB.batch([
+          env.DB.prepare(
+            `INSERT OR IGNORE INTO pending_paper_deletions (storage_key, workspace_id, file_size, created_at) SELECT storage_key, workspace_id, file_size, ? FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
+          ).bind(Date.now(), workspaceId, ...ids),
+          env.DB.prepare(`DELETE FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`)
+            .bind(workspaceId, ...ids),
+        ]);
       }
 
-      await env.DB.prepare(
-        `DELETE FROM exam_papers WHERE workspace_id = ? AND id IN (${placeholders})`,
-      ).bind(workspaceId, ...ids).run();
-
-      return json({ success: true, deletedCount: rows.results.length });
+      const cleanupPending = await cleanPendingDeletions(env, workspaceId).then((count) => count > 0).catch((error: unknown) => {
+        console.error("Pending paper cleanup query failed:", error);
+        return true;
+      });
+      return json({ success: true, deletedCount: rows.results.length, cleanupPending });
     } catch (err) {
       console.error("Batch delete error:", err);
-      return json({ error: "批量删除失败", details: String(err) }, { status: 500 });
+      return json({ error: "批量删除失败" }, { status: 500 });
     }
   }
 

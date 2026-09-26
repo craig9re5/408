@@ -38,6 +38,12 @@ test("Markdown XSS 纵深防御: 严密阻断 script、大小写变形、事件�
   assert.ok(!linkHtml.includes('href="javascript:'));
   assert.ok(linkHtml.includes('href="#"'));
 
+  const encodedScheme = renderMarkdownWithKaTeX("[点击](java&#x73;cript:alert(1))");
+  assert.ok(encodedScheme.includes('href="#"'));
+  assert.ok(sanitizeHtml('<a href="java&#x73;cript:alert(1)">x</a>').includes('href="#"'));
+  const encodedColon = renderMarkdownWithKaTeX("[点击](javascript&#58;alert(1))");
+  assert.ok(!encodedColon.includes('href="javascript:'));
+
   const dataUri = `<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">Click</a>`;
   const cleanData = sanitizeHtml(dataUri);
   assert.ok(!cleanData.includes("data:text/html"));

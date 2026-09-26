@@ -1,5 +1,22 @@
-import { marked } from "marked";
+import { Marked } from "marked";
 import katex from "katex";
+
+const markdownParser = new Marked({ gfm: true, breaks: true });
+markdownParser.use({
+  renderer: {
+    link({ href, title, tokens }) {
+      const safeHref = safeMarkdownUrl(href);
+      const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<a href="${escapeHtml(safeHref)}"${titleAttribute}>${this.parser.parseInline(tokens)}</a>`;
+    },
+    image({ href, title, text }) {
+      const safeSrc = safeMarkdownUrl(href);
+      if (safeSrc === "#") return escapeHtml(text);
+      const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(text)}"${titleAttribute}>`;
+    },
+  },
+});
 
 /**
  * Custom Markdown + KaTeX rendering function:
@@ -73,10 +90,7 @@ export function renderMarkdownWithKaTeX(markdown: string): string {
   });
 
   // Step 8: Parse Markdown with GFM enabled
-  let html = marked.parse(processed, {
-    gfm: true,
-    breaks: true,
-  }) as string;
+  let html = markdownParser.parse(processed) as string;
 
   // Restore escaped HTML entities
   html = html.replace(/%%HTML_LT%%/g, "&lt;").replace(/%%HTML_GT%%/g, "&gt;");
@@ -139,8 +153,28 @@ export function sanitizeHtml(html: string): string {
   // Neutralize dangerous javascript:, vbscript:, data:text/html URIs in href and src
   clean = clean.replace(/(href|src)\s*=\s*(['"])\s*(?:javascript:|vbscript:|data:\s*(?:text\/html|text\/javascript|application\/javascript)).*?\2/gi, '$1="#"');
   clean = clean.replace(/(href|src)\s*=\s*(?:javascript:|vbscript:|data:\s*(?:text\/html|text\/javascript|application\/javascript))[^\s>]+/gi, '$1="#"');
+  // Re-emit parser-owned URL attributes with HTML escaping. This prevents
+  // entity references from becoming a protocol after the browser parses HTML.
+  clean = clean.replace(/\b(href|src)\s*=\s*(['"])(.*?)\2/gi, (_match, attribute: string, _quote: string, value: string) =>
+    `${attribute}="${escapeHtml(safeMarkdownUrl(value))}"`);
 
   return clean;
+}
+
+function safeMarkdownUrl(value: string): string {
+  const url = value.trim();
+  if (!url || /[\u0000-\u001f\u007f]/.test(url)) return "#";
+  const colon = url.indexOf(":");
+  const firstPathDelimiter = url.search(/[/?#]/);
+  if (colon >= 0 && url.slice(0, colon).includes("&")) return "#";
+  if (colon >= 0 && (firstPathDelimiter < 0 || colon < firstPathDelimiter)
+    && !/^[a-z][a-z0-9+.-]*:/i.test(url)) return "#";
+  try {
+    const parsed = new URL(url, "https://markdown.invalid/");
+    return ["http:", "https:", "mailto:"].includes(parsed.protocol) ? url : "#";
+  } catch {
+    return "#";
+  }
 }
 
 /**

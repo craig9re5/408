@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Section, type StudyArea } from "./data/books";
 import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
-import { AnswerSheetModal } from "./components/sprint/AnswerSheetModal";
 import { PaperCard } from "./components/sprint/PaperCard";
-import { JournalEditorModal } from "./components/journal/JournalEditorModal";
+import { AnalyticsActivity } from "./components/AnalyticsActivity";
 import { EditableDate } from "./components/common/EditableDate";
 import { ScheduleView } from "./components/schedule/ScheduleView";
 import { TodayScheduleBanner } from "./components/schedule/TodayScheduleBanner";
 import { useScheduleTicker } from "./components/schedule/useScheduleTicker";
 import { TimetableGrid } from "./components/schedule/TimetableGrid";
-import { PaperNetdiskModal } from "./components/papers/PaperNetdiskModal";
+const AnswerSheetModal = lazy(() => import("./components/sprint/AnswerSheetModal").then((module) => ({ default: module.AnswerSheetModal })));
+const JournalEditorModal = lazy(() => import("./components/journal/JournalEditorModal").then((module) => ({ default: module.JournalEditorModal })));
+const PaperNetdiskModal = lazy(() => import("./components/papers/PaperNetdiskModal").then((module) => ({ default: module.PaperNetdiskModal })));
 import {
   APP_VERSION,
   StorageRepository,
@@ -24,6 +25,7 @@ import {
   calculateWeekNumber,
   calculateWeeklyTrends,
   createAppData,
+  createAppDataPatch,
   createBlankProgress,
   dateToday,
   buildDefaultProgress,
@@ -39,6 +41,7 @@ import {
   isTodayReviewPlan,
   isUnreviewedTask,
   normalizeAppData,
+  rebaseAppData,
   normalizeSectionProgress,
   summarizeImport,
   defaultPastPapers,
@@ -62,7 +65,6 @@ import {
   ENGLISH_PAPER_STRUCTURE,
   type DisciplineStats,
   type ForecastHealth,
-  type HeatmapDay,
   type JournalContext,
   type JournalEntry,
   type JournalPaperContext,
@@ -83,7 +85,6 @@ import {
   type ScheduleAppData,
   type ScheduleEvent,
   type VelocityForecast,
-  type WeeklyTrend,
 } from "./study-data";
 
 type AuthState = "locked" | "authenticated";
@@ -112,14 +113,27 @@ const pageTitles: Record<AppPage, string> = {
   settings: "设置",
 };
 
-const mobileNavigation: { page: AppPage; mark: string; label: string }[] = [
-  { page: "progress", mark: "进", label: "进度" },
-  { page: "sprint", mark: "冲", label: "冲刺" },
-  { page: "today", mark: "今", label: "今日" },
-  { page: "schedule", mark: "课", label: "课表" },
-  { page: "analytics", mark: "析", label: "分析" },
-  { page: "settings", mark: "设", label: "设置" },
+const mobileNavigation: { page: AppPage; label: string }[] = [
+  { page: "progress", label: "进度" },
+  { page: "sprint", label: "冲刺" },
+  { page: "today", label: "今日" },
+  { page: "schedule", label: "课表" },
+  { page: "analytics", label: "分析" },
+  { page: "settings", label: "设置" },
 ];
+
+function MobileNavIcon({ page }: { page: AppPage }) {
+  const paths: Record<AppPage, React.ReactNode> = {
+    progress: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="m15 18 2 2 4-5" /></>,
+    sprint: <><path d="M5 4h14v16H5z" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    today: <><path d="M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" /><path d="m9 15 2 2 4-4" /></>,
+    schedule: <><path d="M3 5h18v15H3zM3 9h18M9 9v11M15 9v11" /></>,
+    analytics: <><path d="M4 20h16M7 17v-5M12 17V7M17 17v-9" /></>,
+    settings: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" /><circle cx="16" cy="12" r="2" /><circle cx="10" cy="18" r="2" /></>,
+  };
+
+  return <svg className="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[page]}</svg>;
+}
 
 type PlanUndo = {
   message: string;
@@ -459,6 +473,21 @@ export function StudyDashboard() {
   const [inviteCode, setInviteCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
+  const syncMeta = useMemo(() => {
+    switch (syncStatus) {
+      case "saved":
+        return { cls: "saved", label: "已同步", desc: "数据已同步到云端" };
+      case "saving":
+        return { cls: "saving", label: "同步中…", desc: "正在同步到云端" };
+      case "offline":
+        return { cls: "offline", label: "离线待同步", desc: "网络不可用：数据已保存在本机，恢复网络后自动同步" };
+      case "error":
+        return { cls: "error", label: "同步失败", desc: "同步失败：数据仍保留在本机，将自动重试" };
+      default:
+        return { cls: "loading", label: "连接中…", desc: "正在连接云端" };
+    }
+  }, [syncStatus]);
+  const [syncTick, setSyncTick] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
@@ -480,8 +509,6 @@ export function StudyDashboard() {
   const [storageLoadIssue, setStorageLoadIssue] = useState<StorageLoadIssue | null>(null);
   const [scrollTargetSectionId, setScrollTargetSectionId] = useState<string | null>(null);
   const [analyticsScope, setAnalyticsScope] = useState<"all" | StudyArea>("all");
-  const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
-  const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
   const [papers, setPapers] = useState<PaperRecord[]>(defaultPastPapers);
   const [schedule, setSchedule] = useState<ScheduleAppData>(buildDefaultSchedule);
   const { activeInfo: activeScheduleInfo } = useScheduleTicker(schedule);
@@ -505,6 +532,19 @@ export function StudyDashboard() {
   const deletedJournalIdsRef = useRef<string[]>([]);
   const deletedPaperIdsRef = useRef<string[]>([]);
   const lastSavedPayloadRef = useRef<string>("");
+  const syncBaseRef = useRef<StudyAppData | null>(null);
+  const remoteRevisionRef = useRef(0);
+  const workingDataRef = useRef<StudyAppData | null>(null);
+  const hasLoadedRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const syncBlockedRef = useRef(false);
+  const workspaceEpochRef = useRef(0);
+
+  useEffect(() => {
+    if (hasLoadedRef.current) {
+      workingDataRef.current = createAppData(progress, projectSettings, planHistory, journals, papers, schedule);
+    }
+  }, [progress, projectSettings, planHistory, journals, papers, schedule]);
 
   const repository = useCallback((targetNamespace?: string): StorageRepository => {
     const namespace = targetNamespace ?? (repositoryWorkspaceRef.current || workspaceId || "");
@@ -516,62 +556,88 @@ export function StudyDashboard() {
   }, [workspaceId]);
 
   const resetSpaceState = useCallback((namespace: string) => {
+    workspaceEpochRef.current += 1;
+    saveInFlightRef.current = false;
+    syncBlockedRef.current = false;
     setWorkspaceId(namespace);
     repositoryRef.current = new StorageRepository(window.localStorage, namespace);
     repositoryWorkspaceRef.current = namespace;
     deletedJournalIdsRef.current = [];
     deletedPaperIdsRef.current = [];
     lastSavedPayloadRef.current = "";
+    syncBaseRef.current = null;
+    remoteRevisionRef.current = 0;
+    workingDataRef.current = null;
+    hasLoadedRef.current = false;
   }, []);
 
-  const applyRemoteData = useCallback((body: Partial<StudyAppData>, includeLocal: boolean, explicitWorkspaceId?: string) => {
+  const applyRemoteData = useCallback((body: Partial<StudyAppData> & { revision?: number }, includeLocal: boolean, explicitWorkspaceId?: string) => {
     const currentNamespace = explicitWorkspaceId ?? repositoryWorkspaceRef.current ?? workspaceId ?? "";
     const isMain = currentNamespace === "main" || currentNamespace === "261219";
     const fallback = defaultProgress(isMain);
     const repo = repository(currentNamespace);
     const remoteProgress = body.progress ?? {};
-    // 对于非 main 用户，如果云端没有进度记录，说明此用户是纯粹的新用户，其学习记录必须是一片空白。
-    // 绝不继承/复活此前偶然泄露在本地缓存的脏数据。
-    const isNewNonMainUser = !isMain && Object.keys(remoteProgress).length === 0;
-    const local = (includeLocal && !isNewNonMainUser) ? repo.load(fallback) : null;
+    const remote = createAppData(
+      mergeRemoteProgress(remoteProgress, fallback),
+      body.projectSettings ?? defaultProjectSettings(),
+      body.planHistory ?? [],
+      body.journals ?? [],
+      body.papers ?? defaultPastPapers(),
+      normalizeSchedule(body.schedule),
+    );
+    const base = syncBaseRef.current ?? repo.loadSyncBase(fallback);
+    const local = includeLocal ? repo.load(fallback) : (hasLoadedRef.current ? workingDataRef.current : null);
     const localIssue = repo.takeLoadIssue();
     if (localIssue) {
       setStorageLoadIssue(localIssue);
       setFeedbackMessage(localIssue.message);
     }
-    const base = isMain
-      ? (Object.keys(remoteProgress).length === 0 && local ? local.progress : fallback)
-      : (isNewNonMainUser ? fallback : (local?.progress && Object.keys(local.progress).length > 0 ? local.progress : fallback));
-    const mergedProgress = mergeRemoteProgress(remoteProgress, base);
-    const mergedSettings = body.projectSettings ?? local?.projectSettings ?? defaultProjectSettings();
-    const mergedHistory = body.planHistory ?? local?.planHistory ?? [];
-    const mergedJournalsList = mergeJournals(local?.journals ?? [], body.journals ?? []);
-    const mergedPapersList = mergePapers(local?.papers ?? defaultPastPapers(), body.papers ?? []);
-    const mergedSchedule = normalizeSchedule(body.schedule ?? local?.schedule);
+    // A local copy without a known sync base cannot be safely merged into an
+    // existing cloud workspace. Preserve it as a backup before trusting cloud.
+    if (includeLocal && local && !base && Object.keys(remoteProgress).length > 0
+      && JSON.stringify(local) !== JSON.stringify(remote)) {
+      const previousIds = new Set(repo.backups().map((backup) => backup.id));
+      const backupsAfter = repo.createBackup(local, "before-migration");
+      if (backupsAfter.some((backup) => !previousIds.has(backup.id))) {
+        setFeedbackMessage("已保留旧本地记录为备份，当前显示云端数据");
+      } else {
+        syncBlockedRef.current = true;
+        setStorageLoadIssue({ message: "旧本地记录无法备份，请先导出原始数据并清理浏览器存储", raw: JSON.stringify(local) });
+      }
+    }
+    const canMigrateEmptyMain = includeLocal && isMain && Object.keys(remoteProgress).length === 0;
+    const merged = local && base
+      ? rebaseAppData(base, local, remote)
+      : local && canMigrateEmptyMain ? rebaseAppData(remote, local, remote) : remote;
 
-    setProgress(mergedProgress);
-    setProjectSettings(mergedSettings);
-    setPlanHistory(mergedHistory);
-    setJournals(mergedJournalsList);
-    setPapers(mergedPapersList);
-    setSchedule(mergedSchedule);
+    workingDataRef.current = merged;
+    hasLoadedRef.current = true;
+    syncBaseRef.current = remote;
+    remoteRevisionRef.current = Number.isSafeInteger(body.revision) ? body.revision! : 0;
+    repo.saveSyncBase(remote);
+    setProgress(merged.progress);
+    setProjectSettings(merged.projectSettings);
+    setPlanHistory(merged.planHistory);
+    setJournals(merged.journals);
+    setPapers(merged.papers);
+    setSchedule(normalizeSchedule(merged.schedule));
     setBackups(repo.backups());
 
-    // 若判定为非 main 的全新用户，立即主动覆写清洗本地缓存，确保下一次打开也彻底洁净
-    if (isNewNonMainUser) {
-      repo.save(createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList, mergedSchedule));
-    }
-
-    // Record the current state payload so auto-save doesn't fire for unchanged data
+    // The server snapshot is the sync base. Rebased local edits must still save.
     lastSavedPayloadRef.current = JSON.stringify({
-      ...createAppData(mergedProgress, mergedSettings, mergedHistory, mergedJournalsList, mergedPapersList, mergedSchedule),
+      ...remote,
+      baseRevision: remoteRevisionRef.current,
+      changedProgressIds: [],
       deletedJournalIds: [],
       deletedPaperIds: [],
     });
   }, [repository, workspaceId]);
 
   const loadRemoteData = useCallback(async (includeLocal: boolean) => {
+    const epoch = workspaceEpochRef.current;
+    const wid = repositoryWorkspaceRef.current || workspaceId || "main";
     const response = await fetch("/api/app-data", { cache: "no-store" });
+    if (epoch !== workspaceEpochRef.current) return;
     if (response.status === 401) {
       setAuthState("locked");
       setLoaded(false);
@@ -580,7 +646,7 @@ export function StudyDashboard() {
     if (!response.ok) throw new Error("app-data-load-failed");
 
     const body = await response.json() as Partial<StudyAppData>;
-    const wid = repositoryWorkspaceRef.current || workspaceId || "main";
+    if (epoch !== workspaceEpochRef.current) return;
     applyRemoteData(body, includeLocal, wid);
     setLoaded(true);
     setSyncStatus("saved");
@@ -611,11 +677,15 @@ export function StudyDashboard() {
 
   useEffect(() => {
     if (!loaded || authState !== "authenticated") return;
+    if (syncBlockedRef.current) return;
     const appData = createAppData(progress, projectSettings, planHistory, journals, papers, schedule);
     repository().save(appData);
 
     const payloadString = JSON.stringify({
       ...appData,
+      baseRevision: remoteRevisionRef.current,
+      changedProgressIds: Object.keys(appData.progress).filter((id) =>
+        JSON.stringify(appData.progress[id]) !== JSON.stringify(syncBaseRef.current?.progress[id])),
       deletedJournalIds: deletedJournalIdsRef.current,
       deletedPaperIds: deletedPaperIdsRef.current,
     });
@@ -625,53 +695,89 @@ export function StudyDashboard() {
       return;
     }
 
+    const patch = syncBaseRef.current ? createAppDataPatch(syncBaseRef.current, appData) : null;
+    const patchString = patch ? JSON.stringify({
+      ...patch,
+      baseRevision: remoteRevisionRef.current,
+      deletedJournalIds: [...new Set([...patch.deletedJournalIds, ...deletedJournalIdsRef.current])],
+      deletedPaperIds: [...new Set([...patch.deletedPaperIds, ...deletedPaperIdsRef.current])],
+    }) : "";
+    const usePatch = Boolean(patch && patchString.length < payloadString.length
+      && new TextEncoder().encode(patchString).byteLength <= 2 * 1024 * 1024);
+
     const timer = window.setTimeout(async () => {
+      if (saveInFlightRef.current) return;
+      saveInFlightRef.current = true;
+      const epoch = workspaceEpochRef.current;
       setSyncStatus("saving");
+      let recheckPending = false;
+      const sentDeletedJournalIds = [...deletedJournalIdsRef.current];
+      const sentDeletedPaperIds = [...deletedPaperIdsRef.current];
       try {
         const response = await fetch("/api/app-data", {
-          method: "PUT",
+          method: usePatch ? "PATCH" : "PUT",
           headers: { "content-type": "application/json" },
-          body: payloadString,
+          body: usePatch ? patchString : payloadString,
         });
+        if (epoch !== workspaceEpochRef.current) return;
         if (response.status === 401) {
           setAuthState("locked");
           setLoaded(false);
           return;
         }
-        if (!response.ok) throw new Error("progress-save-failed");
-        lastSavedPayloadRef.current = payloadString;
-        deletedJournalIdsRef.current = [];
-        deletedPaperIdsRef.current = [];
-
-        const resData = await response.json().catch(() => null) as { saved?: boolean; journals?: JournalEntry[] } | null;
-        if (resData?.journals) {
-          const currentJournals = appData.journals;
-          const isDifferent = resData.journals.length !== currentJournals.length ||
-            resData.journals.some((rj, i) => rj.id !== currentJournals[i]?.id || rj.updatedAt !== currentJournals[i]?.updatedAt);
-          if (isDifferent) {
-            setJournals(resData.journals);
-            lastSavedPayloadRef.current = JSON.stringify({
-              ...createAppData(progress, projectSettings, planHistory, resData.journals, papers, schedule),
-              deletedJournalIds: [],
-              deletedPaperIds: [],
-            });
-          }
+        if (response.status === 409) {
+          const latest = await response.json() as Partial<StudyAppData> & { revision: number };
+          applyRemoteData(latest, false);
+          setSyncStatus("saving");
+          recheckPending = true;
+          return;
         }
+        if (!response.ok) throw new Error("progress-save-failed");
+        const resData = await response.json() as { revision?: number };
+        if (!Number.isSafeInteger(resData.revision)) throw new Error("missing-revision");
+        remoteRevisionRef.current = resData.revision!;
+        syncBaseRef.current = appData;
+        repository().saveSyncBase(appData);
+        lastSavedPayloadRef.current = JSON.stringify({
+          ...appData,
+          baseRevision: resData.revision,
+          changedProgressIds: [],
+          deletedJournalIds: [],
+          deletedPaperIds: [],
+        });
+        deletedJournalIdsRef.current = deletedJournalIdsRef.current.filter((id) => !sentDeletedJournalIds.includes(id));
+        deletedPaperIdsRef.current = deletedPaperIdsRef.current.filter((id) => !sentDeletedPaperIds.includes(id));
         setSyncStatus("saved");
+        recheckPending = true;
       } catch {
-        setSyncStatus("offline");
+        if (epoch === workspaceEpochRef.current) setSyncStatus("offline");
+      } finally {
+        if (epoch === workspaceEpochRef.current) {
+          saveInFlightRef.current = false;
+          if (recheckPending) setSyncTick((current) => current + 1);
+        }
       }
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [authState, loaded, planHistory, progress, projectSettings, journals, papers, schedule, repository]);
+  }, [authState, loaded, planHistory, progress, projectSettings, journals, papers, schedule, repository, applyRemoteData, syncTick]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
 
     const refresh = async () => {
+      if (saveInFlightRef.current || document.hidden) return;
       try {
-        await loadRemoteData(false);
+        const response = await fetch("/api/app-data/revision", { cache: "no-store" });
+        if (response.status === 401) {
+          setAuthState("locked");
+          setLoaded(false);
+          return;
+        }
+        if (!response.ok) throw new Error("revision-load-failed");
+        const body = await response.json() as { revision: number };
+        if (body.revision !== remoteRevisionRef.current) await loadRemoteData(false);
+        else setSyncTick((current) => current + 1);
       } catch {
         setSyncStatus("offline");
       }
@@ -780,6 +886,9 @@ export function StudyDashboard() {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    workspaceEpochRef.current += 1;
+    saveInFlightRef.current = false;
+    syncBlockedRef.current = false;
     setAuthState("locked");
     setLoaded(false);
     setWorkspaceId("");
@@ -791,11 +900,16 @@ export function StudyDashboard() {
     deletedJournalIdsRef.current = [];
     deletedPaperIdsRef.current = [];
     lastSavedPayloadRef.current = "";
+    syncBaseRef.current = null;
+    remoteRevisionRef.current = 0;
+    workingDataRef.current = null;
+    hasLoadedRef.current = false;
     setProgress(defaultProgress(false));
     setProjectSettings(defaultProjectSettings());
     setPlanHistory([]);
     setJournals([]);
     setPapers(defaultPastPapers());
+    setSchedule(buildDefaultSchedule());
     setBackups([]);
   }
 
@@ -1669,10 +1783,15 @@ export function StudyDashboard() {
       const response = await fetch("/api/app-data", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...data, replace: true }),
+        body: JSON.stringify({ ...data, replace: true, baseRevision: remoteRevisionRef.current }),
       });
       if (!response.ok) throw new Error("app-data-replace-failed");
-      lastSavedPayloadRef.current = JSON.stringify({ ...data, deletedJournalIds: [], deletedPaperIds: [] });
+      const result = await response.json() as { revision?: number };
+      if (!Number.isSafeInteger(result.revision)) throw new Error("missing-revision");
+      remoteRevisionRef.current = result.revision!;
+      syncBaseRef.current = data;
+      repository().saveSyncBase(data);
+      lastSavedPayloadRef.current = JSON.stringify({ ...data, baseRevision: result.revision, changedProgressIds: [], deletedJournalIds: [], deletedPaperIds: [] });
       deletedJournalIdsRef.current = [];
       deletedPaperIdsRef.current = [];
       setSyncStatus("saved");
@@ -1797,13 +1916,23 @@ export function StudyDashboard() {
   }
 
   function updateExamStartDate(value: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      setFeedbackMessage("日期格式无效：请使用 年-月-日 选择有效日期");
+      return;
+    }
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      setFeedbackMessage("日期无效：该日期不存在，请重新选择");
+      return;
+    }
     setProjectSettings((prev) => ({
       ...prev,
       "408": { ...prev["408"], examDate: value },
       math: { ...prev.math, examDate: value },
       english: { ...prev.english, examDate: value },
+      ...(prev.politics ? { politics: { ...prev.politics, examDate: value } } : {}),
     }));
+    setFeedbackMessage(`初试日期已更新为 ${value}`);
   }
 
   function renderTaskList(
@@ -2304,11 +2433,13 @@ export function StudyDashboard() {
             <span className="navigation-copy"><strong>设置</strong></span>
           </button>
           <p
-            className="sync-note"
-            title={`同步状态: ${syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "正在同步…" : "等待同步"} · 用户: ${workspaceUserLabel}`}
+            className={`sync-note sync-note--${syncMeta.cls}`}
+            role="status"
+            aria-live="polite"
+            title={`同步状态: ${syncMeta.desc} · 用户: ${workspaceUserLabel}`}
           >
             <i className={syncStatus === "saved" ? "synced" : ""} />
-            <span>{syncStatus === "saved" ? "已同步" : syncStatus === "saving" ? "同步中…" : "待同步"}</span>
+            <span>{syncMeta.label}</span>
             <em>{workspaceUserLabel}</em>
           </p>
         </div>
@@ -2374,6 +2505,14 @@ export function StudyDashboard() {
                 ))}
               </div>
             </div>}
+            <span
+              className={`topbar-sync topbar-sync--${syncMeta.cls}`}
+              role="status"
+              title={`同步状态: ${syncMeta.desc}`}
+            >
+              <i aria-hidden="true" />
+              <span>{syncMeta.label}</span>
+            </span>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
         </header>
@@ -3519,164 +3658,7 @@ export function StudyDashboard() {
                 <h2>打卡记录与周度趋势</h2>
               </div>
 
-              <div className="analytics-activity-grid">
-                <article className="analytics-card heatmap-card">
-                  <div className="card-header-row">
-                    <div>
-                      <h3>打卡轨迹</h3>
-                    </div>
-                    <div className="heatmap-legend">
-                      <span>少</span>
-                      <i className="level-0" />
-                      <i className="level-1" />
-                      <i className="level-2" />
-                      <i className="level-3" />
-                      <span>多</span>
-                    </div>
-                  </div>
-
-                  <div className="heatmap-viewport">
-                    <div className="heatmap-labels-col" aria-hidden="true">
-                      <span>一</span>
-                      <span>二</span>
-                      <span>三</span>
-                      <span>四</span>
-                      <span>五</span>
-                      <span>六</span>
-                      <span>日</span>
-                    </div>
-                    <div className="heatmap-matrix">
-                      {Array.from({ length: 13 }).map((_, colIdx) => (
-                        <div className="heatmap-col" key={colIdx}>
-                          {heatmapDays.slice(colIdx * 7, (colIdx + 1) * 7).map((day) => (
-                            <div
-                              key={day.date}
-                              className={`heatmap-cell level-${day.level} ${day.isToday ? "today-cell" : ""} ${day.isFuture ? "future-cell" : ""}`}
-                              onMouseEnter={() => setHoveredHeatmapDay(day)}
-                              onMouseLeave={() => setHoveredHeatmapDay((curr) => curr?.date === day.date ? null : curr)}
-                              title={`${day.date}: 学完 ${day.learnedCount} 节, 复习 ${day.reviewedCount} 节`}
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="heatmap-hover-info">
-                    {hoveredHeatmapDay ? (
-                      <div className="hover-detail">
-                        <strong>{formatDateChinese(hoveredHeatmapDay.date)} ({hoveredHeatmapDay.date})</strong>
-                        <span>
-                          {hoveredHeatmapDay.isFuture
-                            ? "未来日期"
-                            : hoveredHeatmapDay.totalActions > 0
-                            ? `学完 ${hoveredHeatmapDay.learnedCount} 节 · 复习 ${hoveredHeatmapDay.reviewedCount} 节 · 共 ${hoveredHeatmapDay.totalActions} 项动作`
-                            : "当日无打卡记录"}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="hover-detail placeholder">
-                        <span>💡 鼠标悬停上方方块，查看当日学完与复习详情</span>
-                      </div>
-                    )}
-                  </div>
-                </article>
-
-                <article className="analytics-card trend-card">
-                  <div className="card-header-row">
-                    <div>
-                      <h3>周度产出趋势</h3>
-                    </div>
-                    <div className="trend-legend">
-                      <span className="legend-item learned"><i /> 新学</span>
-                      <span className="legend-item reviewed"><i /> 复习</span>
-                    </div>
-                  </div>
-
-                  <div className="trend-summary-strip">
-                    <div className="trend-summary-item">
-                      <small>本周已学</small>
-                      <strong>{currentWeekTrend?.totalActions ?? 0} <small>节</small></strong>
-                    </div>
-                    <div className="trend-summary-item">
-                      <small>8周周均</small>
-                      <strong>{weeklyAverage} <small>节/周</small></strong>
-                    </div>
-                    <div className="trend-summary-item">
-                      <small>最高周产出</small>
-                      <strong>{peakWeekActions} <small>节</small></strong>
-                    </div>
-                  </div>
-
-                  <div className="trend-chart-wrap">
-                    <div className="trend-grid-lines" aria-hidden="true">
-                      <div className="trend-grid-line"><span className="trend-grid-val">{maxWeeklyAction}</span></div>
-                      <div className="trend-grid-line"><span className="trend-grid-val">{Math.round(maxWeeklyAction / 2)}</span></div>
-                      <div className="trend-grid-line"><span className="trend-grid-val">0</span></div>
-                    </div>
-                    <div className="trend-bars-container">
-                      {weeklyTrends.map((week) => {
-                        const totalHeightPercent = maxWeeklyAction > 0
-                          ? Math.round((week.totalActions / maxWeeklyAction) * 100)
-                          : 0;
-                        const learnedPercent = week.totalActions > 0
-                          ? (week.learnedCount / week.totalActions) * 100
-                          : 0;
-                        const reviewedPercent = week.totalActions > 0
-                          ? (week.reviewedCount / week.totalActions) * 100
-                          : 0;
-                        const isHovered = hoveredTrendWeek?.startDate === week.startDate;
-                        return (
-                          <div
-                            className={`trend-col ${week.isCurrentWeek ? "current-week" : ""} ${isHovered ? "is-hovered" : ""}`}
-                            key={week.startDate}
-                            onMouseEnter={() => setHoveredTrendWeek(week)}
-                            onMouseLeave={() => setHoveredTrendWeek((curr) => curr?.startDate === week.startDate ? null : curr)}
-                          >
-                            <div className="trend-col-track" title={`${week.startDate} ~ ${week.endDate}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节, 共 ${week.totalActions} 节`}>
-                              <span className={`bar-total-num ${week.totalActions > 0 ? "visible" : ""}`}>
-                                {week.totalActions > 0 ? week.totalActions : ""}
-                              </span>
-                              <div
-                                className="trend-bar-stack"
-                                style={{
-                                  height: week.totalActions > 0 ? `${Math.max(totalHeightPercent, 8)}%` : "3px",
-                                  opacity: week.totalActions > 0 ? 1 : 0.35,
-                                }}
-                              >
-                                {week.reviewedCount > 0 && (
-                                  <div className="bar-segment bar-reviewed" style={{ height: `${reviewedPercent}%` }} />
-                                )}
-                                {week.learnedCount > 0 && (
-                                  <div className="bar-segment bar-learned" style={{ height: `${learnedPercent}%` }} />
-                                )}
-                              </div>
-                            </div>
-                            <span className="trend-col-label">{week.shortLabel}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="trend-hover-info">
-                    {hoveredTrendWeek ? (
-                      <div className="hover-detail">
-                        <strong>{hoveredTrendWeek.startDate} ~ {hoveredTrendWeek.endDate} {hoveredTrendWeek.isCurrentWeek ? "(本周)" : ""}</strong>
-                        <span>
-                          {hoveredTrendWeek.totalActions > 0
-                            ? `新学 ${hoveredTrendWeek.learnedCount} 节 · 复习 ${hoveredTrendWeek.reviewedCount} 节 · 合计 ${hoveredTrendWeek.totalActions} 项动作`
-                            : "本周暂无打卡记录"}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="hover-detail placeholder">
-                        <span>💡 鼠标悬停柱状图，查看各周新学与复习打卡构成</span>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              </div>
+              <AnalyticsActivity heatmapDays={heatmapDays} weeklyTrends={weeklyTrends} currentWeekTrend={currentWeekTrend} weeklyAverage={weeklyAverage} peakWeekActions={peakWeekActions} maxWeeklyAction={maxWeeklyAction} formatDateChinese={formatDateChinese} />
 
             </section>
           ) : (
@@ -3824,6 +3806,20 @@ export function StudyDashboard() {
                   </div>
                 </section>
 
+                <section className="settings-card settings-card--account">
+                  <header className="settings-card__header">
+                    <div>
+                      <h2>账号与登录</h2>
+                      <p>当前登录空间：{workspaceUserLabel}。窄屏 / 平板竖屏下顶部退出按钮可能隐藏，可在此随时退出。</p>
+                    </div>
+                  </header>
+                  <div className="settings-actions">
+                    <button type="button" className="settings-btn settings-btn--danger" onClick={logout}>
+                      退出登录
+                    </button>
+                  </div>
+                </section>
+
                 <section className="settings-card settings-card--blog">
                   <header className="settings-card__header">
                     <div>
@@ -3850,7 +3846,7 @@ export function StudyDashboard() {
         </div>
       </main>
       <nav className="mobile-navigation" aria-label="移动端页面导航">
-        {mobileNavigation.map(({ page, mark, label }) => (
+        {mobileNavigation.map(({ page, label }) => (
           <button
             className={activePage === page ? "active" : ""}
             type="button"
@@ -3861,7 +3857,7 @@ export function StudyDashboard() {
               window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
             }}
           >
-            <span aria-hidden="true">{mark}</span>
+            <span className="mobile-nav-symbol"><MobileNavIcon page={page} /></span>
             <strong>{label}</strong>
           </button>
         ))}
@@ -3949,6 +3945,7 @@ export function StudyDashboard() {
 
       {/* Journal Editor Modal */}
       {isEditorOpen && (
+        <Suspense fallback={null}>
         <JournalEditorModal
           editingJournalId={editingJournalId}
           initialTitle={editorTitle}
@@ -3957,12 +3954,14 @@ export function StudyDashboard() {
           initialPaper={editorPaper}
           initialSections={editorSections}
           books={books}
+          draftScope={workspaceId || "main"}
           onClose={() => {
             setIsEditorOpen(false);
             setEditingJournalId(null);
           }}
           onSave={handleSaveJournalPayload}
         />
+        </Suspense>
       )}
 
       {/* Blog Publish Modal */}
@@ -4250,6 +4249,7 @@ export function StudyDashboard() {
 
       {/* Visual Question Board Modal */}
       {activeQuestionPaper && (
+        <Suspense fallback={null}>
         <AnswerSheetModal
           paper={activeQuestionPaper}
           onClose={() => setActivePaperQuestionModalId(null)}
@@ -4276,13 +4276,18 @@ export function StudyDashboard() {
           }}
           getPaperQuestionSummary={getPaperQuestionSummary}
         />
+        </Suspense>
       )}
 
       {/* Paper Netdisk Modal */}
-      <PaperNetdiskModal
-        isOpen={isPaperNetdiskOpen}
-        onClose={() => setIsPaperNetdiskOpen(false)}
-      />
+      {isPaperNetdiskOpen && (
+        <Suspense fallback={null}>
+          <PaperNetdiskModal
+            isOpen={isPaperNetdiskOpen}
+            onClose={() => setIsPaperNetdiskOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 

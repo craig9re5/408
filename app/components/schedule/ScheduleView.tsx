@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   calculateWeekNumber,
   buildDefaultSchedule,
@@ -37,7 +37,20 @@ export function ScheduleView({
 
   const [activeWeek, setActiveWeek] = useState<number>(() => schedule.activeWeek || currentCalculatedWeek || 2);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
-  const [viewMode, setViewMode] = useState<"transposed" | "portrait">("transposed");
+  // 用户手动选择的视图模式；null 表示跟随内容区宽度自动决定
+  const [viewModeOverride, setViewModeOverride] = useState<"transposed" | "portrait" | null>(null);
+  const [isNarrowLayout, setIsNarrowLayout] = useState(false);
+
+  // 平板竖屏 / 窄窗口（≤900px，此时侧栏已收起）默认使用竖版课表，避免横向课表列被压扁重叠
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const update = () => setIsNarrowLayout(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  const viewMode = viewModeOverride ?? (isNarrowLayout ? "portrait" : "transposed");
 
   const { activeInfo } = useScheduleTicker(schedule);
 
@@ -62,7 +75,7 @@ export function ScheduleView({
         onSelectWeek={handleSelectWeek}
         onResetDefault={handleResetDefault}
         layoutMode={viewMode}
-        onChangeLayoutMode={setViewMode}
+        onChangeLayoutMode={setViewModeOverride}
         activeInfo={activeInfo}
       />
 

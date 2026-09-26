@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book } from "../../data/books";
 import type {
   JournalContext,
@@ -36,9 +36,61 @@ export type JournalEditorModalProps = {
   initialPaper: JournalPaperContext | null;
   initialSections: JournalSectionItem[];
   books: Book[];
+  /** 学习空间标识，用于按空间隔离本机草稿 */
+  draftScope: string;
   onClose: () => void;
   onSave: (payload: JournalSavePayload) => void;
 };
+
+type JournalDraft = {
+  title: string;
+  content: string;
+  important: boolean;
+  paper: JournalPaperContext | null;
+  sections: JournalSectionItem[];
+  savedAt: string;
+};
+
+function readJournalDraft(key: string): JournalDraft | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<JournalDraft>;
+    if (typeof parsed.content !== "string") return null;
+    return {
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      content: parsed.content,
+      important: Boolean(parsed.important),
+      paper: parsed.paper ?? null,
+      sections: Array.isArray(parsed.sections) ? (parsed.sections as JournalSectionItem[]) : [],
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeJournalDraft(key: string, draft: JournalDraft) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    // localStorage 不可用（隐私模式 / 容量满）时静默失败，不阻断编辑
+  }
+}
+
+function clearJournalDraft(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function formatDraftTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 export function JournalEditorModal({
   editingJournalId,
@@ -48,19 +100,90 @@ export function JournalEditorModal({
   initialPaper,
   initialSections,
   books,
+  draftScope,
   onClose,
   onSave,
 }: JournalEditorModalProps) {
-  const [editorContent, setEditorContent] = useState(initialContent);
-  const [editorTitle, setEditorTitle] = useState(initialTitle);
-  const [editorImportant, setEditorImportant] = useState(initialImportant);
-  const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(initialPaper);
-  const [editorSections, setEditorSections] = useState<JournalSectionItem[]>(initialSections);
+  // 草稿按「学习空间 + 日志」隔离：新建日志统一挂在 new 键下
+  const draftStorageKey = `study-journal-draft:${draftScope || "main"}:${editingJournalId ?? "new"}`;
+  // 挂载时读取一次本机草稿（编辑器每次打开都是重新挂载，不会过期）
+  const [initialDraft] = useState<JournalDraft | null>(() => readJournalDraft(draftStorageKey));
+
+  const [editorContent, setEditorContent] = useState(() => initialDraft?.content ?? initialContent);
+  const [editorTitle, setEditorTitle] = useState(() => initialDraft?.title ?? initialTitle);
+  const [editorImportant, setEditorImportant] = useState(() => initialDraft?.important ?? initialImportant);
+  const [editorPaper, setEditorPaper] = useState<JournalPaperContext | null>(
+    () => (initialDraft ? initialDraft.paper : initialPaper)
+  );
+  const [editorSections, setEditorSections] = useState<JournalSectionItem[]>(
+    () => initialDraft?.sections ?? initialSections
+  );
   const [editorBookId, setEditorBookId] = useState<string>(() => books[0]?.id || "ds");
   const [showTitleInput, setShowTitleInput] = useState(Boolean(initialTitle));
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [draftSavedAt] = useState(() => initialDraft?.savedAt ?? null);
+  const [draftRestored, setDraftRestored] = useState(
+    () => Boolean(initialDraft && (initialDraft.content !== initialContent || initialDraft.title !== initialTitle))
+  );
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 脏检查：与初始快照比对（草稿恢复后自然为脏，保证自动保存持续刷新草稿）
+  const [initialFingerprint] = useState(() =>
+    JSON.stringify({
+      title: initialTitle,
+      content: initialContent,
+      important: initialImportant,
+      paper: initialPaper,
+      sections: initialSections,
+    })
+  );
+  const isDirty =
+    JSON.stringify({
+      title: editorTitle,
+      content: editorContent,
+      important: editorImportant,
+      paper: editorPaper,
+      sections: editorSections,
+    }) !== initialFingerprint;
+
+  // 自动保存草稿到本机（防抖 600ms）
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = window.setTimeout(() => {
+      writeJournalDraft(draftStorageKey, {
+        title: editorTitle,
+        content: editorContent,
+        important: editorImportant,
+        paper: editorPaper,
+        sections: editorSections,
+        savedAt: new Date().toISOString(),
+      });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [isDirty, draftStorageKey, editorTitle, editorContent, editorImportant, editorPaper, editorSections]);
+
+  const flushDraft = useCallback(() => {
+    writeJournalDraft(draftStorageKey, {
+      title: editorTitle,
+      content: editorContent,
+      important: editorImportant,
+      paper: editorPaper,
+      sections: editorSections,
+      savedAt: new Date().toISOString(),
+    });
+  }, [draftStorageKey, editorTitle, editorContent, editorImportant, editorPaper, editorSections]);
+
+  const discardDraft = useCallback(() => {
+    clearJournalDraft(draftStorageKey);
+    setEditorTitle(initialTitle);
+    setEditorContent(initialContent);
+    setEditorImportant(initialImportant);
+    setEditorPaper(initialPaper);
+    setEditorSections(initialSections);
+    setDraftRestored(false);
+  }, [draftStorageKey, initialTitle, initialContent, initialImportant, initialPaper, initialSections]);
 
   const handleSave = useCallback(() => {
     const trimmedContent = editorContent.trim();
@@ -76,6 +199,7 @@ export function JournalEditorModal({
         ? { type: "sections", sections: editorSections }
         : null;
 
+    clearJournalDraft(draftStorageKey);
     onSave({
       id: editingJournalId,
       title: trimmedTitle,
@@ -83,7 +207,16 @@ export function JournalEditorModal({
       important: editorImportant,
       context: contextToSave,
     });
-  }, [editorContent, editorTitle, editorImportant, editorPaper, editorSections, editingJournalId, onSave]);
+  }, [editorContent, editorTitle, editorImportant, editorPaper, editorSections, editingJournalId, draftStorageKey, onSave]);
+
+  // 关闭前保护：有未保存修改时弹出三选一确认
+  const requestClose = useCallback(() => {
+    if (isDirty) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [isDirty, onClose]);
 
   const applyEditorFormat = useCallback(
     (
@@ -237,15 +370,27 @@ export function JournalEditorModal({
         return;
       }
 
-      // 15. Tab / Shift+Tab (Indent / Outdent)
-      if (e.key === "Tab") {
+      // 15. Indent / Outdent（Ctrl+] / Ctrl+[，单行也可显式缩进）
+      if (isCtrlOrCmd && !e.shiftKey && !e.altKey && (e.key === "]" || e.key === "[")) {
         e.preventDefault();
-        const res = handleTabKey(editorContent, start, end, e.shiftKey);
+        const res = handleTabKey(editorContent, start, end, e.key === "[");
         applyTextResultToTextarea(textarea, res, setEditorContent);
         return;
       }
 
-      // 16. Smart Enter
+      // 16. Tab / Shift+Tab：默认让焦点正常移出编辑器（避免键盘陷阱），
+      // 仅在选中了多行文本时执行缩进 / 反缩进。
+      if (e.key === "Tab") {
+        if (start !== end && editorContent.substring(start, end).includes("\n")) {
+          e.preventDefault();
+          const res = handleTabKey(editorContent, start, end, e.shiftKey);
+          applyTextResultToTextarea(textarea, res, setEditorContent);
+        }
+        // 否则不拦截，浏览器将焦点移到下一个控件（保存 / 取消 / 关闭）
+        return;
+      }
+
+      // 17. Smart Enter
       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const smartRes = handleSmartEnter(editorContent, start, end);
         if (smartRes) {
@@ -255,7 +400,7 @@ export function JournalEditorModal({
         }
       }
 
-      // 17. Auto-pairing quotes and brackets on text selection
+      // 18. Auto-pairing quotes and brackets on text selection
       if (start < end && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const autoRes = handleAutoPair(editorContent, start, end, e.key);
         if (autoRes) {
@@ -279,7 +424,7 @@ export function JournalEditorModal({
           <button
             type="button"
             className="journal-modal-close"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="关闭编辑器"
           >
             ×
@@ -465,6 +610,22 @@ export function JournalEditorModal({
           </div>
         )}
 
+        {draftRestored && (
+          <div className="journal-draft-banner" role="status">
+            <span>
+              已恢复本机未保存的草稿{draftSavedAt ? `（${formatDraftTime(draftSavedAt)}）` : ""}，可继续编辑，或丢弃后重写。
+            </span>
+            <div className="journal-draft-banner__actions">
+              <button type="button" className="journal-draft-banner__btn journal-draft-banner__btn--danger" onClick={discardDraft}>
+                丢弃草稿
+              </button>
+              <button type="button" className="journal-draft-banner__btn" onClick={() => setDraftRestored(false)}>
+                继续编辑
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="journal-editor-body">
           <div className="journal-editor-pane pane-input">
             {/* Markdown Toolbar */}
@@ -608,7 +769,7 @@ export function JournalEditorModal({
             />
             <div className="journal-editor-statusbar">
               <span>{editorContent.length} 字</span>
-              <span className="math-hint">快捷键：Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+K 链接 · Ctrl+M 公式 · Tab 缩进</span>
+              <span className="math-hint">快捷键：Ctrl+B 加粗 · Ctrl+K 链接 · Ctrl+M 公式 · Tab 切换焦点 · 多行选中 Tab 缩进 · Ctrl+]/[ 缩进</span>
             </div>
           </div>
 
@@ -630,7 +791,7 @@ export function JournalEditorModal({
             <button
               type="button"
               className="journal-btn journal-btn--ghost"
-              onClick={onClose}
+              onClick={requestClose}
             >
               取消
             </button>
@@ -644,6 +805,75 @@ export function JournalEditorModal({
           </div>
         </footer>
       </div>
+
+      {showCloseConfirm && (
+        <div
+          className="journal-close-confirm"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCloseConfirm(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              setShowCloseConfirm(false);
+            }
+          }}
+        >
+          <div
+            className="journal-close-confirm__dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="journal-close-confirm-title"
+            aria-describedby="journal-close-confirm-desc"
+          >
+            <h3 id="journal-close-confirm-title">当前日志有未保存的修改</h3>
+            <p id="journal-close-confirm-desc">
+              草稿会在本机自动保留。你可以立即保存、保留草稿稍后继续，或放弃本次全部修改。
+            </p>
+            <div className="journal-close-confirm__actions">
+              <button
+                type="button"
+                className="journal-btn journal-btn--ghost"
+                onClick={() => setShowCloseConfirm(false)}
+                autoFocus
+              >
+                继续编辑
+              </button>
+              <button
+                type="button"
+                className="journal-btn journal-btn--danger-ghost"
+                onClick={() => {
+                  clearJournalDraft(draftStorageKey);
+                  onClose();
+                }}
+              >
+                放弃修改
+              </button>
+              <button
+                type="button"
+                className="journal-btn journal-btn--ghost"
+                onClick={() => {
+                  flushDraft();
+                  onClose();
+                }}
+              >
+                保留草稿退出
+              </button>
+              <button
+                type="button"
+                className="journal-btn journal-btn--primary"
+                onClick={() => {
+                  setShowCloseConfirm(false);
+                  handleSave();
+                }}
+              >
+                保存并关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -150,6 +150,7 @@ export function AnswerSheetModal({
                               key={num}
                               type="button"
                               className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
                               title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
                               onClick={() => onToggleQuestion(num, true)}
                             >
@@ -190,6 +191,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "correct"}
                             onClick={() => onSubjectiveRating(item.num, "correct", item.max)}
                             title="优 · 满分（再次点击取消）"
                           >
@@ -198,6 +201,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "partial"}
                             onClick={() => onSubjectiveRating(item.num, "partial", item.max)}
                             title="良 · 部分分（再次点击取消）"
                           >
@@ -206,6 +211,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "wrong"}
                             onClick={() => onSubjectiveRating(item.num, "wrong", item.max)}
                             title="差 · 失分（再次点击取消）"
                           >
@@ -264,6 +271,7 @@ export function AnswerSheetModal({
                               key={num}
                               type="button"
                               className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
                               title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
                               onClick={() => onToggleQuestion(num, true)}
                             >
@@ -311,6 +319,7 @@ export function AnswerSheetModal({
                               key={num}
                               type="button"
                               className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
                               title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
                               onClick={() => onToggleQuestion(num, true)}
                             >
@@ -350,6 +359,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "correct"}
                             onClick={() => onSubjectiveRating(item.num, "correct", item.max)}
                             title="优 · 满分（再次点击取消）"
                           >
@@ -358,6 +369,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "partial"}
                             onClick={() => onSubjectiveRating(item.num, "partial", item.max)}
                             title="良 · 部分分（再次点击取消）"
                           >
@@ -366,6 +379,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "wrong"}
                             onClick={() => onSubjectiveRating(item.num, "wrong", item.max)}
                             title="差 · 失分（再次点击取消）"
                           >
@@ -413,6 +428,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "correct"}
                             onClick={() => onSubjectiveRating(item.num, "correct", item.max)}
                             title="优 · 满分（再次点击取消）"
                           >
@@ -421,6 +438,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "partial"}
                             onClick={() => onSubjectiveRating(item.num, "partial", item.max)}
                             title="良 · 部分分（再次点击取消）"
                           >
@@ -429,6 +448,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "wrong"}
                             onClick={() => onSubjectiveRating(item.num, "wrong", item.max)}
                             title="差 · 失分（再次点击取消）"
                           >
@@ -489,6 +510,7 @@ export function AnswerSheetModal({
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+                                aria-label={`第 ${num} 题 [${grp.subject}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
                                 title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => onToggleQuestion(num, true)}
                               >
@@ -530,6 +552,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--correct ${state === "correct" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "correct"}
                             onClick={() => onSubjectiveRating(item.num, "correct", item.max)}
                             title="优 · 满分（再次点击取消）"
                           >
@@ -538,6 +562,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--partial ${state === "partial" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "partial"}
                             onClick={() => onSubjectiveRating(item.num, "partial", item.max)}
                             title="良 · 部分分（再次点击取消）"
                           >
@@ -546,6 +572,8 @@ export function AnswerSheetModal({
                           <button
                             type="button"
                             className={`q-rating-btn rating--wrong ${state === "wrong" ? "active" : ""}`}
+                            role="radio"
+                            aria-checked={state === "wrong"}
                             onClick={() => onSubjectiveRating(item.num, "wrong", item.max)}
                             title="差 · 失分（再次点击取消）"
                           >

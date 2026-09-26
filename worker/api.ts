@@ -28,10 +28,9 @@ import {
   defaultPastPapers,
   normalizePaperRecord,
   normalizePapers,
-  mergePapers,
-  mergeJournals,
 } from "../shared/merge.ts";
 import { handlePapersApi } from "./papers.ts";
+import { readJsonBody } from "./request.ts";
 
 export type {
   JournalProjectContext,
@@ -68,6 +67,7 @@ type ProgressRow = {
 };
 
 type AppStateRow = {
+  revision: number;
   schema_version: number;
   project_settings: string;
   plan_history: string;
@@ -77,6 +77,7 @@ type AppStateRow = {
 };
 
 type AppData = {
+  revision: number;
   schemaVersion: number;
   progress: Record<string, ProgressValue>;
   projectSettings: ProjectSettings;
@@ -229,6 +230,26 @@ async function requireWorkspace(request: Request, env: Env): Promise<string | Re
   return workspaceId;
 }
 
+async function loginRateLimitKey(request: Request): Promise<string> {
+  const address = request.headers.get("CF-Connecting-IP") ?? "local";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(address));
+  return base64Url(new Uint8Array(digest));
+}
+
+async function checkLoginRateLimit(request: Request, env: Env): Promise<{ key: string; allowed: boolean }> {
+  const key = await loginRateLimitKey(request);
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - 15 * 60;
+  const row = await env.DB.prepare(
+    `INSERT INTO auth_login_attempts (client_key, attempts, window_start) VALUES (?, 1, ?)
+     ON CONFLICT(client_key) DO UPDATE SET
+       attempts = CASE WHEN window_start < ? THEN 1 ELSE attempts + 1 END,
+       window_start = CASE WHEN window_start < ? THEN excluded.window_start ELSE window_start END
+     RETURNING attempts`,
+  ).bind(key, now, windowStart, windowStart).first<{ attempts: number }>();
+  return { key, allowed: (row?.attempts ?? 11) <= 10 };
+}
+
 function normalizeProgress(value: unknown): ProgressValue | null {
   if (!value || typeof value !== "object") return null;
   const entry = value as Record<string, unknown>;
@@ -255,13 +276,7 @@ function isSafeSectionId(sectionId: string): boolean {
 async function readProgress(env: Env, workspaceId: string): Promise<Record<string, ProgressValue>> {
   const result = await env.DB.prepare(
     "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, COALESCE(reviewed_planned_at, '') as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
-  ).bind(workspaceId).all<ProgressRow>().catch(() => {
-    return env.DB.prepare(
-      "SELECT section_id, learned, learned_at, reviewed, reviewed_at, planned_at, '' as reviewed_planned_at, is_current FROM progress WHERE workspace_id = ?",
-    ).bind(workspaceId).all<ProgressRow>().catch(() => {
-      return { results: [] as ProgressRow[] };
-    });
-  });
+  ).bind(workspaceId).all<ProgressRow>();
 
   return Object.fromEntries(result.results.flatMap((row: ProgressRow) => {
     const normalized = normalizeProgress({
@@ -277,26 +292,6 @@ async function readProgress(env: Env, workspaceId: string): Promise<Record<strin
   }));
 }
 
-async function writeProgress(env: Env, workspaceId: string, values: Record<string, ProgressValue>): Promise<void> {
-  const statements = Object.entries(values)
-    .filter(([sectionId]) => isSafeSectionId(sectionId))
-    .map(([sectionId, value]) => env.DB.prepare(
-      `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, reviewed_planned_at, is_current, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(workspace_id, section_id) DO UPDATE SET
-         learned = excluded.learned,
-         learned_at = excluded.learned_at,
-         reviewed = excluded.reviewed,
-         reviewed_at = excluded.reviewed_at,
-         planned_at = excluded.planned_at,
-         reviewed_planned_at = excluded.reviewed_planned_at,
-         is_current = excluded.is_current,
-         updated_at = CURRENT_TIMESTAMP`,
-    ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
-
-  if (statements.length > 0) await env.DB.batch(statements);
-}
-
 function normalizePlanHistory(value: unknown): PlanHistoryEntry[] {
   return normalizePlanHistoryShared(value, isSafeSectionId);
 }
@@ -305,34 +300,19 @@ async function readAppData(env: Env, workspaceId: string): Promise<AppData> {
   const [progress, stateResult] = await Promise.all([
     readProgress(env, workspaceId),
     env.DB.prepare(
-      "SELECT schema_version, project_settings, plan_history, journals, papers, schedule FROM app_state WHERE workspace_id = ?",
-    ).bind(workspaceId).all<AppStateRow>().catch(() => {
-      return env.DB.prepare(
-        "SELECT schema_version, project_settings, plan_history, journals, papers FROM app_state WHERE workspace_id = ?",
-      ).bind(workspaceId).all<AppStateRow>().catch(() => {
-        return env.DB.prepare(
-          "SELECT schema_version, project_settings, plan_history, journals FROM app_state WHERE workspace_id = ?",
-        ).bind(workspaceId).all<AppStateRow>().catch(() => {
-          return env.DB.prepare(
-            "SELECT schema_version, project_settings, plan_history FROM app_state WHERE workspace_id = ?",
-          ).bind(workspaceId).all<AppStateRow>();
-        });
-      });
-    }),
+      "SELECT revision, schema_version, project_settings, plan_history, journals, papers, schedule FROM app_state WHERE workspace_id = ?",
+    ).bind(workspaceId).all<AppStateRow>(),
   ]);
   const state = stateResult.results[0];
-  let parsedSettings: unknown = null;
-  let parsedHistory: unknown = null;
-  let parsedJournals: unknown = null;
-  let parsedPapers: unknown = null;
-  let parsedSchedule: unknown = null;
-  try { parsedSettings = state ? JSON.parse(state.project_settings) : null; } catch { parsedSettings = null; }
-  try { parsedHistory = state ? JSON.parse(state.plan_history) : null; } catch { parsedHistory = null; }
-  try { parsedJournals = state?.journals ? JSON.parse(state.journals) : null; } catch { parsedJournals = null; }
-  try { parsedPapers = state?.papers ? JSON.parse(state.papers) : null; } catch { parsedPapers = null; }
-  try { parsedSchedule = state?.schedule ? JSON.parse(state.schedule) : null; } catch { parsedSchedule = null; }
+  const parseStored = (value: string | undefined | null): unknown => value ? JSON.parse(value) : null;
+  const parsedSettings = parseStored(state?.project_settings);
+  const parsedHistory = parseStored(state?.plan_history);
+  const parsedJournals = parseStored(state?.journals);
+  const parsedPapers = parseStored(state?.papers);
+  const parsedSchedule = parseStored(state?.schedule);
   return {
     schemaVersion: 2,
+    revision: state?.revision ?? 0,
     progress,
     projectSettings: normalizeProjectSettings(parsedSettings),
     planHistory: normalizePlanHistory(parsedHistory),
@@ -347,17 +327,24 @@ async function writeAppData(
   workspaceId: string,
   data: AppData,
   replace: boolean,
+  expectedRevision: number,
+  changedProgressIds: string[],
   deletedJournalIds: string[] = [],
   deletedPaperIds: string[] = [],
-): Promise<JournalEntry[]> {
+): Promise<number> {
+  await env.DB.prepare("INSERT OR IGNORE INTO app_state (workspace_id) VALUES (?)").bind(workspaceId).run();
   const statements: ReturnType<Env["DB"]["prepare"]>[] = [];
-  if (replace) statements.push(env.DB.prepare("DELETE FROM progress WHERE workspace_id = ?").bind(workspaceId));
+  const changedProgressSet = new Set(changedProgressIds);
+  if (replace) statements.push(env.DB.prepare(
+    "DELETE FROM progress WHERE workspace_id = ? AND EXISTS (SELECT 1 FROM app_state WHERE workspace_id = ? AND revision = ?)",
+  ).bind(workspaceId, workspaceId, expectedRevision));
   Object.entries(data.progress)
-    .filter(([sectionId]) => isSafeSectionId(sectionId))
+    .filter(([sectionId]) => isSafeSectionId(sectionId) && (replace || changedProgressSet.has(sectionId)))
     .forEach(([sectionId, value]) => {
       statements.push(env.DB.prepare(
         `INSERT INTO progress (workspace_id, section_id, learned, learned_at, reviewed, reviewed_at, planned_at, reviewed_planned_at, is_current, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+         WHERE EXISTS (SELECT 1 FROM app_state WHERE workspace_id = ? AND revision = ?)
          ON CONFLICT(workspace_id, section_id) DO UPDATE SET
            learned = excluded.learned,
            learned_at = excluded.learned_at,
@@ -367,29 +354,11 @@ async function writeAppData(
            reviewed_planned_at = excluded.reviewed_planned_at,
            is_current = excluded.is_current,
           updated_at = CURRENT_TIMESTAMP`,
-      ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0));
+      ).bind(workspaceId, sectionId, value.learned ? 1 : 0, value.learnedAt, value.reviewed ? 1 : 0, value.reviewedAt, value.plannedAt, value.reviewedPlannedAt || "", value.isCurrent ? 1 : 0, workspaceId, expectedRevision));
     });
 
   let finalJournals = data.journals;
   let finalPapers = data.papers;
-  if (!replace) {
-    // Read existing journals and papers from D1 to avoid overwriting concurrently added data on other devices
-    try {
-      const stateRow = await env.DB.prepare(
-        "SELECT journals, papers FROM app_state WHERE workspace_id = ?",
-      ).bind(workspaceId).first<{ journals?: string; papers?: string }>();
-      if (stateRow?.journals) {
-        const existingJournals = normalizeJournals(JSON.parse(stateRow.journals));
-        finalJournals = mergeJournals(data.journals, existingJournals);
-      }
-      if (stateRow?.papers) {
-        const existingPapers = normalizePapers(JSON.parse(stateRow.papers));
-        finalPapers = mergePapers(data.papers, existingPapers);
-      }
-    } catch {
-      // Fallback to local data
-    }
-  }
 
   // Filter out any explicitly deleted IDs
   if (deletedJournalIds.length > 0) {
@@ -403,54 +372,29 @@ async function writeAppData(
     finalPapers = finalPapers.filter((p) => !deletedSet.has(p.id));
   }
 
-  try {
+  {
     const scheduleJson = data.schedule ? JSON.stringify(data.schedule) : null;
     statements.push(env.DB.prepare(
-      `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, schedule, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(workspace_id) DO UPDATE SET
-         schema_version = excluded.schema_version,
-         project_settings = excluded.project_settings,
-         plan_history = excluded.plan_history,
-         journals = excluded.journals,
-         papers = excluded.papers,
-         schedule = excluded.schedule,
-         updated_at = CURRENT_TIMESTAMP`,
+      `UPDATE app_state SET schema_version = ?, project_settings = ?, plan_history = ?, journals = ?, papers = ?,
+       schedule = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE workspace_id = ? AND revision = ?`,
     ).bind(
-      workspaceId,
       2,
       JSON.stringify(data.projectSettings),
       JSON.stringify(data.planHistory),
       JSON.stringify(finalJournals),
       JSON.stringify(finalPapers),
       scheduleJson,
-    ));
-    await env.DB.batch(statements);
-  } catch {
-    // If schedule column does not exist yet in D1, fallback to previous schema
-    statements.pop();
-    statements.push(env.DB.prepare(
-      `INSERT INTO app_state (workspace_id, schema_version, project_settings, plan_history, journals, papers, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(workspace_id) DO UPDATE SET
-         schema_version = excluded.schema_version,
-         project_settings = excluded.project_settings,
-         plan_history = excluded.plan_history,
-         journals = excluded.journals,
-         papers = excluded.papers,
-         updated_at = CURRENT_TIMESTAMP`,
-    ).bind(
       workspaceId,
-      2,
-      JSON.stringify(data.projectSettings),
-      JSON.stringify(data.planHistory),
-      JSON.stringify(finalJournals),
-      JSON.stringify(finalPapers),
+      expectedRevision,
     ));
-    await env.DB.batch(statements);
+    const results = await env.DB.batch(statements);
+    if (results.at(-1)?.meta?.changes !== 1) throw new SyncConflictError();
   }
-  return finalJournals;
+  return expectedRevision + 1;
 }
+
+class SyncConflictError extends Error {}
 
 function normalizeAppDataBody(body: unknown): AppData | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
@@ -473,12 +417,19 @@ function normalizeAppDataBody(body: unknown): AppData | null {
     journals: normalizeJournals(candidate.journals),
     papers: normalizePapers(candidate.papers),
     schedule: candidate.schedule,
+    revision: 0,
   };
 }
 
 export async function handleApi(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/")) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    const origin = request.headers.get("origin");
+    if ((origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+      return json({ error: "跨站请求被拒绝" }, { status: 403 });
+    }
+  }
 
   if (url.pathname.startsWith("/api/papers")) {
     const workspaceId = await requireWorkspace(request, env);
@@ -500,12 +451,19 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       return json({ authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) });
     } catch (err) {
       console.error("Session readAppData error:", err);
-      return json({ error: "读取学习进度失败，请稍后重试", details: String(err) }, { status: 503 });
+      return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
     }
   }
 
   if (url.pathname === "/api/auth/login" && request.method === "POST") {
-    const body = await request.json().catch(() => null) as { code?: unknown } | null;
+    let rateLimit: { key: string; allowed: boolean };
+    try {
+      rateLimit = await checkLoginRateLimit(request, env);
+    } catch {
+      return json({ error: "登录服务暂时不可用" }, { status: 503 });
+    }
+    if (!rateLimit.allowed) return json({ error: "尝试次数过多，请 15 分钟后再试" }, { status: 429 });
+    const body = await readJsonBody(request, 1024).catch(() => null) as { code?: unknown } | null;
     const code = typeof body?.code === "string" ? body.code.trim() : "";
     const workspaceId = getWorkspaceMap(env).get(code);
     if (!code || !workspaceId) {
@@ -518,13 +476,14 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       return json({ error: "服务器会话密钥未配置 (SESSION_SECRET)" }, { status: 500 });
     }
     try {
+      await env.DB.prepare("DELETE FROM auth_login_attempts WHERE client_key = ?").bind(rateLimit.key).run();
       return json(
         { authenticated: true, workspaceId, ...(await readAppData(env, workspaceId)) },
         { headers: { "set-cookie": cookieHeader(await createSession(secret, workspaceId), request) } },
       );
     } catch (err) {
       console.error("Login readAppData error:", err);
-      return json({ error: "读取学习进度失败，请稍后重试", details: String(err) }, { status: 503 });
+      return json({ error: "读取学习进度失败，请稍后重试" }, { status: 503 });
     }
   }
 
@@ -542,6 +501,18 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     }
   }
 
+  if (url.pathname === "/api/app-data/revision" && request.method === "GET") {
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
+    try {
+      const row = await env.DB.prepare("SELECT revision FROM app_state WHERE workspace_id = ?")
+        .bind(workspace).first<{ revision: number }>();
+      return json({ revision: row?.revision ?? 0 });
+    } catch {
+      return json({ error: "读取数据版本失败" }, { status: 503 });
+    }
+  }
+
   if (url.pathname === "/api/app-data" && request.method === "GET") {
     const workspace = await requireWorkspace(request, env);
     if (typeof workspace !== "string") return workspace;
@@ -552,13 +523,86 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
     }
   }
 
+  if (url.pathname === "/api/app-data" && request.method === "PATCH") {
+    const workspace = await requireWorkspace(request, env);
+    if (typeof workspace !== "string") return workspace;
+    const body = await readJsonBody(request, 2 * 1024 * 1024).catch(() => null) as Record<string, unknown> | null;
+    if (!body || typeof body !== "object" || Array.isArray(body)
+      || !Number.isSafeInteger(body.baseRevision) || (body.baseRevision as number) < 0) {
+      return json({ error: "增量同步格式不正确" }, { status: 400 });
+    }
+    const progressRaw = body.progressChanges;
+    const journalRaw = body.journalChanges;
+    const paperRaw = body.paperChanges;
+    const deletedJournals = body.deletedJournalIds;
+    const deletedPapers = body.deletedPaperIds;
+    if (!progressRaw || typeof progressRaw !== "object" || Array.isArray(progressRaw)
+      || !Array.isArray(journalRaw) || !Array.isArray(paperRaw)
+      || !Array.isArray(deletedJournals) || !Array.isArray(deletedPapers)
+      || Object.keys(progressRaw).length > 1000 || journalRaw.length > 2000 || paperRaw.length > 2000
+      || deletedJournals.length > 2000 || deletedPapers.length > 2000
+      || (body.projectSettings !== undefined && (typeof body.projectSettings !== "object" || body.projectSettings === null || Array.isArray(body.projectSettings)))
+      || (body.planHistory !== undefined && !Array.isArray(body.planHistory))) {
+      return json({ error: "增量同步格式不正确" }, { status: 400 });
+    }
+    const progressChanges: Record<string, ProgressValue> = {};
+    for (const [id, value] of Object.entries(progressRaw)) {
+      const normalized = normalizeProgress(value);
+      if (!isSafeSectionId(id) || !normalized) return json({ error: "进度修改项无效" }, { status: 400 });
+      progressChanges[id] = normalized;
+    }
+    const journalChanges = journalRaw.map(normalizeJournalEntry);
+    const paperChanges = paperRaw.map(normalizePaperRecord);
+    if (journalChanges.some((entry) => !entry) || paperChanges.some((entry) => !entry)
+      || deletedJournals.some((id) => typeof id !== "string" || id.length > 100)
+      || deletedPapers.some((id) => typeof id !== "string" || id.length > 100)) {
+      return json({ error: "记录修改项无效" }, { status: 400 });
+    }
+    try {
+      const current = await readAppData(env, workspace);
+      if (current.revision !== body.baseRevision) return json({ error: "数据版本冲突", ...current }, { status: 409 });
+      const journalMap = new Map(current.journals.map((entry) => [entry.id, entry]));
+      journalChanges.forEach((entry) => { if (entry) journalMap.set(entry.id, entry); });
+      deletedJournals.forEach((id) => journalMap.delete(id as string));
+      const paperMap = new Map(current.papers.map((entry) => [entry.id, entry]));
+      paperChanges.forEach((entry) => { if (entry) paperMap.set(entry.id, entry); });
+      deletedPapers.forEach((id) => paperMap.delete(id as string));
+      const next: AppData = {
+        ...current,
+        progress: { ...current.progress, ...progressChanges },
+        journals: [...journalMap.values()],
+        papers: [...paperMap.values()],
+        projectSettings: body.projectSettings === undefined ? current.projectSettings : normalizeProjectSettings(body.projectSettings),
+        planHistory: body.planHistory === undefined ? current.planHistory : normalizePlanHistory(body.planHistory),
+        schedule: body.schedule === undefined ? current.schedule : body.schedule,
+      };
+      const revision = await writeAppData(env, workspace, next, false, current.revision, Object.keys(progressChanges));
+      return json({ saved: true, revision });
+    } catch (error) {
+      if (error instanceof SyncConflictError) {
+        const current = await readAppData(env, workspace).catch(() => null);
+        if (current) return json({ error: "数据版本冲突", ...current }, { status: 409 });
+      }
+      console.error("Patch app data error:", error);
+      return json({ error: "增量同步失败，请稍后重试" }, { status: 503 });
+    }
+  }
+
   if (url.pathname === "/api/app-data" && request.method === "PUT") {
     const workspace = await requireWorkspace(request, env);
     if (typeof workspace !== "string") return workspace;
-    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    const body = await readJsonBody(request, 8 * 1024 * 1024).catch(() => null) as Record<string, unknown> | null;
     const data = normalizeAppDataBody(body);
     if (!data) return json({ error: "应用数据格式不正确" }, { status: 400 });
+    const expectedRevision = body?.baseRevision;
+    if (!Number.isSafeInteger(expectedRevision) || (expectedRevision as number) < 0) {
+      return json({ error: "缺少有效的数据版本，请刷新后重试" }, { status: 428 });
+    }
     const replace = Boolean(body && typeof body === "object" && !Array.isArray(body) && body.replace);
+    const changedProgressIds = Array.isArray(body?.changedProgressIds)
+      ? (body.changedProgressIds as unknown[]).filter((id): id is string => typeof id === "string" && isSafeSectionId(id))
+      : Object.keys(data.progress);
+    if (changedProgressIds.length > 1000) return json({ error: "进度修改项过多" }, { status: 400 });
     const deletedJournalIds = Array.isArray(body?.deletedJournalIds)
       ? (body.deletedJournalIds as unknown[]).filter((id): id is string => typeof id === "string")
       : [];
@@ -566,38 +610,27 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       ? (body.deletedPaperIds as unknown[]).filter((id): id is string => typeof id === "string")
       : [];
     try {
-      const savedJournals = await writeAppData(env, workspace, data, replace, deletedJournalIds, deletedPaperIds);
-      return json({ saved: true, journals: savedJournals });
-    } catch {
+      const revision = await writeAppData(env, workspace, data, replace, expectedRevision as number, changedProgressIds, deletedJournalIds, deletedPaperIds);
+      return json({ saved: true, revision });
+    } catch (error) {
+      if (error instanceof SyncConflictError) {
+        const current = await readAppData(env, workspace).catch(() => null);
+        if (current) return json({ error: "数据版本冲突", ...current }, { status: 409 });
+      }
       return json({ error: "保存应用数据失败，请稍后重试" }, { status: 503 });
     }
   }
 
   if (url.pathname === "/api/progress" && request.method === "PUT") {
-    const workspace = await requireWorkspace(request, env);
-    if (typeof workspace !== "string") return workspace;
-    const body = await request.json().catch(() => null) as { progress?: unknown } | null;
-    if (!body?.progress || typeof body.progress !== "object" || Array.isArray(body.progress)) {
-      return json({ error: "进度数据格式不正确" }, { status: 400 });
-    }
-    const values: Record<string, ProgressValue> = {};
-    Object.entries(body.progress as Record<string, unknown>).forEach(([sectionId, value]) => {
-      const normalized = normalizeProgress(value);
-      if (isSafeSectionId(sectionId) && normalized) values[sectionId] = normalized;
-    });
-    try {
-      await writeProgress(env, workspace, values);
-      return json({ saved: true });
-    } catch {
-      return json({ error: "保存学习进度失败，请稍后重试" }, { status: 503 });
-    }
+    return json({ error: "请使用带版本号的 /api/app-data 接口保存进度" }, { status: 410 });
   }
 
   if (url.pathname === "/api/blog/publish" && request.method === "POST") {
     const workspace = await requireWorkspace(request, env);
     if (typeof workspace !== "string") return workspace;
-    void workspace;
-    const body = await request.json().catch(() => null) as {
+    const publisherWorkspace = (env as unknown as Record<string, string | undefined>).BLOG_PUBLISH_WORKSPACE_ID?.trim() || DEFAULT_WORKSPACE_ID;
+    if (workspace !== publisherWorkspace) return json({ error: "此空间没有博客发布权限" }, { status: 403 });
+    const body = await readJsonBody(request, 1024 * 1024).catch(() => null) as {
       title?: unknown;
       slug?: unknown;
       content?: unknown;
@@ -608,10 +641,11 @@ export async function handleApi(request: Request, env: Env): Promise<Response | 
       return json({ error: "发布参数不完整，标题、Slug 与正文必填" }, { status: 400 });
     }
 
-    const title = body.title.trim();
+    const title = body.title.trim().replace(/[\r\n]+/g, " ").slice(0, 200);
     const rawSlug = body.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
-    const slug = rawSlug || `post-${Date.now()}`;
+    const slug = (rawSlug || `post-${Date.now()}`).slice(0, 100);
     const content = body.content;
+    if (content.length > 200_000) return json({ error: "发布内容过长" }, { status: 400 });
     const publishedAt = new Date().toISOString();
     const blogBaseUrl = (env as unknown as Record<string, string>).BLOG_BASE_URL?.trim() || "https://craig9re5.github.io";
     const blogUrl = `${blogBaseUrl.replace(/\/+$/, "")}/posts/${slug}`;
