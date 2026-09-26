@@ -134,6 +134,44 @@ function MobileNavIcon({ page }: { page: AppPage }) {
   return <svg className="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[page]}</svg>;
 }
 
+function SubjectPicker({ selectedBook, onChange, className = "" }: { selectedBook: Book; onChange: (bookId: string) => void; className?: string }) {
+  return (
+    <label className={`book-select${className ? ` ${className}` : ""}`}>
+      <span className="visually-hidden">切换学科</span>
+      <span className="book-select__surface" aria-hidden="true">
+        <strong>{selectedBook.title}</strong>
+        <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </span>
+      <select value={selectedBook.id} onChange={(event) => onChange(event.target.value)}>
+        <optgroup label="408">
+          {books.filter((book) => book.area === "408").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
+        </optgroup>
+        <optgroup label="数学">
+          {books.filter((book) => book.area === "math").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
+        </optgroup>
+      </select>
+    </label>
+  );
+}
+
+function SprintAreaPicker({ activeArea, onChange }: { activeArea: StudyArea; onChange: (area: StudyArea) => void }) {
+  return (
+    <div className="area-switcher" role="group" aria-label="切换冲刺科目">
+      {(["408", "math", "english", "politics"] as StudyArea[]).map((area) => (
+        <button
+          className={activeArea === area ? "active" : ""}
+          type="button"
+          key={area}
+          aria-pressed={activeArea === area}
+          onClick={() => onChange(area)}
+        >
+          {area === "408" ? "408" : area === "math" ? "数学" : area === "english" ? "英语" : "政治"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type PlanUndo = {
   message: string;
   field: "plannedAt" | "reviewedPlannedAt";
@@ -1664,6 +1702,11 @@ export function StudyDashboard() {
     setCatalogFilter("all");
   }
 
+  function selectSprintArea(area: StudyArea) {
+    setActiveArea(area);
+    if ((area === "english" || area === "politics") && sprintTab === "mock") setSprintTab("all");
+  }
+
   function navigateMobile(page: AppPage) {
     setActivePage(page);
     setTopbarMoreOpen(false);
@@ -2521,21 +2564,7 @@ export function StudyDashboard() {
                   </button>
                 ))}
               </nav>
-              <label className="book-select">
-                <span className="visually-hidden">切换学科</span>
-                <span className="book-select__surface" aria-hidden="true">
-                  <strong>{selectedBook.title}</strong>
-                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </span>
-                <select value={selectedBook.id} onChange={(event) => selectBookAcrossAreas(event.target.value)}>
-                  <optgroup label="408">
-                    {books.filter((book) => book.area === "408").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
-                  </optgroup>
-                  <optgroup label="数学">
-                    {books.filter((book) => book.area === "math").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
-                  </optgroup>
-                </select>
-              </label>
+              <SubjectPicker selectedBook={selectedBook} onChange={selectBookAcrossAreas} />
               <div className="area-switcher" role="group" aria-label="切换学习领域">
                 {(["408", "math"] as StudyArea[]).map((area) => (
                   <button
@@ -2555,22 +2584,7 @@ export function StudyDashboard() {
               </div>
             </div>}
             {activePage === "sprint" && <div className="study-switchers sprint-top-switchers">
-              <div className="area-switcher" role="group" aria-label="切换冲刺科目">
-                {(["408", "math", "english", "politics"] as StudyArea[]).map((area) => (
-                  <button
-                    className={activeArea === area ? "active" : ""}
-                    type="button"
-                    key={area}
-                    aria-pressed={activeArea === area}
-                    onClick={() => {
-                      setActiveArea(area);
-                      if ((area === "english" || area === "politics") && sprintTab === "mock") setSprintTab("all");
-                    }}
-                  >
-                    {area === "408" ? "408" : area === "math" ? "数学" : area === "english" ? "英语" : "政治"}
-                  </button>
-                ))}
-              </div>
+              <SprintAreaPicker activeArea={activeArea} onChange={selectSprintArea} />
             </div>}
             <span
               className={`topbar-sync topbar-sync--${syncMeta.cls}`}
@@ -2605,16 +2619,32 @@ export function StudyDashboard() {
             </div>
             <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
+          <nav className="mobile-navigation" aria-label="移动端页面导航">
+            {mobileNavigation.map(({ page, label }) => (
+              <button
+                className={activePage === page ? "active" : ""}
+                type="button"
+                key={page}
+                aria-current={activePage === page ? "page" : undefined}
+                onClick={() => navigateMobile(page)}
+              >
+                <span className="mobile-nav-symbol"><MobileNavIcon page={page} /></span>
+                <strong>{label}</strong>
+              </button>
+            ))}
+          </nav>
         </header>
 
         <div className={`page-content page-content--${activePage}`}>
           {feedbackMessage && <div className="feedback-notice feedback-notice--global"><span>{feedbackMessage}</span><button type="button" onClick={() => setFeedbackMessage("")}>×</button></div>}
+          {(activePage === "analytics" || activePage === "settings") && <h2 className="mobile-secondary-heading" aria-hidden="true">{pageTitles[activePage]}</h2>}
           {activePage === "progress" ? <>
           <section className="hero-grid" aria-label="学习概览与节奏">
             <article className="hero-card progress-card">
               <div className="card-heading">
                 <div>
-                  <h2>{selectedBook.title}</h2>
+                  <h2 className="progress-card-title">{selectedBook.title}</h2>
+                  <SubjectPicker selectedBook={selectedBook} onChange={selectBookAcrossAreas} className="book-select--hero" />
                 </div>
                 <span className="status-pill status-pill--calm">
                   {isReviewPhase ? (reviewedCount === selectedSections.length ? "全部完成" : "强化阶段") : "基础阶段"}
@@ -3338,6 +3368,7 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "sprint" ? (
             <section className="page-view sprint-page" aria-labelledby="sprint-title">
+              <div className="sprint-mobile-area"><SprintAreaPicker activeArea={activeArea} onChange={selectSprintArea} /></div>
               <div className="sprint-macro-grid">
                 {/* Card 1: 历年统考真题 */}
                 <article className="sprint-stat-card sprint-stat-card--dual">
@@ -3967,20 +3998,6 @@ export function StudyDashboard() {
           )}
         </div>
       </main>
-      <nav className="mobile-navigation" aria-label="移动端页面导航">
-        {mobileNavigation.map(({ page, label }) => (
-          <button
-            className={activePage === page ? "active" : ""}
-            type="button"
-            key={page}
-            aria-current={activePage === page ? "page" : undefined}
-            onClick={() => navigateMobile(page)}
-          >
-            <span className="mobile-nav-symbol"><MobileNavIcon page={page} /></span>
-            <strong>{label}</strong>
-          </button>
-        ))}
-      </nav>
       {planPreview && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="plan-preview-title">
