@@ -2468,8 +2468,7 @@ export function StudyDashboard() {
               <label className="book-select">
                 <span className="visually-hidden">切换{activeArea === "408" ? "408" : "数学"}科目</span>
                 <span className="book-select__surface" aria-hidden="true">
-                  <span className="book-select__caption">学科</span>
-                  <strong>{selectedBook.shortTitle}</strong>
+                  <strong>{selectedBook.title}</strong>
                   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </span>
                 <select value={selectedBook.id} onChange={(event) => selectBook(event.target.value)}>
@@ -2609,7 +2608,7 @@ export function StudyDashboard() {
                     ["unreviewed", "未复习"],
                     ["overdue", "逾期"],
                   ] as [CatalogFilter, string][]).map(([value, label]) => (
-                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}>{label}</button>
+                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}>{label}</button>
                   ))}
                 </div>
                 <button className={`catalog-action${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
