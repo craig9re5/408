@@ -122,6 +122,8 @@ export function JournalEditorModal({
   const [showTitleInput, setShowTitleInput] = useState(Boolean(initialTitle));
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  const [showMoreTools, setShowMoreTools] = useState(false);
   const [draftSavedAt] = useState(() => initialDraft?.savedAt ?? null);
   const [draftRestored, setDraftRestored] = useState(
     () => Boolean(initialDraft && (initialDraft.content !== initialContent || initialDraft.title !== initialTitle))
@@ -626,10 +628,14 @@ export function JournalEditorModal({
           </div>
         )}
 
-        <div className="journal-editor-body">
+        <div className="journal-mobile-view-switch" aria-label="日志编辑视图">
+          <button type="button" aria-pressed={mobileView === "edit"} className={mobileView === "edit" ? "active" : ""} onClick={() => setMobileView("edit")}>编辑</button>
+          <button type="button" aria-pressed={mobileView === "preview"} className={mobileView === "preview" ? "active" : ""} onClick={() => setMobileView("preview")}>预览</button>
+        </div>
+        <div className={`journal-editor-body journal-editor-body--${mobileView}`}>
           <div className="journal-editor-pane pane-input">
             {/* Markdown Toolbar */}
-            <div className="journal-markdown-toolbar" role="toolbar" aria-label="Markdown 快捷工具栏">
+            <div className={`journal-markdown-toolbar${showMoreTools ? " journal-markdown-toolbar--expanded" : ""}`} role="toolbar" aria-label="Markdown 快捷工具栏">
               <button
                 type="button"
                 className="journal-tb-btn"
@@ -657,7 +663,7 @@ export function JournalEditorModal({
               <span className="journal-tb-divider" />
               <button
                 type="button"
-                className="journal-tb-btn journal-tb-btn--bold"
+                className="journal-tb-btn journal-tb-btn--bold journal-tb-btn--mobile-primary"
                 title="加粗 (Ctrl+B)"
                 onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "**", "**", "加粗文本"))}
               >
@@ -690,7 +696,7 @@ export function JournalEditorModal({
               <span className="journal-tb-divider" />
               <button
                 type="button"
-                className="journal-tb-btn journal-tb-btn--math"
+                className="journal-tb-btn journal-tb-btn--math journal-tb-btn--mobile-primary"
                 title="数学公式 LaTeX (Ctrl+M)"
                 onClick={() => applyEditorFormat((t, s, e) => applyMath(t, s, e))}
               >
@@ -706,7 +712,7 @@ export function JournalEditorModal({
               </button>
               <button
                 type="button"
-                className="journal-tb-btn"
+                className="journal-tb-btn journal-tb-btn--mobile-primary"
                 title="超链接 (Ctrl+K)"
                 onClick={() => applyEditorFormat((t, s, e) => applyLink(t, s, e))}
               >
@@ -715,7 +721,7 @@ export function JournalEditorModal({
               <span className="journal-tb-divider" />
               <button
                 type="button"
-                className="journal-tb-btn"
+                className="journal-tb-btn journal-tb-btn--mobile-primary"
                 title="无序列表 (Ctrl+Shift+U)"
                 onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "bullet"))}
               >
@@ -731,7 +737,7 @@ export function JournalEditorModal({
               </button>
               <button
                 type="button"
-                className="journal-tb-btn"
+                className="journal-tb-btn journal-tb-btn--mobile-primary"
                 title="待办清单 (Ctrl+Shift+T)"
                 onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "task"))}
               >
@@ -753,6 +759,7 @@ export function JournalEditorModal({
               >
                 ⊞ 表格
               </button>
+              <button type="button" className="journal-toolbar-more" aria-expanded={showMoreTools} onClick={() => setShowMoreTools((value) => !value)}>{showMoreTools ? "收起" : "更多格式"}</button>
             </div>
 
             <textarea

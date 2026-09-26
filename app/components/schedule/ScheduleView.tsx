@@ -80,6 +80,7 @@ export function ScheduleView({
       />
 
       <main className="schedule-main-board">
+        <p className="schedule-scroll-hint">左右滑动课表，查看完整一周 →</p>
         {viewMode === "transposed" ? (
           <TransposedTimetableGrid
             schedule={schedule}

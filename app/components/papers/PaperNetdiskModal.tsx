@@ -292,6 +292,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
             <button
               type="button"
               className="netdisk-upload-btn"
+              aria-label="上传 PDF"
               disabled={!cloudStorageReady || quotaPercent >= 100}
               onClick={() => fileInputRef.current?.click()}
             >

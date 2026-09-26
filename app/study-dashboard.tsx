@@ -10,6 +10,7 @@ import { ScheduleView } from "./components/schedule/ScheduleView";
 import { TodayScheduleBanner } from "./components/schedule/TodayScheduleBanner";
 import { useScheduleTicker } from "./components/schedule/useScheduleTicker";
 import { TimetableGrid } from "./components/schedule/TimetableGrid";
+import { TodayDaySchedule } from "./components/schedule/TodayDaySchedule";
 const AnswerSheetModal = lazy(() => import("./components/sprint/AnswerSheetModal").then((module) => ({ default: module.AnswerSheetModal })));
 const JournalEditorModal = lazy(() => import("./components/journal/JournalEditorModal").then((module) => ({ default: module.JournalEditorModal })));
 const PaperNetdiskModal = lazy(() => import("./components/papers/PaperNetdiskModal").then((module) => ({ default: module.PaperNetdiskModal })));
@@ -966,6 +967,7 @@ export function StudyDashboard() {
       return { chapter, visibleSections };
     })
     .filter(({ visibleSections }) => visibleSections.length > 0);
+  const filteredSectionCount = filteredChapters.reduce((count, { visibleSections }) => count + visibleSections.length, 0);
   const allExpanded = selectedBook.chapters.every((chapter) => expandedChapters.includes(chapter.id));
   const effectiveAllExpanded = catalogFilter === "all" ? allExpanded : !filterChaptersCollapsed;
 
@@ -1036,8 +1038,8 @@ export function StudyDashboard() {
   }, []);
 
   const cockpitWeek = useMemo(() => {
-    return schedule.activeWeek || calculateWeekNumber(schedule.semesterStartDate, dateToday()) || 2;
-  }, [schedule.activeWeek, schedule.semesterStartDate]);
+    return calculateWeekNumber(schedule.semesterStartDate, today);
+  }, [schedule.semesterStartDate, today]);
 
   const activeSlotArea = cockpitFocusedEvent?.linkedArea ?? (activeScheduleInfo.status === "in_progress" ? activeScheduleInfo.activeEvent?.linkedArea : null);
 
@@ -2465,8 +2467,13 @@ export function StudyDashboard() {
               </nav>
               <label className="book-select">
                 <span className="visually-hidden">切换{activeArea === "408" ? "408" : "数学"}科目</span>
+                <span className="book-select__surface" aria-hidden="true">
+                  <span className="book-select__caption">学科</span>
+                  <strong>{selectedBook.shortTitle}</strong>
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
                 <select value={selectedBook.id} onChange={(event) => selectBook(event.target.value)}>
-                  {areaBooks.map((book) => <option value={book.id} key={book.id}>{book.shortTitle}</option>)}
+                  {areaBooks.map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
                 </select>
               </label>
               <div className="area-switcher" role="group" aria-label="切换学习领域">
@@ -2593,7 +2600,7 @@ export function StudyDashboard() {
 
           <section className="catalog">
             <div className="catalog-heading">
-              <div><h2>目录</h2><span>{selectedBook.chapters.length} 章 · {selectedSections.length} 小节</span></div>
+              <div><h2>目录</h2><span>{filteredChapters.length} 章 · {filteredSectionCount} 小节</span></div>
               <div className="catalog-tools">
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
@@ -2609,6 +2616,7 @@ export function StudyDashboard() {
                 <button
                   className="catalog-action"
                   type="button"
+                  disabled={filteredChapters.length === 0}
                   onClick={() => catalogFilter === "all" ? setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id)) : setFilterChaptersCollapsed((value) => !value)}
                 >
                   {effectiveAllExpanded ? "全部折叠" : "全部展开"}
@@ -2617,6 +2625,13 @@ export function StudyDashboard() {
             </div>
 
             {planUndo && <div className="plan-notice"><span>{planUndo.message}</span><button type="button" onClick={undoPlanChange}>撤销</button></div>}
+            {filteredChapters.length === 0 && (
+              <div className="catalog-empty" role="status">
+                <strong>当前筛选没有匹配的小节</strong>
+                <p>可以切换筛选条件，或查看本学科的全部目录。</p>
+                <button type="button" onClick={() => setCatalogFilter("all")}>查看全部</button>
+              </div>
+            )}
             <div className="chapter-grid">
               {filteredChapters.map(({ chapter, visibleSections }) => {
                 const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
@@ -2893,6 +2908,13 @@ export function StudyDashboard() {
                     }}
                     isCompact={true}
                     focusedEventId={cockpitFocusedEvent?.id ?? null}
+                  />
+                  <TodayDaySchedule
+                    schedule={schedule}
+                    todayStr={today}
+                    activeInfo={activeScheduleInfo}
+                    focusedEventId={cockpitFocusedEvent?.id ?? null}
+                    onSelectEvent={(event) => setCockpitFocusedEvent((previous) => previous?.id === event.id ? null : event)}
                   />
                 </div>
 

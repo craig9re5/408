@@ -920,6 +920,9 @@
 
 /* 移动端响应式优化 */
 @media (max-width: 768px) {
+  .netdisk-tab, .netdisk-sort-select, .netdisk-btn-batch { min-height: 44px; }
+  .netdisk-search-input { height: 44px; font-size: 16px; }
+  .netdisk-search-clear { min-width: 36px; min-height: 40px; right: 2px; }
   .netdisk-overlay {
     padding: 0;
   }
@@ -954,4 +957,17 @@
   .netdisk-file-col--date {
     display: none;
   }
+}
+
+@media (max-width: 360px) {
+  .netdisk-header { gap: 5px; }
+  .netdisk-header-left, .netdisk-header-right { gap: 5px; }
+  .netdisk-title { font-size: 16px; white-space: nowrap; }
+  .netdisk-back-btn, .netdisk-close-btn, .netdisk-upload-btn { width: 44px; min-width: 44px; height: 44px; justify-content: center; padding: 0; }
+  .netdisk-back-btn span, .netdisk-upload-btn span { display: none; }
+  .netdisk-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .netdisk-search-wrap { min-width: 0; }
+  .netdisk-search-input, .netdisk-search-input:focus { width: 100%; min-width: 0; }
+  .netdisk-sort-select { width: 104px; }
+  .netdisk-btn-batch { grid-column: 1 / -1; width: 100%; }
 }

@@ -1770,3 +1770,18 @@
     white-space: nowrap;
   }
 }
+
+@media (max-width: 600px) {
+  .sprint-macro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .sprint-stat-card.sprint-stat-card--dual { display: flex; flex-direction: column; gap: 7px; padding: 12px; min-width: 0; }
+  .sprint-stat-card .stat-card-head { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .sprint-stat-card .stat-card-head span { font-size: 11px; line-height: 1.3; }
+  .sprint-stat-card .stat-card-head strong { font-size: 19px; }
+  .sprint-stat-card .stat-card-body { gap: 4px; }
+  .stat-card-sub { font-size: 10px; line-height: 1.35; }
+  .sprint-stat-card .endless-ticks { display: none; }
+  .stat-card-score-box { width: 100%; min-width: 0; gap: 0; padding-top: 6px; }
+  .score-box-label { font-size: 10px; }
+  .score-box-num strong { font-size: 19px; }
+  .sprint-tab-group button, .sprint-status-filters button { min-height: 44px; }
+}
