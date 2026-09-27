@@ -120,6 +120,7 @@ export function PaperListRow({
           type="button"
           className="netdisk-btn-icon netdisk-btn-download"
           title="下载试卷原件"
+          aria-label={`下载 ${paper.fileName}`}
           onClick={() => onDownload(paper)}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -135,6 +136,7 @@ export function PaperListRow({
             type="button"
             className="netdisk-btn-icon"
             title="更多操作"
+            aria-label={`更多操作：${paper.fileName}`}
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

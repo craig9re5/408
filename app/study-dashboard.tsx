@@ -561,6 +561,8 @@ export function StudyDashboard() {
   const [schedule, setSchedule] = useState<ScheduleAppData>(buildDefaultSchedule);
   const { activeInfo: activeScheduleInfo } = useScheduleTicker(schedule);
   const [cockpitFocusedEvent, setCockpitFocusedEvent] = useState<ScheduleEvent | null>(null);
+  const [todayScheduleExpanded, setTodayScheduleExpanded] = useState(false);
+  const [settingsScheduleExpanded, setSettingsScheduleExpanded] = useState(false);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
   const effectiveSprintTab = (activeArea === "english" || activeArea === "politics") && sprintTab === "mock" ? "all" : sprintTab;
   const [sprintStatusFilter, setSprintStatusFilter] = useState<"all" | "uncompleted" | "completed">("all");
@@ -1091,8 +1093,6 @@ export function StudyDashboard() {
     .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
     .map((task) => ({ ...task, phase: "review" as const }))
     .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
-  const todayCompleted = todayBasePlan.filter(({ section }) => progress[section.id]?.learned).length + todayReviewPlan.filter(({ section }) => progress[section.id]?.reviewed).length;
-
   const rescheduleToToday = useCallback((sectionId: string, phase: "base" | "review") => {
     const todayStr = dateToday();
     const field = phase === "review" ? "reviewedPlannedAt" : "plannedAt";
@@ -1130,8 +1130,8 @@ export function StudyDashboard() {
     }
     if (activeSlotArea) {
       return [...list].sort((a, b) => {
-        const aDone = Boolean(progress[a.section.id]?.learned || progress[a.section.id]?.reviewed);
-        const bDone = Boolean(progress[b.section.id]?.learned || progress[b.section.id]?.reviewed);
+        const aDone = Boolean(a.phase === "review" ? progress[a.section.id]?.reviewed : progress[a.section.id]?.learned);
+        const bDone = Boolean(b.phase === "review" ? progress[b.section.id]?.reviewed : progress[b.section.id]?.learned);
         const aMatch = a.book.area === activeSlotArea && !aDone;
         const bMatch = b.book.area === activeSlotArea && !bDone;
         if (aMatch && !bMatch) return -1;
@@ -1141,6 +1141,9 @@ export function StudyDashboard() {
     }
     return list;
   }, [todayPlan, cockpitFocusedEvent, activeSlotArea, progress]);
+  const displayedTodayCompleted = displayedTodayPlan.filter(({ section, phase }) => phase === "review"
+    ? progress[section.id]?.reviewed
+    : progress[section.id]?.learned).length;
 
   const displayedOverdueTasks = useMemo(() => {
     if (!cockpitFocusedEvent?.linkedArea) return overdueTasks;
@@ -1211,9 +1214,6 @@ export function StudyDashboard() {
 
   const sprintMockCompleted = useMemo(() => mockPapers.filter((p) => p.completed).length, [mockPapers]);
   const sprintMockTotal = mockPapers.length;
-  const featuredSprintPapers = effectiveSprintTab === "mock" ? mockPapers : effectiveSprintTab === "past" ? pastPapers : [...pastPapers, ...mockPapers];
-  const featuredSprintPaper = featuredSprintPapers.find((paper) => !paper.completed) ?? featuredSprintPapers[0] ?? null;
-
   const scoredPastPapers = useMemo(() => pastPapers.filter((p) => typeof p.score === "number" && p.score !== null), [pastPapers]);
   const sprintPastAvgScore = useMemo(() => {
     if (!scoredPastPapers.length) return "--";
@@ -1290,6 +1290,12 @@ export function StudyDashboard() {
       return true;
     });
   }, [mockPapers, sprintStatusFilter]);
+  const featuredSprintPapers = effectiveSprintTab === "mock"
+    ? visibleMockPapers
+    : effectiveSprintTab === "past"
+      ? visiblePastPapers
+      : [...visiblePastPapers, ...visibleMockPapers];
+  const featuredSprintPaper = featuredSprintPapers.find((paper) => !paper.completed) ?? featuredSprintPapers[0] ?? null;
 
   const activeQuestionPaper = useMemo(() => {
     if (!activePaperQuestionModalId) return null;
@@ -2093,7 +2099,7 @@ export function StudyDashboard() {
                       onReschedule(section.id, isReviewAction ? "review" : "base");
                     }}
                     title="一键排到今日执行"
-                    aria-label="一键排到今日执行"
+                    aria-label={`将 ${section.number} ${section.title} 的${isReviewAction ? "复习" : "新学"}任务排到今日`}
                   >
                     + 今日
                   </button>
@@ -2102,6 +2108,7 @@ export function StudyDashboard() {
                   <input
                     type="checkbox"
                     checked={Boolean(checked)}
+                    aria-label={`${section.number} ${section.title}，${isReviewAction ? "复习" : "新学"}完成`}
                     onChange={(event) => isReviewAction
                       ? toggleReviewed(section.id, event.target.checked)
                       : toggleLearned(section.id, event.target.checked)}
@@ -3096,6 +3103,17 @@ export function StudyDashboard() {
                     </div>
                   </div>
 
+                  <button
+                    type="button"
+                    className="today-schedule-toggle"
+                    aria-controls="today-schedule-detail"
+                    aria-expanded={todayScheduleExpanded}
+                    onClick={() => setTodayScheduleExpanded((current) => !current)}
+                  >
+                    {todayScheduleExpanded ? "收起今日课程" : "查看今日全部课程"}
+                    <span aria-hidden="true">{todayScheduleExpanded ? "⌃" : "⌄"}</span>
+                  </button>
+                  <div id="today-schedule-detail" className={`today-schedule-detail${todayScheduleExpanded ? " is-open" : ""}`}>
                   <TimetableGrid
                     schedule={schedule}
                     activeInfo={activeScheduleInfo}
@@ -3114,6 +3132,7 @@ export function StudyDashboard() {
                     focusedEventId={cockpitFocusedEvent?.id ?? null}
                     onSelectEvent={(event) => setCockpitFocusedEvent((previous) => previous?.id === event.id ? null : event)}
                   />
+                  </div>
                 </div>
 
                 {/* ── 右侧：今日任务 (右上) + 逾期任务 (右下)，不超过左侧一半宽 ── */}
@@ -3145,7 +3164,7 @@ export function StudyDashboard() {
                         <div className="task-panel-title-group">
                           <h2 id="today-plan-title">今日任务</h2>
                           <span className="task-panel-subtitle">
-                            {displayedTodayPlan.filter(({ section }) => progress[section.id]?.learned || progress[section.id]?.reviewed).length} / {displayedTodayPlan.length} 项完成
+                            {displayedTodayCompleted} / {displayedTodayPlan.length} 项完成
                           </span>
                         </div>
                       </div>
@@ -3236,7 +3255,7 @@ export function StudyDashboard() {
                     )}
                   </div>
 
-                  <div className="journal-filter-pills" role="tablist" aria-label="日志筛选">
+                  <div className="journal-filter-pills" role="group" aria-label="日志筛选">
                     {([
                       ["all", "全部"],
                       ["important", "⭐ 重点"],
@@ -3250,6 +3269,7 @@ export function StudyDashboard() {
                         key={key}
                         type="button"
                         className={`filter-pill ${journalFilter === key ? "active" : ""}`}
+                        aria-pressed={journalFilter === key}
                         onClick={() => setJournalFilter(key)}
                       >
                         {label}
@@ -3266,13 +3286,23 @@ export function StudyDashboard() {
                           ? "没有找到符合条件的学习日志。"
                           : "暂无学习日志，随时随地写下您的第一条学习心得吧。"}
                       </p>
-                      <button
-                        type="button"
-                        className="journal-action-btn journal-action-btn--secondary"
-                        onClick={() => openCreateJournal(null)}
-                      >
-                        ✍ 立即记录第一条
-                      </button>
+                      {journalSearchQuery || journalFilter !== "all" ? (
+                        <button
+                          type="button"
+                          className="journal-action-btn journal-action-btn--secondary"
+                          onClick={() => { setJournalSearchQuery(""); setJournalFilter("all"); }}
+                        >
+                          清除搜索和筛选
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="journal-action-btn journal-action-btn--secondary"
+                          onClick={() => openCreateJournal(null)}
+                        >
+                          ✍ 立即记录第一条
+                        </button>
+                      )}
                     </div>
                   ) : (
                     groupedJournals.map(({ dateKey, label, entries }) => (
@@ -3440,7 +3470,9 @@ export function StudyDashboard() {
                 <div className="sprint-mobile-heading">
                   <div>
                     <span className="sprint-mobile-eyebrow">套卷冲刺</span>
-                    <h2>{featuredSprintPaper ? (featuredSprintPaper.completed ? "回顾练习" : "下一套练习") : "暂无试卷"}</h2>
+                    <h2>{featuredSprintPaper
+                      ? (featuredSprintPaper.completed ? "回顾练习" : "下一套练习")
+                      : sprintStatusFilter === "completed" ? "暂无已完成试卷" : sprintStatusFilter === "uncompleted" ? "暂无未完成试卷" : "暂无试卷"}</h2>
                   </div>
                   <label className="sprint-mobile-subject">
                     <span className="visually-hidden">选择冲刺科目</span>
@@ -3675,6 +3707,9 @@ export function StudyDashboard() {
                   </label>
                 )}
                 {((activeArea === "english" || activeArea === "politics") || (sprintMockTotal === 0 && effectiveSprintTab !== "mock")) && <span className="sprint-mobile-type-label">真题 <small>{visiblePastPapers.length} 套</small></span>}
+                {(activeArea === "408" || activeArea === "math") && sprintMockTotal === 0 && (
+                  <button type="button" className="sprint-mobile-add-mock" onClick={() => setIsAddMockModalOpen(true)}>+ 添加模拟卷</button>
+                )}
                 <details className="sprint-mobile-filter">
                   <summary>筛选{(sprintStatusFilter !== "all" || pastPaperSortOrder !== "desc") && <span className="sprint-mobile-filter-dot"> · 已调整</span>}</summary>
                   <div className="sprint-mobile-filter-panel">
@@ -3972,7 +4007,17 @@ export function StudyDashboard() {
                     </div>
                   </header>
 
-                  <div className="schedule-board-grid">
+                  <button
+                    type="button"
+                    className="settings-schedule-toggle"
+                    aria-controls="settings-exam-schedule"
+                    aria-expanded={settingsScheduleExpanded}
+                    onClick={() => setSettingsScheduleExpanded((current) => !current)}
+                  >
+                    {settingsScheduleExpanded ? "收起考试科目安排" : "查看考试科目安排"}
+                    <span aria-hidden="true">{settingsScheduleExpanded ? "⌃" : "⌄"}</span>
+                  </button>
+                  <div id="settings-exam-schedule" className={`schedule-board-grid${settingsScheduleExpanded ? " is-open" : ""}`}>
                     <div className="schedule-day-card">
                       <div className="schedule-day-top">
                         <span className="schedule-day-badge">第一天</span>
@@ -4042,7 +4087,7 @@ export function StudyDashboard() {
                           导出无法迁移的原始数据
                         </button>
                       )}
-                      <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readImportFile} />
+                      <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" tabIndex={-1} aria-hidden="true" onChange={readImportFile} />
                     </div>
 
                     <div className="data-management-panel data-management-panel--backups">
@@ -4056,7 +4101,7 @@ export function StudyDashboard() {
                         </button>
                       </div>
                       <p>导入、恢复和旧数据迁移前会自动生成快照，最多保留 15 份。</p>
-                      <div className="backup-list">
+                      <div className="backup-list" role={backups.length ? "region" : undefined} aria-label={backups.length ? "本地备份快照列表" : undefined} tabIndex={backups.length ? 0 : undefined}>
                         {backups.length ? (
                           backups.map((backup) => (
                             <article className="backup-item" key={backup.id}>
@@ -4176,9 +4221,9 @@ export function StudyDashboard() {
       )}
       {pendingDeleteBackup && (
         <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="delete-backup-dialog-title">
             <span className="dialog-kicker">{backupKindLabel(pendingDeleteBackup.kind)} · {formatLocalDateTime(pendingDeleteBackup.createdAt)}</span>
-            <h2>确认删除该本地快照？</h2>
+            <h2 id="delete-backup-dialog-title">确认删除该本地快照？</h2>
             <p>删除后此份历史快照将无法再用于恢复，当前数据不受影响。</p>
             <div className="confirm-actions">
               <button type="button" className="btn-cancel" onClick={() => setPendingDeleteBackup(null)}>取消</button>
@@ -4429,9 +4474,9 @@ export function StudyDashboard() {
         const maxScoreLimit = currentPaper?.area === "politics" ? 50 : currentPaper?.area === "english" ? 100 : 150;
         return (
           <div className="confirm-overlay" role="presentation">
-            <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true">
+            <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true" aria-labelledby="paper-score-dialog-title">
               <span className="dialog-kicker">全真模拟考记录</span>
-              <h2>模考成绩录入</h2>
+              <h2 id="paper-score-dialog-title">模考成绩录入</h2>
               <p className="paper-score-sub">记录本套试卷的真实得分（0~{maxScoreLimit} 分）</p>
               <div className="paper-modal-form">
                 <label className="publish-form-field">
@@ -4473,8 +4518,8 @@ export function StudyDashboard() {
       {/* Add Mock Paper Modal */}
       {isAddMockModalOpen && (
         <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setIsAddMockModalOpen(false); }}>
-          <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true">
-            <h2>添加 {activeArea === "408" ? "408" : "数学"} 模拟试卷</h2>
+          <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true" aria-labelledby="add-mock-dialog-title">
+            <h2 id="add-mock-dialog-title">添加 {activeArea === "408" ? "408" : "数学"} 模拟试卷</h2>
             <div className="paper-modal-form">
               <label className="paper-form-field">
                 <span className="field-label">试卷名称 <strong>*</strong></span>
@@ -4505,8 +4550,8 @@ export function StudyDashboard() {
       {/* Delete Mock Paper Modal */}
       {pendingDeletePaperId && (
         <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingDeletePaperId(null); }}>
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true">
-            <h2>确认删除该模拟试卷？</h2>
+          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="delete-mock-dialog-title">
+            <h2 id="delete-mock-dialog-title">确认删除该模拟试卷？</h2>
             <p>删除后将清除此模拟试卷的做题记录与得分，关联的错题复盘日志仍将保留。</p>
             <div className="confirm-actions">
               <button type="button" className="btn-cancel" onClick={() => setPendingDeletePaperId(null)}>取消</button>

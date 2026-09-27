@@ -571,6 +571,7 @@ input[type="number"] {
 .settings-date-input { padding: 6px 10px; border: 1px solid #d5d9d5; border-radius: 8px; background: #faf9f6; color: var(--ink); font-size: 12px; font-weight: 500; outline: none; cursor: pointer; transition: all .16s ease; }
 .settings-date-input:hover { border-color: #b5bcb6; background: #fff; }
 .settings-date-input:focus { border-color: var(--coral); background: #fff; box-shadow: 0 0 0 3px rgba(239,132,109,.14); }
+.settings-schedule-toggle { display: none; }
 .data-management-grid { display: grid; grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr); gap: 28px; }
 .data-management-panel { display: flex; flex-direction: column; }
 .data-management-panel + .data-management-panel { padding-left: 28px; border-left: 1px solid var(--line-soft); }
@@ -890,9 +891,15 @@ button.date-text.late,
   .settings-card { padding: 18px 14px; }
   .settings-card__header { flex-direction: column; gap: 12px; align-items: stretch; }
   .settings-schedule-actions { justify-content: space-between; }
+  .settings-schedule-toggle { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; margin-top: 12px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--canvas); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .settings-schedule-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .settings-card--schedule .schedule-board-grid { display: none; }
+  .settings-card--schedule .schedule-board-grid.is-open { display: grid; }
   .schedule-board-grid { grid-template-columns: 1fr; gap: 10px; }
   .schedule-day-card { padding: 12px 14px; }
-  .backup-list { grid-template-columns: 1fr; max-height: none; }
+  .settings-btn, .backup-create, .backup-item__restore, .backup-item__delete { min-height: 44px; }
+  .backup-list { grid-template-columns: 1fr; max-height: min(330px, 45vh); }
+  .backup-list:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   .confirm-dialog { padding: 18px; }
   .plan-preview-list article { gap: 8px; }
   .hero-grid { gap: 8px; margin-bottom: 14px; }

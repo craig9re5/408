@@ -1431,6 +1431,9 @@
 
 /* Responsive Styles for Mobile & Journal */
 @media (max-width: 768px) {
+  .journal-empty-card { padding: 20px 16px; }
+  .journal-empty-card p { margin-bottom: 10px; }
+  .journal-action-btn { min-height: 44px; }
   /* Prevent iOS Safari auto-zooming when focusing on inputs */
   input[type="text"],
   input[type="date"],
@@ -1544,7 +1547,13 @@
   }
   .journal-card-actions {
     width: 100%;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .journal-card-actions .journal-btn-tool {
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 12px;
   }
   .journal-controls-bar {
     flex-direction: column;

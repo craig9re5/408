@@ -65,6 +65,9 @@
   .sprint-mobile-type select { max-width: 150px; min-height: 44px; appearance: none; padding: 0 19px 0 0; border: 0; color: inherit; background: transparent; font: 700 14px var(--sans); cursor: pointer; }
   .sprint-mobile-type-label { color: var(--ink); font-size: 14px; font-weight: 700; }
   .sprint-mobile-type-label small { margin-left: 5px; color: #7b8580; font-size: 11px; font-weight: 600; }
+  .sprint-mobile-add-mock { min-height: 44px; margin-left: auto; padding: 0 7px; border-radius: 8px; color: #4f747d; background: transparent; font-size: 11px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+  .sprint-mobile-add-mock:focus-visible { outline: 2px solid #507d8a; outline-offset: 2px; }
+  .sprint-mobile-add-mock + .sprint-mobile-filter { margin-left: 0; }
   .sprint-mobile-filter { margin-left: auto; }
   .sprint-mobile-filter summary { display: flex; min-height: 44px; align-items: center; padding: 0 5px; border-radius: 7px; color: #4d6e72; font-size: 12px; font-weight: 650; cursor: pointer; list-style: none; white-space: nowrap; }
   .sprint-mobile-filter summary::-webkit-details-marker { display: none; }

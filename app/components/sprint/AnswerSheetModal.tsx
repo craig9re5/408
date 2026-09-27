@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PaperRecord, QuestionState } from "../../../shared/types.ts";
 import { CS408_PAPER_STRUCTURE, modalChoiceGroups } from "../../study-data.ts";
 
@@ -34,7 +34,19 @@ export function AnswerSheetModal({
   getPaperQuestionSummary,
 }: AnswerSheetModalProps) {
   const [quickWrongInput, setQuickWrongInput] = useState("");
+  const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
+  const clearTriggerRef = useRef<HTMLButtonElement>(null);
+  const clearCancelRef = useRef<HTMLButtonElement>(null);
   const qSummary = getPaperQuestionSummary(paper);
+
+  useEffect(() => {
+    if (clearConfirmationOpen) clearCancelRef.current?.focus();
+  }, [clearConfirmationOpen]);
+
+  function cancelClearConfirmation() {
+    setClearConfirmationOpen(false);
+    clearTriggerRef.current?.focus();
+  }
 
   const wrongNums = Object.entries(paper.questions ?? {})
     .filter(([_, st]) => st === "wrong")
@@ -104,14 +116,48 @@ export function AnswerSheetModal({
 
           <div className="q-quick-btn-group">
             <button
+              ref={clearTriggerRef}
               type="button"
               className="btn-clear-questions"
-              onClick={onClearQuestions}
+              aria-expanded={clearConfirmationOpen}
+              aria-controls={clearConfirmationOpen ? "q-clear-confirmation" : undefined}
+              onClick={() => setClearConfirmationOpen((open) => !open)}
               title="重置清空本卷所有做题记录"
             >
               一键清零
             </button>
           </div>
+          {clearConfirmationOpen && (
+            <div
+              id="q-clear-confirmation"
+              className="q-clear-confirmation"
+              role="group"
+              aria-label="清空试卷记录确认"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  cancelClearConfirmation();
+                }
+              }}
+            >
+              <p role="alert">将清空本卷的完成状态、日期、分数、二刷和全部题目记录，无法撤销。</p>
+              <div className="q-clear-confirmation-actions">
+                <button ref={clearCancelRef} type="button" onClick={cancelClearConfirmation}>取消</button>
+                <button
+                  type="button"
+                  className="btn-confirm-clear"
+                  aria-label={`确认清空${paper.title}的全部做题记录`}
+                  onClick={() => {
+                    onClearQuestions();
+                    cancelClearConfirmation();
+                  }}
+                >
+                  确认清零
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Question Heatmap Matrix */}
@@ -222,6 +268,7 @@ export function AnswerSheetModal({
                         <div className="q-score-input-wrap">
                           <input
                             type="number"
+                            aria-label={`第 ${item.num} 题得分，满分 ${item.max} 分`}
                             min={0}
                             max={item.max}
                             step={0.5}
@@ -390,6 +437,7 @@ export function AnswerSheetModal({
                         <div className="q-score-input-wrap">
                           <input
                             type="number"
+                            aria-label={`第 ${item.num} 题得分，满分 ${item.max} 分`}
                             min={0}
                             max={item.max}
                             step={0.5}
@@ -459,6 +507,7 @@ export function AnswerSheetModal({
                         <div className="q-score-input-wrap">
                           <input
                             type="number"
+                            aria-label={`第 ${item.num} 题得分，满分 ${item.max} 分`}
                             min={0}
                             max={item.max}
                             step={0.5}
@@ -583,6 +632,7 @@ export function AnswerSheetModal({
                         <div className="q-score-input-wrap">
                           <input
                             type="number"
+                            aria-label={`第 ${item.num} 题得分，满分 ${item.max} 分`}
                             min={0}
                             max={item.max}
                             step={0.5}

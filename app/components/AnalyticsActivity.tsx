@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HeatmapDay, WeeklyTrend } from "../study-data";
 
 type Props = {
@@ -24,7 +24,23 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
   const [hoveredHeatmapDay, setHoveredHeatmapDay] = useState<HeatmapDay | null>(null);
   const [selectedHeatmapDay, setSelectedHeatmapDay] = useState<HeatmapDay | null>(null);
   const [hoveredTrendWeek, setHoveredTrendWeek] = useState<WeeklyTrend | null>(null);
+  const heatmapViewportRef = useRef<HTMLDivElement>(null);
+  const heatmapInitiallyPositionedRef = useRef(false);
   const matrixRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const viewport = heatmapViewportRef.current;
+    if (!viewport) return;
+    const showLatestWeek = () => {
+      if (heatmapInitiallyPositionedRef.current || getComputedStyle(viewport).overflowX !== "auto" || viewport.scrollWidth <= viewport.clientWidth) return;
+      viewport.scrollLeft = viewport.scrollWidth;
+      heatmapInitiallyPositionedRef.current = true;
+    };
+    showLatestWeek();
+    const observer = new ResizeObserver(showLatestWeek);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [heatmapDays]);
 
   // 漫游 tabindex：整个热力图只有一个 Tab 停靠点，方向键在格子间移动
   const initialFocusDate = useMemo(() => {
@@ -101,7 +117,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                     </div>
                   </div>
 
-                  <div className="heatmap-viewport">
+                  <div className="heatmap-viewport" ref={heatmapViewportRef}>
                     <div className="heatmap-labels-col" aria-hidden="true">
                       <span>一</span>
                       <span>二</span>
@@ -143,6 +159,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                       ))}
                     </div>
                   </div>
+                  <p className="heatmap-scroll-hint">左右滑动查看近 13 周</p>
 
                   <div className="heatmap-hover-info" aria-live="polite">
                     {activeHeatmapDay ? (

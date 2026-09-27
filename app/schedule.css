@@ -1758,12 +1758,78 @@
 }
 
 .today-day-schedule { display: none; }
+.today-schedule-toggle { display: none; }
+.today-schedule-detail { display: contents; }
 .schedule-scroll-hint { display: none; }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+  /* Let a long section title use the full row instead of squeezing beside its actions. */
+  .task-panel--cockpit .task-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "main main main" "date reschedule check";
+    align-items: center;
+    gap: 3px 8px;
+    min-height: 0;
+    padding: 9px 6px;
+  }
+  .task-panel--cockpit .task-main { grid-area: main; min-width: 0; }
+  .task-panel--cockpit .task-title strong {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+  .task-panel--cockpit .task-row-right { display: contents; }
+  .task-panel--cockpit .task-date {
+    grid-area: date;
+    min-width: 0;
+    justify-self: start;
+    white-space: normal;
+  }
+  .task-panel--cockpit .task-reschedule-btn {
+    grid-area: reschedule;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+  .task-panel--cockpit .task-check {
+    grid-area: check;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+}
+
+@media (max-width: 768px) {
   .cockpit-right-tasks { height: auto; }
   .task-panel--cockpit { flex: none; height: auto; min-height: 0; max-height: none; }
+  .task-panel--cockpit .task-empty {
+    flex: none;
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 10px 14px 14px;
+    text-align: left;
+  }
   .cockpit-left-schedule .timetable-container--compact { display: none; }
+  .today-schedule-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    background: var(--canvas);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .today-schedule-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .today-schedule-detail { display: none; }
+  .today-schedule-detail.is-open { display: block; }
   .today-day-schedule { display: block; }
   .today-day-schedule__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 4px 12px; }
   .today-day-schedule__heading > div { display: flex; align-items: baseline; gap: 8px; }

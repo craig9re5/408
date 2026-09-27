@@ -398,6 +398,8 @@
 .heatmap-legend .level-2 { background: #7cac85; }
 .heatmap-legend .level-3 { background: #3d6e47; }
 
+.heatmap-scroll-hint { display: none; }
+
 .heatmap-viewport {
   display: flex;
   gap: 8px;
@@ -848,9 +850,90 @@
 }
 
 @media (max-width: 640px) {
-  .analytics-overview-grid {
-    grid-template-columns: 1fr;
+  .analytics-page {
+    gap: 18px;
   }
+  .analytics-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .analytics-overview-grid .analytics-card {
+    min-width: 0;
+    padding: 13px 12px;
+  }
+  .macro-card {
+    min-height: 136px;
+    gap: 9px;
+  }
+  .macro-card .macro-badge {
+    display: none;
+  }
+  .macro-card__val,
+  .macro-card__dual-val {
+    margin: 0;
+  }
+  .macro-card__val strong {
+    font-size: 30px;
+  }
+  .macro-card__dual-val {
+    gap: 7px;
+  }
+  .macro-card__dual-val strong {
+    font-size: 20px;
+  }
+  .macro-card__dual-val small {
+    color: var(--ink-soft);
+    font-size: 10.5px;
+  }
+  .macro-card__dual-val .divider {
+    height: 24px;
+  }
+  .macro-card__meta {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    color: var(--ink-soft);
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+  .heatmap-card {
+    min-width: 0;
+  }
+  .heatmap-viewport {
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 10px;
+    overscroll-behavior-inline: contain;
+    scrollbar-color: #b4c0b8 transparent;
+    scrollbar-width: thin;
+  }
+  .heatmap-labels-col {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    flex: 0 0 28px;
+    background: var(--paper);
+  }
+  .heatmap-labels-col span {
+    width: 28px;
+    height: 28px;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+  .heatmap-matrix {
+    flex: 0 0 auto;
+  }
+  .heatmap-col {
+    flex: 0 0 28px;
+    max-width: none;
+  }
+  .heatmap-cell {
+    width: 28px;
+    height: 28px;
+    aspect-ratio: auto;
+  }
+  .heatmap-scroll-hint { display: block; margin: 0 0 8px; color: var(--muted); font-size: 11px; }
   .analytics-discipline-grid {
     grid-template-columns: 1fr;
   }

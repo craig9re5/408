@@ -959,6 +959,20 @@
   }
 }
 
+@media (max-width: 600px) {
+  .netdisk-list-wrap { min-width: 0; width: 100%; }
+  .netdisk-list-header, .netdisk-file-col--size { display: none; }
+  .netdisk-file-row { min-width: 0; gap: 8px; padding: 8px 12px; }
+  .netdisk-file-col--select { width: 32px; min-height: 44px; flex: 0 0 32px; justify-content: center; }
+  .netdisk-file-col--select input { width: 22px; height: 22px; }
+  .netdisk-file-col--main { min-width: 0; flex: 1 1 0; gap: 7px; }
+  .netdisk-file-name-wrap { min-width: 0; flex: 1 1 auto; flex-wrap: wrap; gap: 3px 5px; overflow: visible; white-space: normal; }
+  .netdisk-file-name { display: block; flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; text-overflow: clip; }
+  .netdisk-file-col--actions { width: auto; flex: 0 0 auto; gap: 0; }
+  .netdisk-btn-icon { width: 44px; height: 44px; }
+  .netdisk-btn-download { width: auto; min-width: 64px; padding: 0 4px; }
+}
+
 @media (max-width: 360px) {
   .netdisk-header { gap: 5px; }
   .netdisk-header-left, .netdisk-header-right { gap: 5px; }
