@@ -7,6 +7,7 @@ import "./sprint.css";
 import "./touch.css";
 import "./schedule.css";
 import "./paper-netdisk.css";
+import "./sprint-mobile.css";
 
 export const metadata: Metadata = {
   title: "学习进度",

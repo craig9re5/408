@@ -467,6 +467,9 @@
   background: #ffffff;
 }
 
+.bento-mobile-summary { display: none; }
+.bento-card-details { display: flex; flex-direction: column; gap: 12px; }
+
 .bento-card-top {
   position: relative;
   display: flex;
@@ -1784,4 +1787,84 @@
   .score-box-label { font-size: 10px; }
   .score-box-num strong { font-size: 19px; }
   .sprint-tab-group button, .sprint-status-filters button { min-height: 44px; }
+
+  .sprint-bento-grid {
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+  }
+  .sprint-bento-card,
+  .sprint-bento-card.completed {
+    gap: 0;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: none;
+  }
+  .sprint-bento-card + .sprint-bento-card { border-top: 1px solid var(--line-soft); }
+  .sprint-bento-card:hover { transform: none; box-shadow: none; }
+  .sprint-bento-card.is-expanded { background: rgba(255, 255, 255, 0.55); }
+  .bento-mobile-summary { display: flex; flex-direction: column; gap: 6px; }
+  .bento-mobile-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
+  .bento-mobile-title {
+    min-width: 0;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .bento-mobile-status {
+    flex: 0 0 auto;
+    color: var(--ink-soft);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .bento-mobile-status.is-complete { color: #3b6c45; }
+  .bento-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bento-mobile-actions button {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 8px;
+    color: var(--ink-soft);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .bento-mobile-actions button::before {
+    position: absolute;
+    inset: 3px 0;
+    z-index: -1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.8);
+    content: "";
+  }
+  .bento-mobile-actions .bento-mobile-open { color: #fff; }
+  .bento-mobile-actions .bento-mobile-open::before { border-color: var(--sidebar); background: var(--sidebar); }
+  .bento-mobile-actions button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-radius: 8px; }
+  .bento-card-details { display: none; }
+  .sprint-bento-card.is-expanded .bento-card-details {
+    display: flex;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .bento-card-details .bento-card-top > .bento-year-pill,
+  .bento-card-details .bento-card-top > .bento-title-wrap { display: none; }
+  .bento-card-details .bento-card-top { justify-content: flex-end; flex-wrap: wrap; }
+  .bento-card-details .bento-card-top--mock { padding-right: 28px; }
+  .bento-card-details .bento-top-controls { flex-wrap: wrap; }
 }

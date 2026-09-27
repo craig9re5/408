@@ -121,6 +121,13 @@ const mobileNavigation: { page: AppPage; label: string }[] = [
   { page: "schedule", label: "课表" },
 ];
 
+const sprintAreaLabels: Record<StudyArea, string> = {
+  "408": "408",
+  math: "数学",
+  english: "英语",
+  politics: "政治",
+};
+
 function MobileNavIcon({ page }: { page: AppPage }) {
   const paths: Record<AppPage, React.ReactNode> = {
     progress: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="m15 18 2 2 4-5" /></>,
@@ -1200,6 +1207,8 @@ export function StudyDashboard() {
 
   const sprintMockCompleted = useMemo(() => mockPapers.filter((p) => p.completed).length, [mockPapers]);
   const sprintMockTotal = mockPapers.length;
+  const featuredSprintPapers = effectiveSprintTab === "mock" ? mockPapers : effectiveSprintTab === "past" ? pastPapers : [...pastPapers, ...mockPapers];
+  const featuredSprintPaper = featuredSprintPapers.find((paper) => !paper.completed) ?? featuredSprintPapers[0] ?? null;
 
   const scoredPastPapers = useMemo(() => pastPapers.filter((p) => typeof p.score === "number" && p.score !== null), [pastPapers]);
   const sprintPastAvgScore = useMemo(() => {
@@ -2627,6 +2636,7 @@ export function StudyDashboard() {
                 key={page}
                 aria-current={activePage === page ? "page" : undefined}
                 onClick={() => navigateMobile(page)}
+                data-page={page}
               >
                 <span className="mobile-nav-symbol"><MobileNavIcon page={page} /></span>
                 <strong>{label}</strong>
@@ -3020,7 +3030,7 @@ export function StudyDashboard() {
                       <button
                         type="button"
                         className="cockpit-action-btn"
-                        onClick={() => setActivePage("schedule")}
+                        onClick={() => navigateMobile("schedule")}
                         title="查看/编辑全屏课表"
                       >
                         ⤢ 全屏/设置
@@ -3368,7 +3378,35 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "sprint" ? (
             <section className="page-view sprint-page" aria-labelledby="sprint-title">
-              <div className="sprint-mobile-area"><SprintAreaPicker activeArea={activeArea} onChange={selectSprintArea} /></div>
+              <div className="sprint-mobile-intro">
+                <div className="sprint-mobile-heading">
+                  <div>
+                    <span className="sprint-mobile-eyebrow">套卷冲刺</span>
+                    <h2>{featuredSprintPaper ? (featuredSprintPaper.completed ? "回顾练习" : "下一套练习") : "暂无试卷"}</h2>
+                  </div>
+                  <label className="sprint-mobile-subject">
+                    <span className="visually-hidden">选择冲刺科目</span>
+                    <span aria-hidden="true">{sprintAreaLabels[activeArea]} <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                    <select value={activeArea} onChange={(event) => selectSprintArea(event.target.value as StudyArea)}>
+                      {(["408", "math", "english", "politics"] as StudyArea[]).map((area) => <option key={area} value={area}>{sprintAreaLabels[area]}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <p className="sprint-mobile-summary">
+                  真题已完成 <strong>{sprintPastCompleted}/{sprintPastTotal}</strong> 套
+                  {sprintPastAvgScore !== "--" && <span> · 均分 {sprintPastAvgScore}</span>}
+                  {sprintMockTotal > 0 && <span> · 模拟 {sprintMockCompleted}/{sprintMockTotal}</span>}
+                </p>
+                {featuredSprintPaper && (
+                  <div className="sprint-mobile-focus">
+                    <span>{featuredSprintPaper.kind === "past" ? `${featuredSprintPaper.year} 年真题` : featuredSprintPaper.title}</span>
+                    <button type="button" onClick={() => setActivePaperQuestionModalId(featuredSprintPaper.id)} aria-label={`打开${featuredSprintPaper.title}答题卡`}>
+                      打开答题卡 <span aria-hidden="true">↗</span>
+                    </button>
+                  </div>
+                )}
+                <button type="button" className="sprint-mobile-library" onClick={() => setIsPaperNetdiskOpen(true)}>查看试卷文件 <span aria-hidden="true">›</span></button>
+              </div>
               <div className="sprint-macro-grid">
                 {/* Card 1: 历年统考真题 */}
                 <article className="sprint-stat-card sprint-stat-card--dual">
@@ -3564,10 +3602,48 @@ export function StudyDashboard() {
                 </div>
               </div>
 
+              <div className="sprint-mobile-controls">
+                {(activeArea === "408" || activeArea === "math") && (sprintMockTotal > 0 || effectiveSprintTab === "mock") && (
+                  <label className="sprint-mobile-type">
+                    <span className="visually-hidden">试卷类型</span>
+                    <select value={effectiveSprintTab} onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === "all" || value === "past" || value === "mock") setSprintTab(value);
+                    }}>
+                      <option value="all">全部试卷</option>
+                      <option value="past">历年真题</option>
+                      <option value="mock">模拟试题</option>
+                    </select>
+                  </label>
+                )}
+                {((activeArea === "english" || activeArea === "politics") || (sprintMockTotal === 0 && effectiveSprintTab !== "mock")) && <span className="sprint-mobile-type-label">真题 <small>{visiblePastPapers.length} 套</small></span>}
+                <details className="sprint-mobile-filter">
+                  <summary>筛选{(sprintStatusFilter !== "all" || pastPaperSortOrder !== "desc") && <span className="sprint-mobile-filter-dot"> · 已调整</span>}</summary>
+                  <div className="sprint-mobile-filter-panel">
+                    <label>完成状态
+                      <select value={sprintStatusFilter} onChange={(event) => {
+                        const value = event.target.value;
+                        if (value === "all" || value === "uncompleted" || value === "completed") setSprintStatusFilter(value);
+                      }}>
+                        <option value="all">全部</option>
+                        <option value="uncompleted">未完成</option>
+                        <option value="completed">已完成</option>
+                      </select>
+                    </label>
+                    <label>真题排序
+                      <select value={pastPaperSortOrder} onChange={(event) => setPastPaperSortOrder(event.target.value === "asc" ? "asc" : "desc")}>
+                        <option value="desc">最新优先</option>
+                        <option value="asc">最早优先</option>
+                      </select>
+                    </label>
+                  </div>
+                </details>
+              </div>
+
               <div className="sprint-bento-container">
                 {(effectiveSprintTab === "all" || effectiveSprintTab === "past") && (
                   <section className="sprint-section" aria-labelledby="past-bento-heading">
-                    <div className="sprint-section-header">
+                    <div className={`sprint-section-header${sprintMockTotal === 0 ? " sprint-section-header--mobile-collapsed" : ""}`}>
                       <div className="sprint-header-title-group">
                         <h3 id="past-bento-heading">真题</h3>
                         <span className="sprint-count-badge">{visiblePastPapers.length} 套</span>
@@ -3692,6 +3768,7 @@ export function StudyDashboard() {
             </section>
           ) : activePage === "schedule" ? (
             <section className="page-view schedule-page" aria-labelledby="schedule-title">
+              <button className="schedule-mobile-back" type="button" onClick={() => navigateMobile("today")}>‹ 返回今日</button>
               <ScheduleView
                 schedule={schedule}
                 todayStr={dateToday()}

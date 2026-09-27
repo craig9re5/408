@@ -200,7 +200,7 @@ input[type="number"] {
 .book-select__surface strong { min-width: 0; margin-right: auto; overflow: hidden; font-size: 14px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .book-select__surface svg { width: 14px; height: 14px; flex: 0 0 14px; color: #617177; }
 .book-select select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.book-select.book-select--hero, .sprint-mobile-area, .mobile-secondary-heading { display: none; }
+.book-select.book-select--hero, .sprint-mobile-intro, .sprint-mobile-controls, .mobile-secondary-heading, .schedule-mobile-back { display: none; }
 .topbar-more-wrap, .catalog-more { display: none; }
 .area-switcher { display: grid; width: 116px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; padding: 3px; border: 1px solid #d7d4cc; border-radius: 9px; background: rgba(251, 250, 246, 0.78); box-shadow: 0 4px 14px rgba(35, 42, 44, 0.035); }
 .area-switcher button { width: 100%; min-width: 0; padding: 6px 8px; border-radius: 6px; color: #7c8483; background: transparent; font-size: 10.5px; font-weight: 600; cursor: pointer; transition: color 0.16s, background 0.16s, box-shadow 0.16s; }
@@ -1253,7 +1253,8 @@ button.date-text.late,
   .topbar .study-switchers,
   .topbar .study-switchers.sprint-top-switchers { display: none; }
   .topbar-actions { min-width: 44px; flex: 0 0 44px; margin-left: 0; }
-  .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; }
+  .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mobile-navigation button[data-page="schedule"] { display: none; }
   .mobile-navigation button { min-height: 44px; }
   .mobile-navigation button strong { font-size: 13px; }
 
@@ -1283,12 +1284,7 @@ button.date-text.late,
   .book-select--hero select { z-index: 1; }
   .book-select--hero:focus-within { outline: 2px solid #507d8a; outline-offset: 2px; }
 
-  .sprint-mobile-area { display: block; margin: 0 0 14px; }
-  .sprint-mobile-area .area-switcher { width: 100%; height: 44px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; border: 0; background: #e9ede8; box-shadow: none; }
-  .sprint-mobile-area .area-switcher button { position: relative; isolation: isolate; min-height: 44px; padding: 0 2px; color: #596963; background: transparent; font-size: 12px; }
-  .sprint-mobile-area .area-switcher button::before { position: absolute; inset: 5px 2px; z-index: -1; border-radius: 7px; background: transparent; content: ""; }
-  .sprint-mobile-area .area-switcher button.active { color: var(--ink); background: transparent; box-shadow: none; }
-  .sprint-mobile-area .area-switcher button.active::before { background: #fffefa; box-shadow: 0 1px 3px rgba(35, 42, 44, .12); }
+  .schedule-mobile-back { display: inline-flex; min-height: 44px; align-items: center; margin-bottom: 8px; padding: 0 4px; color: var(--ink-soft); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
   .mobile-secondary-heading { display: block; margin: 7px 2px 16px; color: var(--ink); font: 600 21px/1.3 var(--serif); }
 
   .hero-grid { gap: 5px; margin-bottom: 16px; }

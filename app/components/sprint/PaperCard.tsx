@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import type { JournalEntry, PaperRecord, StudyArea } from "../../../shared/types.ts";
 import { bentoChoiceGroups } from "../../study-data.ts";
 import { EditableDate } from "../common/EditableDate.tsx";
@@ -44,6 +45,8 @@ export function PaperCard({
   onChangeCompletedAt,
   qSummary,
 }: PaperCardProps) {
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const mobileDetailsId = useId();
   const isMock = paper.kind === "mock";
   const choiceGroups = bentoChoiceGroups(paper.area);
 
@@ -95,7 +98,37 @@ export function PaperCard({
   }
 
   return (
-    <div className={`sprint-bento-card ${paper.completed ? "completed" : ""}`} key={paper.id}>
+    <div className={`sprint-bento-card ${paper.completed ? "completed" : ""} ${mobileExpanded ? "is-expanded" : ""}`} key={paper.id}>
+      <div className="bento-mobile-summary">
+        <div className="bento-mobile-heading">
+          <strong className="bento-mobile-title">{paper.title}</strong>
+          <span className={`bento-mobile-status ${paper.completed ? "is-complete" : ""}`}>
+            {paper.completed ? "已做" : "未做"}
+          </span>
+        </div>
+        <div className="bento-mobile-actions">
+          <button
+            type="button"
+            className="bento-mobile-open"
+            aria-label={`打开${paper.title}答题卡`}
+            onClick={() => onOpenAnswerSheet(paper.id)}
+          >
+            答题卡 <span aria-hidden="true">↗</span>
+          </button>
+          <button
+            type="button"
+            className="bento-mobile-more"
+            aria-label={`${mobileExpanded ? "收起操作" : "更多操作"}：${paper.title}`}
+            aria-expanded={mobileExpanded}
+            aria-controls={mobileDetailsId}
+            onClick={() => setMobileExpanded((expanded) => !expanded)}
+          >
+            {mobileExpanded ? "收起操作" : "更多操作"}
+            <span aria-hidden="true">{mobileExpanded ? "⌃" : "⌄"}</span>
+          </button>
+        </div>
+      </div>
+      <div className="bento-card-details" id={mobileDetailsId}>
       <div className={`bento-card-top ${isMock ? "bento-card-top--mock" : ""}`}>
         {isMock ? (
           <div className="bento-title-wrap" title={paper.title}>
@@ -111,6 +144,7 @@ export function PaperCard({
             <input
               type="number"
               className="bento-score-input"
+              aria-label={`${paper.title}分数`}
               min={0}
               max={maxScore}
               step={0.5}
@@ -281,6 +315,7 @@ export function PaperCard({
             <span className="record-label">记</span>
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
