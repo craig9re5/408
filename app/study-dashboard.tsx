@@ -484,6 +484,7 @@ export function StudyDashboard() {
     politics: "",
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
+  const [expandedSectionRows, setExpandedSectionRows] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(() => defaultProgress(false));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
   const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
@@ -538,6 +539,7 @@ export function StudyDashboard() {
   const [isShaking, setIsShaking] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
   const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(false);
+  const [filteredChapterOverrides, setFilteredChapterOverrides] = useState<Record<string, boolean>>({});
   const [planEditMode, setPlanEditMode] = useState(false);
   const [chapterPlanTarget, setChapterPlanTarget] = useState<"base" | "review">("base");
   const [chapterRanges, setChapterRanges] = useState<Record<string, { start: string; end: string; includeCompleted: boolean }>>({});
@@ -1045,7 +1047,9 @@ export function StudyDashboard() {
     .filter(({ visibleSections }) => visibleSections.length > 0);
   const filteredSectionCount = filteredChapters.reduce((count, { visibleSections }) => count + visibleSections.length, 0);
   const allExpanded = selectedBook.chapters.every((chapter) => expandedChapters.includes(chapter.id));
-  const effectiveAllExpanded = catalogFilter === "all" ? allExpanded : !filterChaptersCollapsed;
+  const effectiveAllExpanded = catalogFilter === "all"
+    ? allExpanded
+    : filteredChapters.every(({ chapter }) => filteredChapterOverrides[chapter.id] ?? !filterChaptersCollapsed);
 
   const projectTasks = useMemo(() => projectTaskEntries(activeArea), [activeArea]);
   const todayTasks = useMemo(() => [
@@ -1728,7 +1732,8 @@ export function StudyDashboard() {
     if (catalogFilter === "all") {
       setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id));
     } else {
-      setFilterChaptersCollapsed((value) => !value);
+      setFilterChaptersCollapsed(effectiveAllExpanded);
+      setFilteredChapterOverrides({});
     }
   }
 
@@ -2646,7 +2651,7 @@ export function StudyDashboard() {
         </header>
 
         <div className={`page-content page-content--${activePage}`}>
-          {feedbackMessage && <div className="feedback-notice feedback-notice--global"><span>{feedbackMessage}</span><button type="button" onClick={() => setFeedbackMessage("")}>×</button></div>}
+          {feedbackMessage && <div className="feedback-notice feedback-notice--global" role="status"><span>{feedbackMessage}</span><button type="button" aria-label="关闭提示" onClick={() => setFeedbackMessage("")}>×</button></div>}
           {(activePage === "analytics" || activePage === "settings") && <h2 className="mobile-secondary-heading" aria-hidden="true">{pageTitles[activePage]}</h2>}
           {activePage === "progress" ? <>
           <section className="hero-grid" aria-label="学习概览与节奏">
@@ -2732,7 +2737,7 @@ export function StudyDashboard() {
                     ["unreviewed", "未复习"],
                     ["overdue", "逾期"],
                   ] as [CatalogFilter, string][]).map(([value, label]) => (
-                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); }}><span>{label}</span></button>
+                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); setFilteredChapterOverrides({}); }}><span>{label}</span></button>
                   ))}
                 </div>
                 <button className={`catalog-action catalog-action--desktop${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
@@ -2775,7 +2780,9 @@ export function StudyDashboard() {
             <div className="chapter-grid">
               {filteredChapters.map(({ chapter, visibleSections }) => {
                 const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
-                const open = catalogFilter !== "all" ? !filterChaptersCollapsed : expandedChapters.includes(chapter.id);
+                const open = catalogFilter !== "all"
+                  ? filteredChapterOverrides[chapter.id] ?? !filterChaptersCollapsed
+                  : expandedChapters.includes(chapter.id);
                 const chapterCompleted = chapter.sections.filter((section) => isReviewPhase
                   ? progress[section.id]?.reviewed
                   : progress[section.id]?.learned).length;
@@ -2797,7 +2804,9 @@ export function StudyDashboard() {
                   <article className={`chapter-card ${chapterState}${open ? " open" : ""}`} key={chapter.id}>
                     <button
                       className="chapter-button"
-                      onClick={() => setExpandedChapters((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}
+                      onClick={() => catalogFilter !== "all"
+                        ? setFilteredChapterOverrides((current) => ({ ...current, [chapter.id]: !open }))
+                        : setExpandedChapters((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}
                       aria-expanded={open}
                     >
                       <span className="chapter-index">{String(chapterIndex + 1).padStart(2, "0")}</span>
@@ -2852,17 +2861,65 @@ export function StudyDashboard() {
                           const rowStatus = studyPlanStatus(state);
                           const isCurrent = currentSection?.id === section.id;
                           const sectionJournals = journalsBySection[section.id] ?? [];
+                          const detailsOpen = expandedSectionRows.includes(section.id);
+                          const nextPhase = !state?.learned ? "新学" : !state.reviewed ? "复习" : "完成";
+                          const needsLearnedDate = nextPhase === "复习" && !state?.learnedAt;
+                          const nextPlannedAt = !state?.learned ? state?.plannedAt : state.reviewed ? "" : state.reviewedPlannedAt;
+                          const nextPlanLabel = needsLearnedDate
+                            ? "新学完成日期未记录"
+                            : nextPhase === "完成"
+                            ? state?.reviewedAt ? `复习于 ${formatDateChinese(state.reviewedAt)}` : "新学和复习已完成"
+                            : `${nextPhase}计划${nextPlannedAt ? ` ${formatDateChinese(nextPlannedAt)}` : "未设置"}`;
                           return (
                             <div
-                              className={`section-row ${rowStatus}${isCurrent ? " is-current" : ""}`}
+                              className={`section-row ${rowStatus}${isCurrent ? " is-current" : ""}${detailsOpen && !planEditMode ? " is-detail-open" : ""}`}
                               id={`section-${section.id}`}
                               aria-current={isCurrent ? "step" : undefined}
                               key={section.id}
                             >
+                              <div className="section-mobile-summary">
+                                <button
+                                  type="button"
+                                  className="section-mobile-disclosure"
+                                  aria-expanded={detailsOpen}
+                                  aria-label={`${section.number} ${section.title}，${nextPhase === "完成" ? "已完成" : `待${nextPhase}`}，${nextPlanLabel}，${detailsOpen ? "收起详情" : "展开详情"}`}
+                                  onClick={() => setExpandedSectionRows((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id])}
+                                >
+                                  <span className="section-mobile-number">{section.number}</span>
+                                  <span className="section-mobile-copy">
+                                    <strong>{section.title}</strong>
+                                    <span className="section-mobile-meta">
+                                      {isCurrent && <em>当前</em>}
+                                      <span>{nextPhase === "完成" ? "已完成" : `待${nextPhase}`}</span>
+                                      <span aria-hidden="true">·</span>
+                                      <span>{nextPlanLabel}</span>
+                                      {sectionJournals.length > 0 && <span>· 日志 {sectionJournals.length}</span>}
+                                    </span>
+                                  </span>
+                                  <span className="section-mobile-chevron" aria-hidden="true" />
+                                </button>
+                                <div className="section-mobile-primary">
+                                  {nextPhase === "完成" ? (
+                                    <span className="section-mobile-complete" aria-label="新学与复习均已完成">✓</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      aria-label={needsLearnedDate
+                                        ? `展开 ${section.number} ${section.title}，补记新学完成日期`
+                                        : `标记 ${section.number} ${section.title} ${nextPhase}完成`}
+                                      onClick={() => needsLearnedDate
+                                        ? setExpandedSectionRows((current) => current.includes(section.id) ? current : [...current, section.id])
+                                        : nextPhase === "新学" ? toggleLearned(section.id, true) : toggleReviewed(section.id, true)}
+                                    >
+                                      <b>{needsLearnedDate ? "补记日期" : `完成${nextPhase}`}</b>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                               <div className="section-name">
                                 <span className="section-num">{section.number}</span>
                                 <strong title={`${section.number} ${section.title}`}>{section.title}</strong>
-                                {isCurrent && <i title="当前新学" />}
+                                {isCurrent && <i title={currentSectionLabel} />}
                                 <div className="section-actions">
                                   {!state?.learned && !isCurrent && (
                                     <button
@@ -2902,6 +2959,7 @@ export function StudyDashboard() {
                                   >
                                     <span className="record-plus">+</span>
                                     <span className="record-label">记</span>
+                                    <span className="record-label-mobile">写日志</span>
                                   </button>
                                 </div>
                               </div>
