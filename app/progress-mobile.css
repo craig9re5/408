@@ -12,24 +12,10 @@
 }
 
 @media (max-width: 768px) {
-  .chapter-review-bar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px 8px;
-    padding: 5px 9px;
-    font-size: 10.5px;
-  }
-
-  .chapter-review-plan {
-    justify-content: space-between;
-    gap: 4px;
-    margin-right: 0;
-  }
-
   .chapter-review-check,
-  .chapter-review-bar .date-text,
-  .chapter-review-bar .date-editor,
-  .chapter-review-bar input[type="date"] {
+  .chapter-review-inline .date-text,
+  .chapter-review-inline .date-editor,
+  .chapter-review-inline input[type="date"] {
     min-height: 44px;
   }
 
@@ -38,10 +24,7 @@
   }
 
   .chapter-review-date {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-    padding-top: 3px;
-    border-top: 1px solid #deebe6;
+    gap: 4px;
   }
 
   .section-table .section-row {
@@ -281,17 +264,6 @@
   .section-row.is-detail-open .section-name {
     align-items: flex-start;
     justify-content: flex-start;
-  }
-}
-
-@media (max-width: 600px) {
-  .chapter-review-bar {
-    margin: 0;
-    padding: 4px 12px 6px 14px;
-    border: 0;
-    border-top: 1px solid #e4ece6;
-    border-radius: 0;
-    background: #f7faf6;
   }
 }
 

@@ -3071,42 +3071,33 @@ export function StudyDashboard() {
 
                 return (
                   <article className={`chapter-card${chapter.id === currentChapterId ? " current" : ""}${chapterOverdue ? " overdue" : ""}${chapterComplete ? " completed" : ""}${open ? " open" : ""}`} id={`chapter-${chapter.id}`} key={chapter.id}>
-                    <button
-                      className="chapter-button"
-                      onClick={() => toggleChapterExpansion(chapter.id, open)}
-                      aria-expanded={open}
-                    >
-                      <span className="chapter-index" aria-hidden="true">{String(chapterIndex + 1).padStart(2, "0")}</span>
-                      <span className="chapter-name">
-                        <small>第{chapter.number}章</small>
-                        <strong>{chapter.title}</strong>
-                        <span className="chapter-meta">
-                          {chapter.id === currentChapterId && <span className="chapter-state-marker current">当前章</span>}
-                          {chapterOverdue && <span className="chapter-state-marker overdue">逾期</span>}
-                          {!review.allLearned && baseDates.length > 0 && <em>{formatPlanRange(baseDates, "基础")}</em>}
-                        </span>
-                      </span>
-                      <span
-                        className={`chapter-count${chapterComplete ? " complete" : ""}`}
-                        aria-label={`本章新学 ${review.learnedCount}/${review.sectionCount} 小节${baseDateLabel ? `，${baseDateLabel}` : ""}；${review.reviewed ? "已复习" : "未复习"}${reviewDateLabel ? `，${reviewDateLabel}` : ""}`}
+                    <div className="chapter-header">
+                      <button
+                        className="chapter-button"
+                        type="button"
+                        onClick={() => toggleChapterExpansion(chapter.id, open)}
+                        aria-expanded={open}
                       >
-                        <span className="chapter-count-group">
+                        <span className="chapter-index" aria-hidden="true">{String(chapterIndex + 1).padStart(2, "0")}</span>
+                        <span className="chapter-name">
+                          <small>第{chapter.number}章</small>
+                          <strong>{chapter.title}</strong>
+                          <span className="chapter-meta">
+                            {chapter.id === currentChapterId && <span className="chapter-state-marker current">当前章</span>}
+                            {chapterOverdue && <span className="chapter-state-marker overdue">逾期</span>}
+                            {!review.allLearned && baseDates.length > 0 && <em>{formatPlanRange(baseDates, "基础")}</em>}
+                          </span>
+                        </span>
+                      </button>
+
+                      <div className="chapter-progress">
+                        <span className="chapter-count-group" aria-label={`本章新学 ${review.learnedCount}/${review.sectionCount} 小节${baseDateLabel ? `，${baseDateLabel}` : ""}`}>
                           <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
                           {baseDateLabel && <span className={`chapter-count-date${overdueBaseDate && !learnedCompletedAt ? " overdue" : ""}`}>{baseDateLabel}</span>}
                         </span>
-                        <span className="chapter-count-group">
-                          <span className="chapter-count-review">{review.reviewed ? "已复习" : review.canReview ? "待复习" : "未复习"}</span>
-                          {reviewDateLabel && <span className={`chapter-count-date${reviewScheduleStatus === "overdue" ? " overdue" : ""}`}>{reviewDateLabel}</span>}
-                        </span>
-                      </span>
-                      <span className="chevron" aria-hidden="true" />
-                    </button>
-
-                    {open && (
-                      <>
-                        <div className="chapter-review-bar">
+                        {open ? <div className="chapter-review-inline">
                           <div className="chapter-review-plan">
-                            <span>本章复习计划</span>
+                            <span>复习计划</span>
                             <EditableDate
                               value={review.reviewedPlannedAt}
                               emptyLabel="未设置"
@@ -3115,15 +3106,16 @@ export function StudyDashboard() {
                               onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
                             />
                           </div>
+                          <span className="chapter-review-arrow" aria-hidden="true">→</span>
                           <label className="chapter-review-check" title={!review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
                             <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
                               aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}
                               onChange={(event) => toggleChapterReviewed(chapter, event.target.checked)} />
-                            <span /><b>{review.reviewed ? "本章已复习" : "完成本章复习"}</b>
+                            <span /><b>{review.reviewed ? "已复习" : "完成复习"}</b>
                           </label>
                           {review.reviewed && (
                             <div className="chapter-review-date">
-                              <span>完成日期</span>
+                              <span>完成</span>
                               {review.canReview ? (
                                 <EditableDate value={review.reviewedAt} emptyLabel="未记录"
                                   ariaLabel={`第${chapter.number}章 ${chapter.title} 复习完成日期`}
@@ -3148,7 +3140,25 @@ export function StudyDashboard() {
                               )}
                             </div>
                           )}
-                        </div>
+                        </div> : (
+                          <span className={`chapter-count-group chapter-review-summary${chapterComplete ? " complete" : ""}`} aria-label={`${review.reviewed ? "已复习" : "未复习"}${reviewDateLabel ? `，${reviewDateLabel}` : ""}`}>
+                            <span className="chapter-count-review">{review.reviewed ? "已复习" : review.canReview ? "待复习" : "未复习"}</span>
+                            {reviewDateLabel && <span className={`chapter-count-date${reviewScheduleStatus === "overdue" ? " overdue" : ""}`}>{reviewDateLabel}</span>}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        className="chapter-expand-button"
+                        type="button"
+                        onClick={() => toggleChapterExpansion(chapter.id, open)}
+                        aria-label={`${open ? "收起" : "展开"}第${chapter.number}章 ${chapter.title}`}
+                        aria-expanded={open}
+                      ><span className="chevron" aria-hidden="true" /></button>
+                    </div>
+
+                    {open && (
+                      <>
 
                       {planEditMode && (
                         <div className="chapter-plan-editor">
