@@ -508,6 +508,7 @@ export function StudyDashboard() {
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [collapsedCurrentChapterId, setCollapsedCurrentChapterId] = useState<string | null>(null);
   const [expandedSectionRows, setExpandedSectionRows] = useState<string[]>([]);
+  const [expandedChapterReviewControls, setExpandedChapterReviewControls] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(() => defaultProgress(false));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
   const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
@@ -2896,6 +2897,26 @@ export function StudyDashboard() {
           {feedbackMessage && <div className="feedback-notice feedback-notice--global" role="status"><span>{feedbackMessage}</span><button type="button" aria-label="关闭提示" onClick={() => setFeedbackMessage("")}>×</button></div>}
           {(activePage === "analytics" || activePage === "settings") && <h2 className="mobile-secondary-heading" aria-hidden="true">{pageTitles[activePage]}</h2>}
           {activePage === "progress" ? <>
+          <section className="mobile-progress-overview" aria-label="学习概览与本周节奏">
+            <div className="mobile-progress-overview-head">
+              <SubjectPicker selectedBook={selectedBook} onChange={selectBookAcrossAreas} className="book-select--mobile-overview" />
+              <span className={`mobile-progress-percent${activeProgressPercent === 100 ? " complete" : ""}`}>{activeProgressPercent}%</span>
+            </div>
+            <details className="mobile-week-disclosure">
+              <summary>本周 {weeklyDaysCount} 天学习 · {weeklySectionCount} 项完成<span>查看节奏</span></summary>
+              <div className="mobile-week-content">
+                <p>新学 {learnedCount}/{selectedSections.length} 小节 · 复习 {reviewedCount}/{selectedBook.chapters.length} 章</p>
+                <div className="week-dots" aria-label="本周打卡记录">
+                  {weekDots.map((day) => (
+                    <div key={day.dateStr}>
+                      <span className={`dot ${day.isDone ? "dot--done" : ""} ${day.isToday ? "dot--today" : ""}`} title={`${day.dateStr} ${day.isDone ? "已打卡" : "未打卡"}`} />
+                      <small>{day.label}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </section>
           <section className="hero-grid" aria-label="学习概览与节奏">
             <article className="hero-card progress-card">
               <div className="card-heading">
@@ -2983,6 +3004,15 @@ export function StudyDashboard() {
             <div className="catalog-heading">
               <div><h2>目录</h2><span>{catalogFilter === "unreviewed" ? `${filteredChapters.length} 章待复习` : `${filteredChapters.length} 章 · ${filteredSectionCount} 小节`}{planEditMode ? " · 编辑中" : ""}</span></div>
               <div className="catalog-tools">
+                <label className="catalog-filter-mobile">
+                  <span className="visually-hidden">筛选目录</span>
+                  <select value={catalogFilter} onChange={(event) => { setCatalogFilter(event.target.value as CatalogFilter); setFilterChaptersCollapsed(true); setFilteredChapterOverrides({}); }}>
+                    <option value="all">全部</option>
+                    <option value="unlearned">未新学</option>
+                    <option value="unreviewed">未复习</option>
+                    <option value="overdue">逾期</option>
+                  </select>
+                </label>
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
                     ["all", "全部"],
@@ -3087,6 +3117,9 @@ export function StudyDashboard() {
                             {chapterOverdue && <span className="chapter-state-marker overdue">逾期</span>}
                             {!review.allLearned && baseDates.length > 0 && <em>{formatPlanRange(baseDates, "基础")}</em>}
                           </span>
+                          <span className="chapter-mobile-meta">
+                            {chapter.id === currentChapterId && "当前章 · "}新学 {review.learnedCount}/{review.sectionCount} · {review.reviewed ? `已复习${review.reviewedAt ? ` ${formatDateShort(review.reviewedAt)}` : ""}` : review.canReview ? "待复习" : "未复习"}
+                          </span>
                         </span>
                       </button>
 
@@ -3095,7 +3128,9 @@ export function StudyDashboard() {
                           <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
                           {baseDateLabel && <span className={`chapter-count-date${overdueBaseDate && !learnedCompletedAt ? " overdue" : ""}`}>{baseDateLabel}</span>}
                         </span>
-                        {open ? <div className="chapter-review-inline">
+                        {open ? <>
+                          <button className="chapter-review-mobile-toggle" type="button" aria-expanded={expandedChapterReviewControls.includes(chapter.id)} aria-controls={`chapter-review-controls-${chapter.id}`} onClick={() => setExpandedChapterReviewControls((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}>复习记录与计划<span aria-hidden="true">›</span></button>
+                          <div className={`chapter-review-inline${expandedChapterReviewControls.includes(chapter.id) ? " mobile-open" : ""}`} id={`chapter-review-controls-${chapter.id}`}>
                           <div className="chapter-review-plan">
                             <span>复习计划</span>
                             <EditableDate
@@ -3140,7 +3175,8 @@ export function StudyDashboard() {
                               )}
                             </div>
                           )}
-                        </div> : (
+                          </div>
+                        </> : (
                           <span className={`chapter-count-group chapter-review-summary${chapterComplete ? " complete" : ""}`} aria-label={`${review.reviewed ? "已复习" : "未复习"}${reviewDateLabel ? `，${reviewDateLabel}` : ""}`}>
                             <span className="chapter-count-review">{review.reviewed ? "已复习" : review.canReview ? "待复习" : "未复习"}</span>
                             {reviewDateLabel && <span className={`chapter-count-date${reviewScheduleStatus === "overdue" ? " overdue" : ""}`}>{reviewDateLabel}</span>}
@@ -3215,7 +3251,7 @@ export function StudyDashboard() {
                                 </button>
                                 <div className="section-mobile-primary">
                                   {state?.learned ? (
-                                    <span className="section-mobile-complete" aria-label="新学已完成">✓</span>
+                                    <span className="section-mobile-complete">已新学</span>
                                   ) : (
                                     <button
                                       type="button"
