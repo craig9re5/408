@@ -506,6 +506,7 @@ export function StudyDashboard() {
     };
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
+  const [collapsedCurrentChapterId, setCollapsedCurrentChapterId] = useState<string | null>(null);
   const [expandedSectionRows, setExpandedSectionRows] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(() => defaultProgress(false));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
@@ -560,7 +561,7 @@ export function StudyDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
-  const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(false);
+  const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(true);
   const [filteredChapterOverrides, setFilteredChapterOverrides] = useState<Record<string, boolean>>({});
   const [planEditMode, setPlanEditMode] = useState(false);
   const [chapterRanges, setChapterRanges] = useState<Record<string, { start: string; end: string; includeCompleted: boolean }>>({});
@@ -1114,7 +1115,7 @@ export function StudyDashboard() {
   function jumpToCurrentSection() {
     if (!currentSection || !currentChapterId) return;
     setCatalogFilter("all");
-    setExpandedChapters((current) => current.includes(currentChapterId) ? current : [...current, currentChapterId]);
+    setCollapsedCurrentChapterId(null);
     setScrollTargetSectionId(isReviewPhase && currentChapterId ? `chapter:${currentChapterId}` : currentSection.id);
   }
 
@@ -1162,7 +1163,8 @@ export function StudyDashboard() {
     })
     .filter(({ visibleSections }) => visibleSections.length > 0);
   const filteredSectionCount = filteredChapters.reduce((count, { visibleSections }) => count + visibleSections.length, 0);
-  const allExpanded = selectedBook.chapters.every((chapter) => expandedChapters.includes(chapter.id));
+  const allExpanded = selectedBook.chapters.every((chapter) =>
+    expandedChapters.includes(chapter.id) || (chapter.id === currentChapterId && collapsedCurrentChapterId !== chapter.id));
   const effectiveAllExpanded = catalogFilter === "all"
     ? allExpanded
     : filteredChapters.every(({ chapter }) => filteredChapterOverrides[chapter.id] ?? !filterChaptersCollapsed);
@@ -1844,6 +1846,7 @@ export function StudyDashboard() {
       return next;
     });
     setExpandedChapters([]);
+    setCollapsedCurrentChapterId(null);
     setCatalogFilter("all");
   }
 
@@ -1858,6 +1861,7 @@ export function StudyDashboard() {
       return next;
     });
     setExpandedChapters([]);
+    setCollapsedCurrentChapterId(null);
     setCatalogFilter("all");
   }
 
@@ -1877,10 +1881,26 @@ export function StudyDashboard() {
   function toggleCatalogExpansion() {
     if (catalogFilter === "all") {
       setExpandedChapters(allExpanded ? [] : selectedBook.chapters.map((chapter) => chapter.id));
+      setCollapsedCurrentChapterId(allExpanded ? currentChapterId ?? null : null);
     } else {
       setFilterChaptersCollapsed(effectiveAllExpanded);
       setFilteredChapterOverrides({});
     }
+  }
+
+  function toggleChapterExpansion(chapterId: string, open: boolean) {
+    if (catalogFilter !== "all") {
+      setFilteredChapterOverrides((current) => ({ ...current, [chapterId]: !open }));
+      return;
+    }
+    if (chapterId === currentChapterId) {
+      setExpandedChapters((current) => current.filter((id) => id !== chapterId));
+      setCollapsedCurrentChapterId(open ? chapterId : null);
+      return;
+    }
+    setExpandedChapters((current) => current.includes(chapterId)
+      ? current.filter((id) => id !== chapterId)
+      : [...current, chapterId]);
   }
 
   function clearLearned(sectionId: string) {
@@ -2913,7 +2933,7 @@ export function StudyDashboard() {
                 ) : (
                   <p>{currentSectionLabel}：<strong>{phaseCompleteLabel}</strong></p>
                 )}
-                {hasDifferentGlobalRecent && globalRecentBook && globalRecentSection && (
+                {!currentSection && hasDifferentGlobalRecent && globalRecentBook && globalRecentSection && (
                   <button
                     className="current-learning-link"
                     type="button"
@@ -2970,7 +2990,7 @@ export function StudyDashboard() {
                     ["unreviewed", "未复习"],
                     ["overdue", "逾期"],
                   ] as [CatalogFilter, string][]).map(([value, label]) => (
-                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(false); setFilteredChapterOverrides({}); }}><span>{label}</span></button>
+                    <button className={catalogFilter === value ? "active" : ""} type="button" key={value} aria-pressed={catalogFilter === value} onClick={() => { setCatalogFilter(value); setFilterChaptersCollapsed(true); setFilteredChapterOverrides({}); }}><span>{label}</span></button>
                   ))}
                 </div>
                 <button className={`catalog-action catalog-action--desktop${planEditMode ? " active" : ""}`} type="button" onClick={() => setPlanEditMode((value) => !value)}>{planEditMode ? "完成编辑" : "编辑计划"}</button>
@@ -3015,15 +3035,34 @@ export function StudyDashboard() {
                 const chapterIndex = selectedBook.chapters.findIndex((item) => item.id === chapter.id);
                 const open = catalogFilter !== "all"
                   ? filteredChapterOverrides[chapter.id] ?? !filterChaptersCollapsed
-                  : expandedChapters.includes(chapter.id);
+                  : expandedChapters.includes(chapter.id) || (chapter.id === currentChapterId && collapsedCurrentChapterId !== chapter.id);
                 const review = summarizeChapterReview(chapter, progress);
                 const reviewScheduleStatus = chapterReviewPlanStatus(chapter, progress, dateToday());
                 const chapterComplete = review.allLearned && review.reviewed;
                 const chapterOverdue = chapter.sections.some((section) => basePlanStatus(progress[section.id]) === "overdue")
                   || reviewScheduleStatus === "overdue";
-                const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
                 const baseDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
+                const overdueBaseDate = chapter.sections
+                  .filter((section) => basePlanStatus(progress[section.id]) === "overdue")
+                  .map((section) => progress[section.id]?.plannedAt ?? "")
+                  .filter(Boolean).sort()[0];
+                const nextBaseDate = chapter.sections
+                  .filter((section) => !progress[section.id]?.learned)
+                  .map((section) => progress[section.id]?.plannedAt ?? "")
+                  .filter(Boolean).sort()[0];
                 const learnedCompletedAt = chapterCompletionDate(chapter.sections, progress, "learned");
+                const baseDateLabel = learnedCompletedAt
+                  ? `完成 ${formatDateShort(learnedCompletedAt)}`
+                  : overdueBaseDate
+                    ? `逾期 ${formatDateShort(overdueBaseDate)}`
+                    : nextBaseDate
+                      ? `计划 ${formatDateShort(nextBaseDate)}`
+                      : "";
+                const reviewDateLabel = review.reviewedAt
+                  ? `完成 ${formatDateShort(review.reviewedAt)}`
+                  : review.reviewedPlannedAt
+                    ? `${reviewScheduleStatus === "overdue" ? "逾期" : "计划"} ${formatDateShort(review.reviewedPlannedAt)}`
+                    : "";
                 const range = chapterRanges[chapter.id] ?? {
                   start: baseDates[0] ?? "",
                   end: baseDates[baseDates.length - 1] ?? baseDates[0] ?? "",
@@ -3031,87 +3070,86 @@ export function StudyDashboard() {
                 };
 
                 return (
-                  <article className={`chapter-card ${chapterState}${open ? " open" : ""}`} id={`chapter-${chapter.id}`} key={chapter.id}>
+                  <article className={`chapter-card${chapter.id === currentChapterId ? " current" : ""}${chapterOverdue ? " overdue" : ""}${chapterComplete ? " completed" : ""}${open ? " open" : ""}`} id={`chapter-${chapter.id}`} key={chapter.id}>
                     <button
                       className="chapter-button"
-                      onClick={() => catalogFilter !== "all"
-                        ? setFilteredChapterOverrides((current) => ({ ...current, [chapter.id]: !open }))
-                        : setExpandedChapters((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}
+                      onClick={() => toggleChapterExpansion(chapter.id, open)}
                       aria-expanded={open}
                     >
-                      <span className="chapter-index">{String(chapterIndex + 1).padStart(2, "0")}</span>
+                      <span className="chapter-index" aria-hidden="true">{String(chapterIndex + 1).padStart(2, "0")}</span>
                       <span className="chapter-name">
                         <small>第{chapter.number}章</small>
                         <strong>{chapter.title}</strong>
                         <span className="chapter-meta">
-                          <em>{formatPlanRange(baseDates, "基础")}</em>
-                          {review.reviewedPlannedAt && <em>强化 {formatDateChinese(review.reviewedPlannedAt)}</em>}
-                          {(learnedCompletedAt || review.reviewedAt) && (
-                            <span className="chapter-completion-dates">
-                              {learnedCompletedAt && <span className="chapter-completion-date learned">基础 {formatDateChinese(learnedCompletedAt)}</span>}
-                              {review.reviewedAt && <span className="chapter-completion-date reviewed">强化 {formatDateChinese(review.reviewedAt)}</span>}
-                            </span>
-                          )}
+                          {chapter.id === currentChapterId && <span className="chapter-state-marker current">当前章</span>}
+                          {chapterOverdue && <span className="chapter-state-marker overdue">逾期</span>}
+                          {!review.allLearned && baseDates.length > 0 && <em>{formatPlanRange(baseDates, "基础")}</em>}
                         </span>
                       </span>
                       <span
                         className={`chapter-count${chapterComplete ? " complete" : ""}`}
-                        aria-label={`本章新学 ${review.learnedCount}/${review.sectionCount} 小节，${review.reviewed ? "已复习" : "未复习"}`}
+                        aria-label={`本章新学 ${review.learnedCount}/${review.sectionCount} 小节${baseDateLabel ? `，${baseDateLabel}` : ""}；${review.reviewed ? "已复习" : "未复习"}${reviewDateLabel ? `，${reviewDateLabel}` : ""}`}
                       >
-                        <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
-                        <span className="chapter-count-review">复习 {review.reviewed ? "✓" : "—"}</span>
+                        <span className="chapter-count-group">
+                          <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
+                          {baseDateLabel && <span className={`chapter-count-date${overdueBaseDate && !learnedCompletedAt ? " overdue" : ""}`}>{baseDateLabel}</span>}
+                        </span>
+                        <span className="chapter-count-group">
+                          <span className="chapter-count-review">{review.reviewed ? "已复习" : review.canReview ? "待复习" : "未复习"}</span>
+                          {reviewDateLabel && <span className={`chapter-count-date${reviewScheduleStatus === "overdue" ? " overdue" : ""}`}>{reviewDateLabel}</span>}
+                        </span>
                       </span>
                       <span className="chevron" aria-hidden="true" />
                     </button>
 
-                    <div className="chapter-review-bar">
-                      <div className="chapter-review-plan">
-                        <span>本章复习计划</span>
-                        <EditableDate
-                          value={review.reviewedPlannedAt}
-                          emptyLabel="未设置"
-                          tone={planTone(reviewScheduleStatus === "today" ? "due_today" : reviewScheduleStatus)}
-                          ariaLabel={`第${chapter.number}章 ${chapter.title} 复习计划日期`}
-                          onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
-                        />
-                      </div>
-                      <label className="chapter-review-check" title={!review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
-                        <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
-                          aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}
-                          onChange={(event) => toggleChapterReviewed(chapter, event.target.checked)} />
-                        <span /><b>{review.reviewed ? "本章已复习" : "完成本章复习"}</b>
-                      </label>
-                      {review.reviewed && (
-                        <div className="chapter-review-date">
-                          <span>完成日期</span>
-                          {review.canReview ? (
-                            <EditableDate value={review.reviewedAt} emptyLabel="未记录"
-                              ariaLabel={`第${chapter.number}章 ${chapter.title} 复习完成日期`}
-                              validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : null}
-                              onError={setFeedbackMessage}
-                              onChange={(value) => toggleChapterReviewed(chapter, true, value)} />
-                          ) : (
-                            <span title="补齐本章全部小节的新学记录后可修改复习日期">{review.reviewedAt ? formatDateChinese(review.reviewedAt) : "未记录"}</span>
+                    {open && (
+                      <>
+                        <div className="chapter-review-bar">
+                          <div className="chapter-review-plan">
+                            <span>本章复习计划</span>
+                            <EditableDate
+                              value={review.reviewedPlannedAt}
+                              emptyLabel="未设置"
+                              tone={planTone(reviewScheduleStatus === "today" ? "due_today" : reviewScheduleStatus)}
+                              ariaLabel={`第${chapter.number}章 ${chapter.title} 复习计划日期`}
+                              onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
+                            />
+                          </div>
+                          <label className="chapter-review-check" title={!review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
+                            <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
+                              aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}
+                              onChange={(event) => toggleChapterReviewed(chapter, event.target.checked)} />
+                            <span /><b>{review.reviewed ? "本章已复习" : "完成本章复习"}</b>
+                          </label>
+                          {review.reviewed && (
+                            <div className="chapter-review-date">
+                              <span>完成日期</span>
+                              {review.canReview ? (
+                                <EditableDate value={review.reviewedAt} emptyLabel="未记录"
+                                  ariaLabel={`第${chapter.number}章 ${chapter.title} 复习完成日期`}
+                                  validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : null}
+                                  onError={setFeedbackMessage}
+                                  onChange={(value) => toggleChapterReviewed(chapter, true, value)} />
+                              ) : (
+                                <span title="补齐本章全部小节的新学记录后可修改复习日期">{review.reviewedAt ? formatDateChinese(review.reviewedAt) : "未记录"}</span>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                      {planEditMode && chapter.sections[0] && (
-                        <div className="shift-anchor chapter-review-shift">
-                          <button type="button" onClick={() => setShiftSectionId(shiftSectionId === chapter.id ? null : chapter.id)}>移动复习计划</button>
-                          {shiftSectionId === chapter.id && (
-                            <div className="shift-popover">
-                              <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="复习计划移动范围"><option value="chapter">本章</option><option value="subject">本章及后续章节</option></select>
-                              {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, days, "review")}>{days > 0 ? "+" : ""}{days}天</button>)}
-                              <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
-                              <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, shiftDays, "review")}>确定</button>
+                          {planEditMode && chapter.sections[0] && (
+                            <div className="shift-anchor chapter-review-shift">
+                              <button type="button" onClick={() => setShiftSectionId(shiftSectionId === chapter.id ? null : chapter.id)}>移动复习计划</button>
+                              {shiftSectionId === chapter.id && (
+                                <div className="shift-popover">
+                                  <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="复习计划移动范围"><option value="chapter">本章</option><option value="subject">本章及后续章节</option></select>
+                                  {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, days, "review")}>{days > 0 ? "+" : ""}{days}天</button>)}
+                                  <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
+                                  <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, shiftDays, "review")}>确定</button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
 
-                    {open && (
-                      <>
                       {planEditMode && (
                         <div className="chapter-plan-editor">
                           <span>新学计划区间</span>
