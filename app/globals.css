@@ -687,7 +687,7 @@ input[type="number"] {
   display: grid;
   width: 100%;
   min-height: 68px;
-  grid-template-columns: 43px minmax(220px, 1fr) 82px 22px;
+  grid-template-columns: 43px minmax(0, 1fr) minmax(96px, max-content) 22px;
   align-items: center;
   gap: 15px;
   padding: 12px 20px 12px 23px;
@@ -708,11 +708,32 @@ input[type="number"] {
 .chapter-completion-date::before { width: 4px; height: 4px; flex: 0 0 auto; border-radius: 50%; background: currentColor; content: ""; }
 .chapter-completion-date.learned { color: #52745b; }
 .chapter-completion-date.reviewed { color: #426f7f; }
-.chapter-count { color: #8c9290; font-size: 11px; text-align: right; }
+.chapter-count { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; color: #8c9290; font-size: 11px; text-align: right; white-space: nowrap; }
 .chapter-count i { display: inline-grid; width: 17px; height: 17px; margin-right: 7px; place-items: center; border-radius: 50%; color: #fff; background: var(--green); font-size: 9.5px; font-style: normal; }
 .chapter-count.complete { color: #5e8066; }
 .chevron { width: 8px; height: 8px; border-right: 1.5px solid #7f8989; border-bottom: 1.5px solid #7f8989; transform: rotate(45deg) translate(-2px, -2px); transition: transform 0.18s; }
 .chapter-card.open .chevron { transform: rotate(225deg) translate(-1px, -1px); }
+
+.chapter-review-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 16px; margin: 0 20px 10px 69px; padding: 8px 12px; border: 1px solid #dce7e5; border-radius: 10px; color: #456673; background: #f2f7f6; font-size: 11px; }
+.chapter-review-plan, .chapter-review-date { display: inline-flex; min-width: 0; align-items: center; gap: 6px; white-space: nowrap; }
+.chapter-review-plan { margin-right: auto; }
+.chapter-review-date { color: #4f765b; }
+.chapter-review-bar .date-text { min-height: 32px; padding: 5px 8px; border: 1px solid #cad8d5; border-radius: 7px; background: #fff; color: #356d80; font-variant-numeric: tabular-nums; text-align: center; }
+.chapter-review-bar .date-text:hover { border-color: #85a8b0; }
+.chapter-review-bar .date-text:focus-visible, .chapter-review-bar .date-editor:focus-visible, .chapter-review-bar input[type="date"]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.chapter-review-bar .date-editor, .chapter-review-bar input[type="date"] { width: 108px; min-height: 34px; padding: 0 7px; border: 1px solid #cad8d5; border-radius: 7px; background: #fff; color: var(--ink); font-size: 11px; }
+.chapter-review-check { position: relative; display: inline-flex; min-height: 34px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #b9d2c6; border-radius: 8px; color: #3f6c54; background: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.chapter-review-check:has(input:checked) { border-color: #94bba2; background: #eaf4ec; }
+.chapter-review-check:has(input:disabled) { opacity: .62; cursor: not-allowed; }
+.chapter-review-check:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.chapter-review-check input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.chapter-review-check > span { position: relative; display: inline-block; width: 17px; height: 17px; flex: 0 0 auto; border: 1px solid #b8cfc3; border-radius: 5px; background: #fff; }
+.chapter-review-check input:checked + span { border-color: var(--green); background: var(--green); }
+.chapter-review-check input:checked + span::after { position: absolute; top: 2px; left: 5px; width: 5px; height: 8px; border-right: 1.5px solid #fff; border-bottom: 1.5px solid #fff; content: ""; transform: rotate(42deg); }
+.chapter-review-check b { font-weight: 600; }
+.chapter-review-bar .chapter-review-shift { position: relative; top: auto; right: auto; margin-left: auto; transform: none; }
+.chapter-review-bar .chapter-review-shift > button { min-height: 34px; padding: 0 10px; border: 1px solid #cad8d5; opacity: 1; color: #456673; background: #fff; }
+.chapter-card:has(.chapter-review-shift .shift-popover) { z-index: 5; overflow: visible; }
 
 .chapter-plan-editor { display: flex; align-items: center; gap: 10px; margin: 0 20px 10px 69px; padding: 10px 14px; border: 1px solid #e2ded5; border-radius: 10px; background: #faf8f2; color: #596460; font-size: 11px; }
 .chapter-plan-editor input[type="date"] { width: 126px; height: 30px; padding: 0 8px; border: 1px solid #d0d5d0; border-radius: 6px; background: #fff; font-size: 11px; color: var(--ink); }
@@ -724,11 +745,11 @@ input[type="number"] {
 .chapter-plan-phase-toggle button.active { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .section-table { margin: 0 20px 14px 69px; border-top: 1px solid var(--line-soft); animation: reveal 0.2s ease-out; }
 .section-table.editing .check-with-date { opacity: .55; }
-.section-head, .section-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 96px 76px 96px; align-items: center; column-gap: 12px; }
+.section-head, .section-row { display: grid; grid-template-columns: minmax(0, 1fr) 116px 132px; align-items: center; column-gap: 12px; }
 .section-head { min-height: 32px; color: #54605c; font-size: 10.5px; font-weight: 600; }
 .section-head span:not(:first-child) { padding-left: 1px; }
 .section-plan { display: flex; align-items: center; min-width: 0; }
-.section-plan .inline-plan-input { width: 72px; height: 26px; padding: 0 3px; font-size: 10px; }
+.section-plan .inline-plan-input { width: 104px; height: 26px; padding: 0 3px; font-size: 10px; }
 .section-row { position: relative; min-height: 46px; scroll-margin-top: 90px; border-top: 1px solid var(--line-soft); }
 .section-row.overdue::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--coral); content: ""; }
 .section-row.due_today::before { position: absolute; inset: 8px auto 8px -12px; width: 2px; border-radius: 3px; background: var(--blue); content: ""; }
@@ -942,6 +963,7 @@ button.date-text.late,
   .catalog-filters { grid-column: 1 / -1; display: flex; width: 100%; height: 32px; padding: 2px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: rgba(251, 250, 246, .85); gap: 2px; }
   .catalog-filters button { flex: 1; height: 100%; min-height: 0; padding: 0; font-size: 11px; font-weight: 500; white-space: nowrap; text-align: center; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
   .catalog-action { height: 32px; box-sizing: border-box; padding: 0 8px; font-size: 11px; font-weight: 500; white-space: nowrap; text-align: center; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; width: 100%; }
+  .chapter-review-bar { margin: 0 12px 10px 14px; }
   .chapter-plan-editor { align-items: flex-start; flex-wrap: wrap; margin: 0 12px 10px 14px; }
   .chapter-plan-editor label { margin-left: 0; }
   .chapter-grid { gap: 8px; }
@@ -949,10 +971,10 @@ button.date-text.late,
   .chapter-index { font-size: 14px; }
   .chapter-name strong { overflow: hidden; font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
   .chapter-count i { display: none; }
-  .chapter-button { min-height: 52px; grid-template-columns: 28px minmax(0, 1fr) 42px 13px; gap: 8px; padding: 8px 12px 8px 14px; align-items: center; }
+  .chapter-button { min-height: 52px; grid-template-columns: 28px minmax(0, 1fr) minmax(50px, max-content) 13px; gap: 8px; padding: 8px 12px 8px 14px; align-items: center; }
   .section-table { margin: 0 12px 12px 14px; overflow: visible; }
   .section-head { display: none; }
-  .section-row { min-width: 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "name name" "base-plan review-plan" "learned reviewed"; gap: 6px 8px; padding: 10px 0; align-items: start; }
+  .section-row { min-width: 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "name name" "base-plan learned"; gap: 6px 8px; padding: 10px 0; align-items: start; }
   .section-name { grid-area: name; align-items: flex-start; gap: 7px; }
   .section-name > span { flex-basis: 22px; padding-top: 1px; }
   .section-name strong { overflow: visible; font-size: 12.5px; line-height: 1.45; text-overflow: clip; white-space: normal; }
@@ -960,13 +982,10 @@ button.date-text.late,
   .section-name button { display: none; }
   .section-plan { display: flex; align-items: center; justify-content: center; height: 20px; }
   .section-plan--base { grid-area: base-plan; }
-  .section-plan--review { grid-area: review-plan; }
   .section-plan .date-text, .section-plan .date-editor, .section-plan .inline-plan-input { width: 100%; text-align: center; font-size: 10.5px; line-height: 20px; }
   .section-plan--base .date-text::before { color: #a2a49f; content: "新学计划 "; font-size: 10.5px; }
-  .section-plan--review .date-text::before { color: #a2a49f; content: "复习计划 "; font-size: 10.5px; }
   .check-with-date { display: flex; flex-direction: column; min-width: 0; align-items: center; gap: 2px; min-height: 56px; }
   .check-with-date--learned { grid-area: learned; }
-  .check-with-date--reviewed { grid-area: reviewed; }
   .check-with-date label { width: 100%; height: 36px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; border: 1px solid var(--line-soft); border-radius: 8px; background: #fff; }
   .check-with-date label span { width: 18px; height: 18px; }
   .mobile-check-label { display: inline; color: #687170; font-size: 10.5px; font-weight: 600; }
@@ -974,7 +993,7 @@ button.date-text.late,
   .check-with-date > .date-text, .check-with-date > .date-editor { display: block; width: 100%; height: 18px; line-height: 18px; font-size: 10.5px; color: var(--muted); text-align: center; }
   .check-with-date > .date-text { font-size: 10.5px; }
   .section-table.editing .check-with-date { display: none; }
-  .section-table.editing .section-row { grid-template-areas: "name name" "base-plan review-plan"; }
+  .section-table.editing .section-row { grid-template-areas: "name name" "base-plan base-plan"; }
   .shift-anchor { position: relative; top: auto; right: auto; grid-column: 1 / -1; justify-self: end; transform: none; }
   .shift-anchor > button { min-height: 30px; opacity: 1; }
   .shift-popover { top: 34px; max-width: calc(100vw - 36px); flex-wrap: wrap; }

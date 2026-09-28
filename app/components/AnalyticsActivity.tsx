@@ -16,7 +16,7 @@ type Props = {
 function describeHeatmapDay(day: HeatmapDay): string {
   if (day.isFuture) return "未来日期";
   return day.totalActions > 0
-    ? `学完 ${day.learnedCount} 节 · 复习 ${day.reviewedCount} 节 · 共 ${day.totalActions} 项动作`
+    ? `学完 ${day.learnedCount} 节 · 复习 ${day.reviewedCount} 章 · 共 ${day.totalActions} 项动作`
     : "当日无打卡记录";
 }
 
@@ -152,7 +152,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                               }}
                               onClick={() => setSelectedHeatmapDay(day)}
                               onKeyDown={(e) => handleHeatmapKeyDown(e, day)}
-                              title={`${day.date}: 学完 ${day.learnedCount} 节, 复习 ${day.reviewedCount} 节`}
+                              title={`${day.date}: 学完 ${day.learnedCount} 节, 复习 ${day.reviewedCount} 章`}
                             />
                           ))}
                         </div>
@@ -184,7 +184,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                           </span>
                           <span className="heatmap-data-list__value">
                             {day.totalActions > 0
-                              ? `学完 ${day.learnedCount} 节 · 复习 ${day.reviewedCount} 节`
+                              ? `学完 ${day.learnedCount} 节 · 复习 ${day.reviewedCount} 章`
                               : "无记录"}
                           </span>
                         </li>
@@ -206,16 +206,16 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
 
                   <div className="trend-summary-strip">
                     <div className="trend-summary-item">
-                      <small>本周已学</small>
-                      <strong>{currentWeekTrend?.totalActions ?? 0} <small>节</small></strong>
+                      <small>本周打卡</small>
+                      <strong>{currentWeekTrend?.totalActions ?? 0} <small>项</small></strong>
                     </div>
                     <div className="trend-summary-item">
                       <small>8周周均</small>
-                      <strong>{weeklyAverage} <small>节/周</small></strong>
+                      <strong>{weeklyAverage} <small>项/周</small></strong>
                     </div>
                     <div className="trend-summary-item">
                       <small>最高周产出</small>
-                      <strong>{peakWeekActions} <small>节</small></strong>
+                      <strong>{peakWeekActions} <small>项</small></strong>
                     </div>
                   </div>
 
@@ -238,7 +238,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                           : 0;
                         const isHovered = hoveredTrendWeek?.startDate === week.startDate;
                         const weekDesc = week.totalActions > 0
-                          ? `新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节, 共 ${week.totalActions} 节`
+                          ? `新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 章, 共 ${week.totalActions} 项动作`
                           : "本周暂无打卡记录";
                         return (
                           <div
@@ -258,7 +258,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                               }
                             }}
                           >
-                            <div className="trend-col-track" title={`${week.startDate} ~ ${week.endDate}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 节, 共 ${week.totalActions} 节`}>
+                            <div className="trend-col-track" title={`${week.startDate} ~ ${week.endDate}: 新学 ${week.learnedCount} 节, 复习 ${week.reviewedCount} 章, 共 ${week.totalActions} 项动作`}>
                               <span className={`bar-total-num ${week.totalActions > 0 ? "visible" : ""}`}>
                                 {week.totalActions > 0 ? week.totalActions : ""}
                               </span>
@@ -290,7 +290,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                         <strong>{hoveredTrendWeek.startDate} ~ {hoveredTrendWeek.endDate} {hoveredTrendWeek.isCurrentWeek ? "(本周)" : ""}</strong>
                         <span>
                           {hoveredTrendWeek.totalActions > 0
-                            ? `新学 ${hoveredTrendWeek.learnedCount} 节 · 复习 ${hoveredTrendWeek.reviewedCount} 节 · 合计 ${hoveredTrendWeek.totalActions} 项动作`
+                            ? `新学 ${hoveredTrendWeek.learnedCount} 节 · 复习 ${hoveredTrendWeek.reviewedCount} 章 · 合计 ${hoveredTrendWeek.totalActions} 项动作`
                             : "本周暂无打卡记录"}
                         </span>
                       </div>

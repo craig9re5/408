@@ -1,7 +1,16 @@
 "use client";
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { books, type Book, type Section, type StudyArea } from "./data/books";
+import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
+import {
+  buildChapterReviewAnalyticsProgress,
+  cancelChapterReview,
+  chapterReviewPlanStatus,
+  completeChapterReview,
+  migrateLegacyChapterReviews,
+  setChapterReviewPlan,
+  summarizeChapterReview,
+} from "./chapter-review";
 import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
 import { PaperCard } from "./components/sprint/PaperCard";
 import { AnalyticsActivity } from "./components/AnalyticsActivity";
@@ -20,7 +29,6 @@ import {
   addCalendarDays,
   buildChapterPlanChanges,
   calculateActivityHeatmap,
-  calculateDisciplineStats,
   calculateMaxStreak,
   calculateVelocityAndForecast,
   calculateWeekNumber,
@@ -34,15 +42,14 @@ import {
   extractJournalSections,
   generateJournalId,
   mergeJournals,
-  isOverdueTask,
   isOverdueBaseTask,
-  isOverdueReviewTask,
-  isTodayPlan,
   isTodayBasePlan,
-  isTodayReviewPlan,
-  isUnreviewedTask,
   normalizeAppData,
   rebaseAppData,
+  resolveRecentBookByArea,
+  resolveGlobalRecentTarget,
+  loadLastViewedStudyState,
+  saveLastViewedStudyState,
   normalizeSectionProgress,
   summarizeImport,
   defaultPastPapers,
@@ -64,7 +71,6 @@ import {
   MATH_PAPER_STRUCTURE,
   CS408_PAPER_STRUCTURE,
   ENGLISH_PAPER_STRUCTURE,
-  type DisciplineStats,
   type ForecastHealth,
   type JournalContext,
   type JournalEntry,
@@ -192,6 +198,18 @@ type PlanPreview = {
   values: Record<string, string>;
 };
 
+function visiblePlanPreviewEntries(values: Record<string, string>, field: PlanPreview["field"]): [string, string][] {
+  const entries = Object.entries(values);
+  if (field !== "reviewedPlannedAt") return entries;
+  const seen = new Set<string>();
+  return entries.filter(([sectionId]) => {
+    const chapterId = findSectionById(sectionId)?.chapter.id ?? sectionId;
+    if (seen.has(chapterId)) return false;
+    seen.add(chapterId);
+    return true;
+  });
+}
+
 function defaultProgress(isMain = false): ProgressMap {
   return buildDefaultProgress(books, isMain);
 }
@@ -200,17 +218,19 @@ function allSections(book: Book): Section[] {
   return book.chapters.flatMap((chapter) => chapter.sections);
 }
 
-function progressStage(sections: Section[], progress: ProgressMap) {
+function progressStage(book: Book, progress: ProgressMap) {
+  const sections = allSections(book);
   const learned = sections.filter((section) => progress[section.id]?.learned).length;
   const phase = sections.length > 0 && learned === sections.length ? "reviewed" : "learned";
   const completed = phase === "reviewed"
-    ? sections.filter((section) => progress[section.id]?.reviewed).length
+    ? book.chapters.filter((chapter) => summarizeChapterReview(chapter, progress).reviewed).length
     : learned;
+  const total = phase === "reviewed" ? book.chapters.length : sections.length;
 
   return {
     phase,
     completed,
-    percentage: sections.length ? Math.round((completed / sections.length) * 100) : 0,
+    percentage: total ? Math.round((completed / total) * 100) : 0,
   } as const;
 }
 
@@ -280,24 +300,6 @@ function basePlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
   return "upcoming";
 }
 
-function reviewPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
-  if (state?.reviewed) return "completed";
-  if (!state?.reviewedPlannedAt) return "unscheduled";
-  const today = dateToday();
-  if (state.reviewedPlannedAt < today) return "overdue";
-  if (state.reviewedPlannedAt === today) return "due_today";
-  return "upcoming";
-}
-
-function studyPlanStatus(state: SectionProgress | undefined): StudyPlanStatus {
-  if (state?.learned) {
-    if (state.reviewed) return "completed";
-    if (state.reviewedPlannedAt) return reviewPlanStatus(state);
-    return "completed";
-  }
-  return basePlanStatus(state);
-}
-
 function planTone(status: StudyPlanStatus): "late" | "soon" | "normal" | "empty" {
   if (status === "overdue") return "late";
   if (status === "due_today") return "soon";
@@ -324,6 +326,7 @@ function calculateTimeProgress(examDate: string): number {
 
 type TaskEntry = {
   book: Book;
+  chapter: Chapter;
   chapterTitle: string;
   section: Section;
   phase?: "base" | "review";
@@ -334,9 +337,22 @@ function projectTaskEntries(area: StudyArea): TaskEntry[] {
     .filter((book) => book.area === area)
     .flatMap((book) => book.chapters.flatMap((chapter) => chapter.sections.map((section) => ({
       book,
+      chapter,
       chapterTitle: chapter.title,
       section,
     }))));
+}
+
+function projectReviewTaskEntries(area: StudyArea): TaskEntry[] {
+  return books
+    .filter((book) => book.area === area)
+    .flatMap((book) => book.chapters.flatMap((chapter) => chapter.sections[0] ? [{
+      book,
+      chapter,
+      chapterTitle: chapter.title,
+      section: chapter.sections[0],
+      phase: "review" as const,
+    }] : []));
 }
 
 function findSectionById(sectionId: string | null): { book: Book; chapter: (typeof books)[number]["chapters"][number]; section: Section } | null {
@@ -476,12 +492,18 @@ export function StudyDashboard() {
   const [activePage, setActivePage] = useState<AppPage>("progress");
   const [topbarMoreOpen, setTopbarMoreOpen] = useState(false);
   const [catalogMoreOpen, setCatalogMoreOpen] = useState(false);
-  const [activeArea, setActiveArea] = useState<StudyArea>("408");
-  const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>({
-    "408": "operating-system",
-    math: "advanced-math",
-    english: "",
-    politics: "",
+  const [activeArea, setActiveArea] = useState<StudyArea>(() => {
+    const saved = loadLastViewedStudyState();
+    return (saved?.activeArea === "408" || saved?.activeArea === "math") ? saved.activeArea : "408";
+  });
+  const [selectedBookByArea, setSelectedBookByArea] = useState<Record<StudyArea, string>>(() => {
+    const saved = loadLastViewedStudyState();
+    return {
+      "408": saved?.selectedBookByArea?.["408"] || "computer-network",
+      math: saved?.selectedBookByArea?.math || "probability",
+      english: "",
+      politics: "",
+    };
   });
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [expandedSectionRows, setExpandedSectionRows] = useState<string[]>([]);
@@ -541,11 +563,9 @@ export function StudyDashboard() {
   const [filterChaptersCollapsed, setFilterChaptersCollapsed] = useState(false);
   const [filteredChapterOverrides, setFilteredChapterOverrides] = useState<Record<string, boolean>>({});
   const [planEditMode, setPlanEditMode] = useState(false);
-  const [chapterPlanTarget, setChapterPlanTarget] = useState<"base" | "review">("base");
   const [chapterRanges, setChapterRanges] = useState<Record<string, { start: string; end: string; includeCompleted: boolean }>>({});
   const [shiftSectionId, setShiftSectionId] = useState<string | null>(null);
   const [shiftScope, setShiftScope] = useState<ShiftScope>("chapter");
-  const [shiftPlanTarget, setShiftPlanTarget] = useState<"base" | "review">("base");
   const [shiftDays, setShiftDays] = useState(1);
   const [planUndo, setPlanUndo] = useState<PlanUndo | null>(null);
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
@@ -593,6 +613,7 @@ export function StudyDashboard() {
   const saveInFlightRef = useRef(false);
   const syncBlockedRef = useRef(false);
   const workspaceEpochRef = useRef(0);
+  const hasUserExplicitlyNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!topbarMoreOpen && !catalogMoreOpen) return;
@@ -690,19 +711,78 @@ export function StudyDashboard() {
     const merged = local && base
       ? rebaseAppData(base, local, remote)
       : local && canMigrateEmptyMain ? rebaseAppData(remote, local, remote) : remote;
+    const reviewMigration = migrateLegacyChapterReviews(books, merged.progress);
+    let visibleData = merged;
+    if (reviewMigration.changedSectionIds.length > 0) {
+      const previousIds = new Set(repo.backups().map((backup) => backup.id));
+      const backupsAfter = repo.createBackup(merged, "before-migration");
+      if (backupsAfter.some((backup) => !previousIds.has(backup.id))) {
+        visibleData = { ...merged, progress: reviewMigration.progress };
+      } else {
+        syncBlockedRef.current = true;
+        setStorageLoadIssue({ message: "章节复习旧记录无法备份，请先导出原始数据并清理浏览器存储", raw: JSON.stringify(merged) });
+      }
+    }
 
-    workingDataRef.current = merged;
+    workingDataRef.current = visibleData;
     hasLoadedRef.current = true;
     syncBaseRef.current = remote;
     remoteRevisionRef.current = Number.isSafeInteger(body.revision) ? body.revision! : 0;
     repo.saveSyncBase(remote);
-    setProgress(merged.progress);
-    setProjectSettings(merged.projectSettings);
-    setPlanHistory(merged.planHistory);
-    setJournals(merged.journals);
-    setPapers(merged.papers);
-    setSchedule(normalizeSchedule(merged.schedule));
+    setProgress(visibleData.progress);
+    setProjectSettings(visibleData.projectSettings);
+    setPlanHistory(visibleData.planHistory);
+    setJournals(visibleData.journals);
+    setPapers(visibleData.papers);
+    setSchedule(normalizeSchedule(visibleData.schedule));
     setBackups(repo.backups());
+
+    const savedNav = loadLastViewedStudyState();
+    const smartTarget = resolveGlobalRecentTarget(books, visibleData.progress);
+    const smartBooksByArea = resolveRecentBookByArea(books, visibleData.progress);
+
+    if (!savedNav && !hasUserExplicitlyNavigatedRef.current) {
+      if (smartTarget) {
+        setActiveArea(smartTarget.area);
+        setSelectedBookByArea((prev) => ({
+          ...prev,
+          ...smartBooksByArea,
+          [smartTarget.area]: smartTarget.bookId,
+        }));
+        setExpandedChapters((prev) =>
+          prev.includes(smartTarget.chapterId) ? prev : [...prev, smartTarget.chapterId]
+        );
+      }
+    } else {
+      setSelectedBookByArea((prev) => ({
+        ...smartBooksByArea,
+        ...prev,
+        ...(savedNav?.selectedBookByArea ?? {}),
+      }));
+
+      if (!hasUserExplicitlyNavigatedRef.current) {
+        const curArea = savedNav?.activeArea ?? "408";
+        const curBookId = savedNav?.selectedBookByArea?.[curArea] ?? smartBooksByArea[curArea];
+        const curBook = books.find((b) => b.id === curBookId);
+        if (curBook) {
+          const sections = curBook.chapters.flatMap((c) => c.sections);
+          const learnedCount = sections.filter((s) => visibleData.progress[s.id]?.learned).length;
+          const isRev = sections.length > 0 && learnedCount === sections.length;
+          const curSec = isRev
+            ? curBook.chapters.find((chapter) => !summarizeChapterReview(chapter, visibleData.progress).reviewed)?.sections[0]
+            : sections.find((s) => visibleData.progress[s.id]?.isCurrent && !visibleData.progress[s.id]?.learned)
+              ?? sections.find((s) => !visibleData.progress[s.id]?.learned);
+          const curChap = curSec
+            ? curBook.chapters.find((c) => c.sections.some((s) => s.id === curSec.id))
+            : undefined;
+          if (curChap) {
+            setExpandedChapters((prev) =>
+              prev.includes(curChap.id) ? prev : [...prev, curChap.id]
+            );
+          }
+        }
+      }
+    }
 
     // The server snapshot is the sync base. Rebased local edits must still save.
     lastSavedPayloadRef.current = JSON.stringify({
@@ -999,16 +1079,17 @@ export function StudyDashboard() {
   const selectedBook = areaBooks.find((book) => book.id === selectedBookId) ?? areaBooks[0] ?? books[0];
   const selectedSections = useMemo(() => allSections(selectedBook), [selectedBook]);
   const learnedCount = selectedSections.filter((section) => progress[section.id]?.learned).length;
-  const reviewedCount = selectedSections.filter((section) => progress[section.id]?.reviewed).length;
-  const selectedProgressStage = progressStage(selectedSections, progress);
+  const reviewedCount = selectedBook.chapters.filter((chapter) => summarizeChapterReview(chapter, progress).reviewed).length;
+  const selectedProgressStage = progressStage(selectedBook, progress);
   const isReviewPhase = selectedProgressStage.phase === "reviewed";
   const activeProgressPercent = selectedProgressStage.percentage;
   const activeProgressLabel = isReviewPhase ? "强化阶段" : "基础阶段";
   const manualCurrentSection = selectedSections.find((section) => progress[section.id]?.isCurrent && !progress[section.id]?.learned);
+  const currentReviewChapter = selectedBook.chapters.find((chapter) => !summarizeChapterReview(chapter, progress).reviewed);
   const currentSection = isReviewPhase
-    ? selectedSections.find((section) => !progress[section.id]?.reviewed)
+    ? currentReviewChapter?.sections[0]
     : manualCurrentSection ?? selectedSections.find((section) => !progress[section.id]?.learned);
-  const currentSectionLabel = isReviewPhase ? "当前复习" : "当前新学";
+  const currentSectionLabel = isReviewPhase ? "当前复习章节" : "当前新学";
   const phaseCompleteLabel = isReviewPhase ? "强化阶段已完成" : "基础阶段已完成";
   const currentChapterId = currentSection
     ? selectedBook.chapters.find((chapter) => chapter.sections.some((section) => section.id === currentSection.id))?.id
@@ -1018,7 +1099,9 @@ export function StudyDashboard() {
     if (!scrollTargetSectionId || catalogFilter !== "all") return;
 
     const frame = window.requestAnimationFrame(() => {
-      const target = document.getElementById(`section-${scrollTargetSectionId}`);
+      const target = document.getElementById(scrollTargetSectionId.startsWith("chapter:")
+        ? `chapter-${scrollTargetSectionId.slice(8)}`
+        : `section-${scrollTargetSectionId}`);
       if (!target) return;
       const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
       target.scrollIntoView({ behavior, block: "center" });
@@ -1032,16 +1115,47 @@ export function StudyDashboard() {
     if (!currentSection || !currentChapterId) return;
     setCatalogFilter("all");
     setExpandedChapters((current) => current.includes(currentChapterId) ? current : [...current, currentChapterId]);
-    setScrollTargetSectionId(currentSection.id);
+    setScrollTargetSectionId(isReviewPhase && currentChapterId ? `chapter:${currentChapterId}` : currentSection.id);
+  }
+
+  const globalRecent = useMemo(() => resolveGlobalRecentTarget(books, progress), [progress]);
+  const hasDifferentGlobalRecent = Boolean(
+    globalRecent && (globalRecent.bookId !== selectedBook.id || globalRecent.area !== activeArea)
+  );
+  const globalRecentBook = useMemo(
+    () => (globalRecent ? books.find((b) => b.id === globalRecent.bookId) : null),
+    [globalRecent]
+  );
+  const globalRecentSection = useMemo(() => {
+    if (!globalRecent || !globalRecentBook) return null;
+    return globalRecentBook.chapters.flatMap((c) => c.sections).find((s) => s.id === globalRecent.sectionId) ?? null;
+  }, [globalRecent, globalRecentBook]);
+
+  function jumpToGlobalRecent() {
+    if (!globalRecent) return;
+    hasUserExplicitlyNavigatedRef.current = true;
+    setActiveArea(globalRecent.area);
+    setSelectedBookByArea((current) => {
+      const next = { ...current, [globalRecent.area]: globalRecent.bookId };
+      saveLastViewedStudyState({ activeArea: globalRecent.area, selectedBookByArea: next });
+      return next;
+    });
+    setCatalogFilter("all");
+    setExpandedChapters((current) =>
+      current.includes(globalRecent.chapterId) ? current : [...current, globalRecent.chapterId]
+    );
+    setScrollTargetSectionId(globalRecent.isReview ? `chapter:${globalRecent.chapterId}` : globalRecent.sectionId);
   }
 
   const filteredChapters = selectedBook.chapters
     .map((chapter) => {
+      const review = summarizeChapterReview(chapter, progress);
+      const overdueReview = chapterReviewPlanStatus(chapter, progress, dateToday()) === "overdue";
       const visibleSections = chapter.sections.filter((section) => {
         const state = progress[section.id];
         if (catalogFilter === "unlearned") return !state?.learned;
-        if (catalogFilter === "unreviewed") return Boolean(state?.learned) && !state?.reviewed;
-        if (catalogFilter === "overdue") return studyPlanStatus(state) === "overdue";
+        if (catalogFilter === "unreviewed") return review.canReview && !review.reviewed;
+        if (catalogFilter === "overdue") return overdueReview || basePlanStatus(state) === "overdue";
         return true;
       });
       return { chapter, visibleSections };
@@ -1058,6 +1172,10 @@ export function StudyDashboard() {
     ...projectTaskEntries("408"),
     ...projectTaskEntries("math"),
   ], []);
+  const reviewChapterTasks = useMemo(() => [
+    ...projectReviewTaskEntries("408"),
+    ...projectReviewTaskEntries("math"),
+  ], []);
   const today = dateToday();
   const todayBasePlan: TaskEntry[] = useMemo(() => {
     return todayTasks
@@ -1066,10 +1184,9 @@ export function StudyDashboard() {
   }, [todayTasks, progress, today]);
 
   const todayReviewPlan: TaskEntry[] = useMemo(() => {
-    return todayTasks
-      .filter(({ section }) => isTodayReviewPlan(progress[section.id], today))
-      .map((task) => ({ ...task, phase: "review" as const }));
-  }, [todayTasks, progress, today]);
+    return reviewChapterTasks
+      .filter(({ chapter }) => summarizeChapterReview(chapter, progress).reviewedPlannedAt === today);
+  }, [reviewChapterTasks, progress, today]);
 
   const todayPlan = useMemo(() => [...todayBasePlan, ...todayReviewPlan], [todayBasePlan, todayReviewPlan]);
 
@@ -1081,21 +1198,22 @@ export function StudyDashboard() {
   }, [todayTasks, progress, today]);
 
   const overdueReviewTasks: TaskEntry[] = useMemo(() => {
-    return todayTasks
-      .filter(({ section }) => isOverdueReviewTask(progress[section.id], today))
-      .map((task) => ({ ...task, phase: "review" as const }))
-      .sort((left, right) => (progress[left.section.id]?.reviewedPlannedAt ?? "").localeCompare(progress[right.section.id]?.reviewedPlannedAt ?? ""));
-  }, [todayTasks, progress, today]);
+    return reviewChapterTasks
+      .filter(({ chapter }) => chapterReviewPlanStatus(chapter, progress, today) === "overdue")
+      .sort((left, right) => summarizeChapterReview(left.chapter, progress).reviewedPlannedAt.localeCompare(
+        summarizeChapterReview(right.chapter, progress).reviewedPlannedAt));
+  }, [reviewChapterTasks, progress, today]);
 
   const overdueTasks = useMemo(() => [...overdueBaseTasks, ...overdueReviewTasks], [overdueBaseTasks, overdueReviewTasks]);
-  const allFirstRoundComplete = todayTasks.every(({ section }) => progress[section.id]?.learned);
-  const unreviewedTasks: TaskEntry[] = todayTasks
-    .filter(({ section }) => isUnreviewedTask(progress[section.id], today))
-    .map((task) => ({ ...task, phase: "review" as const }))
-    .sort((left, right) => (progress[left.section.id]?.learnedAt ?? "").localeCompare(progress[right.section.id]?.learnedAt ?? ""));
-  const rescheduleToToday = useCallback((sectionId: string, phase: "base" | "review") => {
+  const rescheduleToToday = (sectionId: string, phase: "base" | "review") => {
     const todayStr = dateToday();
-    const field = phase === "review" ? "reviewedPlannedAt" : "plannedAt";
+    if (phase === "review") {
+      const target = findSectionById(sectionId);
+      if (target) updateChapterReviewedPlannedAt(target.chapter, todayStr);
+      setFeedbackMessage("已将本章复习任务改排至今日");
+      return;
+    }
+    const field = "plannedAt";
     setProgress((prev) => {
       const existing = prev[sectionId] ?? {
         learned: false,
@@ -1115,7 +1233,7 @@ export function StudyDashboard() {
       };
     });
     setFeedbackMessage("已成功将逾期任务改排至今日执行！");
-  }, []);
+  };
 
   const cockpitWeek = useMemo(() => {
     return calculateWeekNumber(schedule.semesterStartDate, today);
@@ -1130,8 +1248,8 @@ export function StudyDashboard() {
     }
     if (activeSlotArea) {
       return [...list].sort((a, b) => {
-        const aDone = Boolean(a.phase === "review" ? progress[a.section.id]?.reviewed : progress[a.section.id]?.learned);
-        const bDone = Boolean(b.phase === "review" ? progress[b.section.id]?.reviewed : progress[b.section.id]?.learned);
+        const aDone = Boolean(a.phase === "review" ? summarizeChapterReview(a.chapter, progress).reviewed : progress[a.section.id]?.learned);
+        const bDone = Boolean(b.phase === "review" ? summarizeChapterReview(b.chapter, progress).reviewed : progress[b.section.id]?.learned);
         const aMatch = a.book.area === activeSlotArea && !aDone;
         const bMatch = b.book.area === activeSlotArea && !bDone;
         if (aMatch && !bMatch) return -1;
@@ -1141,8 +1259,8 @@ export function StudyDashboard() {
     }
     return list;
   }, [todayPlan, cockpitFocusedEvent, activeSlotArea, progress]);
-  const displayedTodayCompleted = displayedTodayPlan.filter(({ section, phase }) => phase === "review"
-    ? progress[section.id]?.reviewed
+  const displayedTodayCompleted = displayedTodayPlan.filter(({ section, chapter, phase }) => phase === "review"
+    ? summarizeChapterReview(chapter, progress).reviewed
     : progress[section.id]?.learned).length;
 
   const displayedOverdueTasks = useMemo(() => {
@@ -1154,13 +1272,16 @@ export function StudyDashboard() {
   const examDate = (activePage === "progress" || activePage === "sprint") ? (projectSettings[activeArea]?.examDate ?? nearestExamDate) : nearestExamDate;
   const daysUntilExam = useMemo(() => calculateDaysUntilExam(examDate), [examDate]);
   const timeProgressPercent = useMemo(() => calculateTimeProgress(examDate), [examDate]);
-  const weekDots = useMemo(() => getWeekDaysActivity(progress), [progress]);
+  const activityProgress = useMemo(() => buildChapterReviewAnalyticsProgress(books, progress), [progress]);
+  const weekDots = useMemo(() => getWeekDaysActivity(activityProgress), [activityProgress]);
   const weeklyDaysCount = useMemo(() => weekDots.filter((day) => day.isDone).length, [weekDots]);
-  const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(progress), [progress]);
+  const weeklySectionCount = useMemo(() => calculateWeeklySectionCount(activityProgress), [activityProgress]);
+  const analyticsBooks = useMemo(() => analyticsScope === "all"
+    ? books
+    : books.filter((book) => book.area === analyticsScope), [analyticsScope]);
   const analyticsSections = useMemo(() => {
-    if (analyticsScope === "all") return books.flatMap(allSections);
-    return books.filter((b) => b.area === analyticsScope).flatMap(allSections);
-  }, [analyticsScope]);
+    return analyticsBooks.flatMap(allSections);
+  }, [analyticsBooks]);
   const analyticsSectionIds = useMemo(() => analyticsSections.map((s) => s.id), [analyticsSections]);
   const analyticsExamDate = useMemo(() => {
     if (analyticsScope === "all") return nearestExamDate;
@@ -1173,15 +1294,18 @@ export function StudyDashboard() {
   const analyticsLearnedPercent = forecast.totalSections > 0
     ? Math.round((forecast.learnedTotal / forecast.totalSections) * 100)
     : 0;
-  const analyticsReviewedPercent = forecast.totalSections > 0
-    ? Math.round((forecast.reviewedTotal / forecast.totalSections) * 100)
+  const analyticsChapterCount = analyticsBooks.reduce((count, book) => count + book.chapters.length, 0);
+  const analyticsReviewedChapters = analyticsBooks.reduce((count, book) =>
+    count + book.chapters.filter((chapter) => summarizeChapterReview(chapter, progress).reviewed).length, 0);
+  const analyticsReviewedPercent = analyticsChapterCount > 0
+    ? Math.round((analyticsReviewedChapters / analyticsChapterCount) * 100)
     : 0;
   const heatmapDays = useMemo(() => {
-    return calculateActivityHeatmap(progress, dateToday(), 13);
-  }, [progress]);
+    return calculateActivityHeatmap(activityProgress, dateToday(), 13);
+  }, [activityProgress]);
   const weeklyTrends = useMemo(() => {
-    return calculateWeeklyTrends(progress, dateToday(), 8);
-  }, [progress]);
+    return calculateWeeklyTrends(activityProgress, dateToday(), 8);
+  }, [activityProgress]);
   const maxWeeklyAction = useMemo(() => {
     const max = Math.max(...weeklyTrends.map((w) => w.totalActions), 0);
     return Math.max(max, 6);
@@ -1681,18 +1805,24 @@ export function StudyDashboard() {
     }].slice(-1000));
   }
 
-  function updateReviewedPlannedAt(sectionId: string, reviewedPlannedAt: string) {
-    const previous = progress[sectionId]?.reviewedPlannedAt ?? "";
-    if (previous === reviewedPlannedAt) return;
-    updateProgress(sectionId, { reviewedPlannedAt });
-    setPlanHistory((current) => [...current, {
+  function updateChapterReviewedPlannedAt(chapter: Chapter, reviewedPlannedAt: string) {
+    const change = setChapterReviewPlan(chapter, progress, reviewedPlannedAt);
+    if (change.error) {
+      setFeedbackMessage("复习计划日期无效");
+      return;
+    }
+    if (!change.changedSectionIds.length) return;
+    const previous = Object.fromEntries(change.changedSectionIds.map((sectionId) =>
+      [sectionId, progress[sectionId]?.reviewedPlannedAt ?? ""]));
+    setProgress(change.progress);
+    setPlanHistory((current) => [...current, ...change.changedSectionIds.map((sectionId) => ({
       id: crypto.randomUUID(),
       sectionId,
-      from: previous,
+      from: previous[sectionId],
       to: reviewedPlannedAt,
       changedAt: new Date().toISOString(),
       source: "manual" as const,
-    }].slice(-1000));
+    }))].slice(-1000));
   }
 
   function setCurrentSection(sectionId: string) {
@@ -1707,7 +1837,12 @@ export function StudyDashboard() {
   }
 
   function selectBook(bookId: string) {
-    setSelectedBookByArea((current) => ({ ...current, [activeArea]: bookId }));
+    hasUserExplicitlyNavigatedRef.current = true;
+    setSelectedBookByArea((current) => {
+      const next = { ...current, [activeArea]: bookId };
+      saveLastViewedStudyState({ activeArea, selectedBookByArea: next });
+      return next;
+    });
     setExpandedChapters([]);
     setCatalogFilter("all");
   }
@@ -1715,8 +1850,13 @@ export function StudyDashboard() {
   function selectBookAcrossAreas(bookId: string) {
     const book = books.find((candidate) => candidate.id === bookId);
     if (!book) return;
+    hasUserExplicitlyNavigatedRef.current = true;
     setActiveArea(book.area);
-    setSelectedBookByArea((current) => ({ ...current, [book.area]: book.id }));
+    setSelectedBookByArea((current) => {
+      const next = { ...current, [book.area]: book.id };
+      saveLastViewedStudyState({ activeArea: book.area, selectedBookByArea: next });
+      return next;
+    });
     setExpandedChapters([]);
     setCatalogFilter("all");
   }
@@ -1744,12 +1884,14 @@ export function StudyDashboard() {
   }
 
   function clearLearned(sectionId: string) {
-    updateProgress(sectionId, {
-      learned: false,
-      learnedAt: "",
-      reviewed: false,
-      reviewedAt: "",
-      isCurrent: false,
+    const target = findSectionById(sectionId);
+    setProgress((current) => {
+      const reviewCleared = target ? cancelChapterReview(target.chapter, current).progress : current;
+      const previous = reviewCleared[sectionId];
+      return {
+        ...reviewCleared,
+        [sectionId]: normalizeSectionProgress({ ...previous, learned: false, learnedAt: "", reviewed: false, reviewedAt: "", isCurrent: false }, previous),
+      };
     });
   }
 
@@ -1758,22 +1900,31 @@ export function StudyDashboard() {
       updateProgress(sectionId, { learned: true, learnedAt: dateToday(), isCurrent: false });
       return;
     }
-    if (progress[sectionId]?.reviewed) {
+    const target = findSectionById(sectionId);
+    if (target && summarizeChapterReview(target.chapter, progress).reviewed) {
       setPendingClearSectionId(sectionId);
       return;
     }
     clearLearned(sectionId);
   }
 
-  function toggleReviewed(sectionId: string, checked: boolean) {
-    if (checked && (!progress[sectionId]?.learned || !progress[sectionId]?.learnedAt)) {
-      setFeedbackMessage("请先完成新学并记录日期，再标记复习");
+  function toggleChapterReviewed(chapter: Chapter, checked: boolean, completedAt = dateToday()) {
+    const change = checked
+      ? completeChapterReview(chapter, progress, completedAt)
+      : cancelChapterReview(chapter, progress);
+    if (change.error === "not-ready") {
+      setFeedbackMessage("请先完成本章全部小节的新学，再标记复习");
       return;
     }
-    updateProgress(sectionId, {
-      reviewed: checked,
-      reviewedAt: checked ? dateToday() : "",
-    });
+    if (change.error === "date-before-learned") {
+      setFeedbackMessage("复习完成日期不能早于本章小节的新学完成日期");
+      return;
+    }
+    if (change.error) {
+      setFeedbackMessage("复习完成日期无效");
+      return;
+    }
+    if (change.changedSectionIds.length) setProgress(change.progress);
   }
 
   function applyPlanChanges(values: Record<string, string>, message: string, source: PlanChangeSource, field: "plannedAt" | "reviewedPlannedAt" = "plannedAt") {
@@ -1785,10 +1936,20 @@ export function StudyDashboard() {
     const previous = Object.fromEntries(ids.map((sectionId) => [sectionId, progress[sectionId]?.[field] ?? ""]));
     const changedAt = new Date().toISOString();
     setProgress((current) => {
-      const next = { ...current };
-      ids.forEach((sectionId) => {
-        next[sectionId] = { ...next[sectionId], [field]: values[sectionId] };
-      });
+      let next = { ...current };
+      if (field === "reviewedPlannedAt") {
+        const handledChapters = new Set<string>();
+        ids.forEach((sectionId) => {
+          const target = findSectionById(sectionId);
+          if (!target || handledChapters.has(target.chapter.id)) return;
+          handledChapters.add(target.chapter.id);
+          next = setChapterReviewPlan(target.chapter, next, values[sectionId]).progress;
+        });
+      } else {
+        ids.forEach((sectionId) => {
+          next[sectionId] = { ...next[sectionId], [field]: values[sectionId] };
+        });
+      }
       return next;
     });
     setPlanHistory((current) => [...current, ...ids.map((sectionId) => ({
@@ -1819,10 +1980,20 @@ export function StudyDashboard() {
     const changedAt = new Date().toISOString();
     const field = planUndo.field || "plannedAt";
     setProgress((current) => {
-      const next = { ...current };
-      Object.entries(planUndo.values).forEach(([sectionId, dateVal]) => {
-        next[sectionId] = { ...next[sectionId], [field]: dateVal };
-      });
+      let next = { ...current };
+      if (field === "reviewedPlannedAt") {
+        const handledChapters = new Set<string>();
+        Object.entries(planUndo.values).forEach(([sectionId, dateVal]) => {
+          const target = findSectionById(sectionId);
+          if (!target || handledChapters.has(target.chapter.id)) return;
+          handledChapters.add(target.chapter.id);
+          next = setChapterReviewPlan(target.chapter, next, dateVal).progress;
+        });
+      } else {
+        Object.entries(planUndo.values).forEach(([sectionId, dateVal]) => {
+          next[sectionId] = { ...next[sectionId], [field]: dateVal };
+        });
+      }
       return next;
     });
     setPlanHistory((current) => [...current, ...Object.entries(planUndo.values).map(([sectionId, dateVal]) => ({
@@ -1841,7 +2012,6 @@ export function StudyDashboard() {
     sections: Section[],
     range: { start: string; end: string; includeCompleted: boolean },
     mode: "uniform" | "spread",
-    targetPhase: "base" | "review" = "base",
   ) {
     if (!range.start || (mode === "spread" && !range.end)) {
       setFeedbackMessage("请先设置完整的计划日期或区间");
@@ -1851,25 +2021,22 @@ export function StudyDashboard() {
       setFeedbackMessage("计划结束日期不能早于开始日期");
       return;
     }
-    const field = targetPhase === "review" ? "reviewedPlannedAt" : "plannedAt";
     const values = buildChapterPlanChanges(
       sections.map((section) => ({
         id: section.id,
         learned: Boolean(progress[section.id]?.learned),
-        reviewed: Boolean(progress[section.id]?.reviewed),
         plannedAt: progress[section.id]?.plannedAt ?? "",
-        reviewedPlannedAt: progress[section.id]?.reviewedPlannedAt ?? "",
+        reviewed: Boolean(progress[section.id]?.reviewed),
       })),
       range,
       mode,
-      targetPhase,
+      "base",
     );
-    const phaseLabel = targetPhase === "review" ? "强化阶段（复习）" : "基础阶段（新学）";
     previewPlanChanges(
       values,
-      mode === "uniform" ? `已统一设置${phaseLabel}章节计划` : `已按天均分${phaseLabel}章节计划`,
+      mode === "uniform" ? "已统一设置基础阶段章节计划" : "已按天均分基础阶段章节计划",
       "batchSchedule",
-      field,
+      "plannedAt",
     );
   }
 
@@ -1879,17 +2046,34 @@ export function StudyDashboard() {
       return;
     }
     const chapter = selectedBook.chapters.find((item) => item.sections.some((section) => section.id === startSectionId));
+    if (targetPhase === "review") {
+      if (!chapter) return;
+      const sourceChapters = scope === "chapter"
+        ? [chapter]
+        : selectedBook.chapters.slice(selectedBook.chapters.findIndex((item) => item.id === chapter.id));
+      const values: Record<string, string> = {};
+      sourceChapters.forEach((item) => {
+        const summary = summarizeChapterReview(item, progress);
+        if (!summary.reviewed && summary.reviewedPlannedAt) {
+          const date = addCalendarDays(summary.reviewedPlannedAt, days);
+          item.sections.forEach((section) => { values[section.id] = date; });
+        }
+      });
+      previewPlanChanges(values, `已将后续章节复习计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift", "reviewedPlannedAt");
+      setShiftSectionId(null);
+      return;
+    }
     const source = scope === "chapter" ? chapter?.sections ?? [] : selectedSections;
     const startIndex = source.findIndex((section) => section.id === startSectionId);
-    const field = targetPhase === "review" ? "reviewedPlannedAt" : "plannedAt";
+    const field = "plannedAt";
     const values: Record<string, string> = {};
     source.slice(Math.max(startIndex, 0)).forEach((section) => {
       const state = progress[section.id];
       const dateVal = state?.[field];
-      const isDone = targetPhase === "review" ? state?.reviewed : state?.learned;
+      const isDone = state?.learned;
       if (dateVal && !isDone) values[section.id] = addCalendarDays(dateVal, days);
     });
-    const phaseLabel = targetPhase === "review" ? "强化复习" : "基础新学";
+    const phaseLabel = "基础新学";
     previewPlanChanges(values, `已将后续${phaseLabel}计划${days > 0 ? "后移" : "前移"} ${Math.abs(days)} 天`, "shift", field);
     setShiftSectionId(null);
   }
@@ -1943,7 +2127,7 @@ export function StudyDashboard() {
     link.download = `study-progress-backup-${dateToday()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    setFeedbackMessage("已导出全部学习数据（包含学习日志与小节进度）");
+    setFeedbackMessage("已导出全部学习数据（包含学习日志、小节新学与整章复习进度）");
   }
 
   function downloadRecoveryData() {
@@ -1980,17 +2164,35 @@ export function StudyDashboard() {
   async function confirmImport() {
     if (!pendingImport) return;
     const isMain = workspaceId === "main" || workspaceId === "261219";
-    setBackups(repository().createBackup(currentAppData(), "before-import"));
-    if (!await replaceCloudData(pendingImport)) return;
-    setProgress(mergeRemoteProgress(pendingImport.progress, defaultProgress(isMain)));
-    setProjectSettings(pendingImport.projectSettings);
-    setPlanHistory(pendingImport.planHistory);
-    setJournals(pendingImport.journals);
-    setPapers(pendingImport.papers ?? defaultPastPapers());
-    if (pendingImport.schedule) {
-      setSchedule(normalizeSchedule(pendingImport.schedule));
+    const repo = repository();
+    const previousIds = new Set(repo.backups().map((backup) => backup.id));
+    const backupsAfter = repo.createBackup(currentAppData(), "before-import");
+    if (!backupsAfter.some((backup) => !previousIds.has(backup.id))) {
+      setFeedbackMessage("导入前备份失败，请先导出当前数据后再重试");
+      return;
     }
-    repository().save(pendingImport);
+    const importedProgress = mergeRemoteProgress(pendingImport.progress, defaultProgress(isMain));
+    const reviewMigration = migrateLegacyChapterReviews(books, importedProgress);
+    if (reviewMigration.changedSectionIds.length > 0) {
+      const importBackupIds = new Set(backupsAfter.map((backup) => backup.id));
+      const migrationBackups = repo.createBackup(pendingImport, "before-migration");
+      if (!migrationBackups.some((backup) => !importBackupIds.has(backup.id))) {
+        setFeedbackMessage("导入文件中的旧复习记录无法备份，请先保留原始文件后重试");
+        return;
+      }
+    }
+    const imported = { ...pendingImport, progress: reviewMigration.progress };
+    setBackups(repo.backups());
+    if (!await replaceCloudData(imported)) return;
+    setProgress(imported.progress);
+    setProjectSettings(imported.projectSettings);
+    setPlanHistory(imported.planHistory);
+    setJournals(imported.journals);
+    setPapers(imported.papers ?? defaultPastPapers());
+    if (imported.schedule) {
+      setSchedule(normalizeSchedule(imported.schedule));
+    }
+    repo.save(imported);
     setPendingImport(null);
     setFeedbackMessage("数据导入完成，已自动保留导入前备份");
   }
@@ -2003,10 +2205,19 @@ export function StudyDashboard() {
   async function confirmRestore() {
     if (!pendingRestore) return;
     const isMain = workspaceId === "main" || workspaceId === "261219";
-    setBackups(repository().createBackup(currentAppData(), "before-restore"));
-    const restored = normalizeAppData(pendingRestore.data, defaultProgress(isMain));
-    if (!restored || !await replaceCloudData(restored)) return;
-    setProgress(mergeRemoteProgress(restored.progress, defaultProgress(isMain)));
+    const repo = repository();
+    const previousIds = new Set(repo.backups().map((backup) => backup.id));
+    const backupsAfter = repo.createBackup(currentAppData(), "before-restore");
+    if (!backupsAfter.some((backup) => !previousIds.has(backup.id))) {
+      setFeedbackMessage("恢复前备份失败，请先导出当前数据后再重试");
+      return;
+    }
+    const source = normalizeAppData(pendingRestore.data, defaultProgress(isMain));
+    if (!source) return;
+    const reviewMigration = migrateLegacyChapterReviews(books, mergeRemoteProgress(source.progress, defaultProgress(isMain)));
+    const restored = { ...source, progress: reviewMigration.progress };
+    if (!await replaceCloudData(restored)) return;
+    setProgress(restored.progress);
     setProjectSettings(restored.projectSettings);
     setPlanHistory(restored.planHistory);
     setJournals(restored.journals);
@@ -2014,8 +2225,8 @@ export function StudyDashboard() {
     if (restored.schedule) {
       setSchedule(normalizeSchedule(restored.schedule));
     }
-    repository().save(restored);
-    setBackups(repository().backups());
+    repo.save(restored);
+    setBackups(repo.backups());
     setPendingRestore(null);
     setFeedbackMessage("备份恢复完成，已保留恢复前备份");
   }
@@ -2058,7 +2269,7 @@ export function StudyDashboard() {
 
   function renderTaskList(
     tasks: TaskEntry[],
-    kind: "today" | "overdue" | "unreviewed",
+    kind: "today" | "overdue",
     emptyMessage: string,
     onReschedule?: (sectionId: string, phase: "base" | "review") => void,
     slotArea?: string | null,
@@ -2066,28 +2277,29 @@ export function StudyDashboard() {
     if (!tasks.length) return <p className="task-empty">{emptyMessage}</p>;
     return (
       <div className="task-list">
-        {tasks.map(({ book, chapterTitle, section, phase }) => {
+        {tasks.map(({ book, chapter, chapterTitle, section, phase }) => {
           const state = progress[section.id];
-          const isReviewAction = phase === "review" || kind === "unreviewed" || (!phase && Boolean(state?.learned) && !state?.reviewed);
-          const checked = isReviewAction ? state?.reviewed : state?.learned;
+          const review = summarizeChapterReview(chapter, progress);
+          const isReviewAction = phase === "review";
+          const checked = isReviewAction ? review.reviewed : state?.learned;
           const isCurrentSlot = kind === "today" && Boolean(slotArea && book.area === slotArea && !checked);
           return (
-            <article className={`task-row${checked ? " completed" : ""}${isCurrentSlot ? " task-row--current-slot" : ""}`} key={`${kind}-${phase ?? "task"}-${section.id}`}>
+            <article className={`task-row${checked ? " completed" : ""}${isCurrentSlot ? " task-row--current-slot" : ""}`} key={`${kind}-${phase ?? "task"}-${isReviewAction ? chapter.id : section.id}`}>
               <div className="task-main">
                 <div className="task-title">
                   {isCurrentSlot && <span className="task-slot-tag" aria-label="当前时段课程">🎯 正在进行</span>}
-                  <span>{section.number}</span><strong>{section.title}</strong>
+                  <span>{isReviewAction ? `第${chapter.number}章` : section.number}</span><strong>{isReviewAction ? chapter.title : section.title}</strong>
                 </div>
-                <div className="task-context"><strong>{book.shortTitle}</strong><span>{chapterTitle}</span></div>
+                <div className="task-context"><strong>{book.shortTitle}</strong><span>{isReviewAction ? `${review.learnedCount}/${review.sectionCount} 小节已新学` : chapterTitle}</span></div>
               </div>
               <div className="task-row-right">
                 <span className={`task-date ${isReviewAction ? "unreviewed" : kind === "today" ? "today" : "overdue"}`}>
                   {kind === "today"
                     ? isReviewAction
-                      ? state?.reviewed ? `复习 ${formatDateShort(state.reviewedAt)}` : "计划今日复习"
+                      ? review.reviewed ? `复习 ${formatDateShort(review.reviewedAt)}` : "计划今日复习"
                       : state?.learned ? `新学 ${formatDateShort(state.learnedAt)}` : "计划今日新学"
                     : isReviewAction
-                      ? `复习逾期 ${formatDateShort(state?.reviewedPlannedAt ?? "")}`
+                      ? `复习逾期 ${formatDateShort(review.reviewedPlannedAt)}`
                       : `新学逾期 ${formatDateShort(state?.plannedAt ?? "")}`}
                 </span>
                 {kind === "overdue" && onReschedule && (
@@ -2099,18 +2311,19 @@ export function StudyDashboard() {
                       onReschedule(section.id, isReviewAction ? "review" : "base");
                     }}
                     title="一键排到今日执行"
-                    aria-label={`将 ${section.number} ${section.title} 的${isReviewAction ? "复习" : "新学"}任务排到今日`}
+                    aria-label={`将 ${isReviewAction ? `第${chapter.number}章 ${chapter.title}` : `${section.number} ${section.title}`} 的${isReviewAction ? "复习" : "新学"}任务排到今日`}
                   >
                     + 今日
                   </button>
                 )}
-                <label className="task-check">
+                <label className="task-check" title={isReviewAction && !review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
                   <input
                     type="checkbox"
                     checked={Boolean(checked)}
-                    aria-label={`${section.number} ${section.title}，${isReviewAction ? "复习" : "新学"}完成`}
+                    disabled={isReviewAction && !review.canReview && !review.reviewed}
+                    aria-label={`${isReviewAction ? `第${chapter.number}章 ${chapter.title}` : `${section.number} ${section.title}`}，${isReviewAction ? "复习" : "新学"}完成`}
                     onChange={(event) => isReviewAction
-                      ? toggleReviewed(section.id, event.target.checked)
+                      ? toggleChapterReviewed(chapter, event.target.checked)
                       : toggleLearned(section.id, event.target.checked)}
                   />
                   <span />
@@ -2594,7 +2807,9 @@ export function StudyDashboard() {
                     key={area}
                     aria-pressed={activeArea === area}
                     onClick={() => {
+                      hasUserExplicitlyNavigatedRef.current = true;
                       setActiveArea(area);
+                      saveLastViewedStudyState({ activeArea: area });
                       setExpandedChapters([]);
                       setCatalogFilter("all");
                     }}
@@ -2669,7 +2884,7 @@ export function StudyDashboard() {
                   <SubjectPicker selectedBook={selectedBook} onChange={selectBookAcrossAreas} className="book-select--hero" />
                 </div>
                 <span className="status-pill status-pill--calm">
-                  {isReviewPhase ? (reviewedCount === selectedSections.length ? "全部完成" : "强化阶段") : "基础阶段"}
+                  {isReviewPhase ? (reviewedCount === selectedBook.chapters.length ? "全部完成" : "强化阶段") : "基础阶段"}
                 </span>
               </div>
 
@@ -2684,19 +2899,30 @@ export function StudyDashboard() {
 
               <div className="progress-note">
                 <p>
-                  新学 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedSections.length}</strong> 小节
+                  新学 <strong>{learnedCount}/{selectedSections.length}</strong> 小节，复习 <strong>{reviewedCount}/{selectedBook.chapters.length}</strong> 章
                 </p>
                 {currentSection ? (
                   <button
                     className="current-learning-link"
                     type="button"
-                    aria-label={`跳转到${currentSectionLabel}：${currentSection.number} ${currentSection.title}`}
+                    aria-label={`跳转到${currentSectionLabel}：${isReviewPhase && currentReviewChapter ? `第${currentReviewChapter.number}章 ${currentReviewChapter.title}` : `${currentSection.number} ${currentSection.title}`}`}
                     onClick={jumpToCurrentSection}
                   >
-                    {currentSectionLabel}：<strong>{currentSection.number} {currentSection.title}</strong>
+                    {currentSectionLabel}：<strong>{isReviewPhase && currentReviewChapter ? `第${currentReviewChapter.number}章 ${currentReviewChapter.title}` : `${currentSection.number} ${currentSection.title}`}</strong>
                   </button>
                 ) : (
                   <p>{currentSectionLabel}：<strong>{phaseCompleteLabel}</strong></p>
+                )}
+                {hasDifferentGlobalRecent && globalRecentBook && globalRecentSection && (
+                  <button
+                    className="current-learning-link"
+                    type="button"
+                    style={{ marginTop: "0.4rem", opacity: 0.9 }}
+                    aria-label={`回到最近学习科目：${globalRecentBook.shortTitle} ${globalRecentSection.number} ${globalRecentSection.title}`}
+                    onClick={jumpToGlobalRecent}
+                  >
+                    📍 最近学习：<strong>{globalRecentBook.shortTitle} · {globalRecentSection.number} {globalRecentSection.title}</strong>
+                  </button>
                 )}
               </div>
             </article>
@@ -2709,13 +2935,13 @@ export function StudyDashboard() {
                 <span className="streak-flame">✹</span>
               </div>
 
-              <div className="rhythm-metrics" aria-label={`本周学习 ${weeklyDaysCount} 天，完成 ${weeklySectionCount} 小节`}>
+              <div className="rhythm-metrics" aria-label={`本周学习 ${weeklyDaysCount} 天，完成 ${weeklySectionCount} 项新学或复习动作`}>
                 <div className="rhythm-metric">
                   <strong>{weeklyDaysCount}</strong><span>天已学</span>
                 </div>
                 <i aria-hidden="true" />
                 <div className="rhythm-metric">
-                  <strong>{weeklySectionCount}</strong><span>小节已学</span>
+                  <strong>{weeklySectionCount}</strong><span>项完成</span>
                 </div>
               </div>
 
@@ -2735,7 +2961,7 @@ export function StudyDashboard() {
 
           <section className="catalog">
             <div className="catalog-heading">
-              <div><h2>目录</h2><span>{filteredChapters.length} 章 · {filteredSectionCount} 小节{planEditMode ? " · 编辑中" : ""}</span></div>
+              <div><h2>目录</h2><span>{catalogFilter === "unreviewed" ? `${filteredChapters.length} 章待复习` : `${filteredChapters.length} 章 · ${filteredSectionCount} 小节`}{planEditMode ? " · 编辑中" : ""}</span></div>
               <div className="catalog-tools">
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
@@ -2779,7 +3005,7 @@ export function StudyDashboard() {
             {planUndo && <div className="plan-notice"><span>{planUndo.message}</span><button type="button" onClick={undoPlanChange}>撤销</button></div>}
             {filteredChapters.length === 0 && (
               <div className="catalog-empty" role="status">
-                <strong>当前筛选没有匹配的小节</strong>
+                <strong>当前筛选没有匹配的{catalogFilter === "unreviewed" ? "章节" : "小节"}</strong>
                 <p>可以切换筛选条件，或查看本学科的全部目录。</p>
                 <button type="button" onClick={() => setCatalogFilter("all")}>查看全部</button>
               </div>
@@ -2790,25 +3016,22 @@ export function StudyDashboard() {
                 const open = catalogFilter !== "all"
                   ? filteredChapterOverrides[chapter.id] ?? !filterChaptersCollapsed
                   : expandedChapters.includes(chapter.id);
-                const chapterCompleted = chapter.sections.filter((section) => isReviewPhase
-                  ? progress[section.id]?.reviewed
-                  : progress[section.id]?.learned).length;
-                const chapterComplete = chapterCompleted === chapter.sections.length;
-                const chapterOverdue = chapter.sections.some((section) => studyPlanStatus(progress[section.id]) === "overdue");
+                const review = summarizeChapterReview(chapter, progress);
+                const reviewScheduleStatus = chapterReviewPlanStatus(chapter, progress, dateToday());
+                const chapterComplete = review.allLearned && review.reviewed;
+                const chapterOverdue = chapter.sections.some((section) => basePlanStatus(progress[section.id]) === "overdue")
+                  || reviewScheduleStatus === "overdue";
                 const chapterState = chapter.id === currentChapterId ? "current" : chapterOverdue ? "overdue" : chapterComplete ? "completed" : "normal";
                 const baseDates = chapter.sections.map((section) => progress[section.id]?.plannedAt ?? "").filter(Boolean).sort();
-                const reviewDates = chapter.sections.map((section) => progress[section.id]?.reviewedPlannedAt ?? "").filter(Boolean).sort();
-                const activeDates = chapterPlanTarget === "review" ? reviewDates : baseDates;
                 const learnedCompletedAt = chapterCompletionDate(chapter.sections, progress, "learned");
-                const reviewedCompletedAt = chapterCompletionDate(chapter.sections, progress, "reviewed");
                 const range = chapterRanges[chapter.id] ?? {
-                  start: activeDates[0] ?? "",
-                  end: activeDates[activeDates.length - 1] ?? activeDates[0] ?? "",
+                  start: baseDates[0] ?? "",
+                  end: baseDates[baseDates.length - 1] ?? baseDates[0] ?? "",
                   includeCompleted: false,
                 };
 
                 return (
-                  <article className={`chapter-card ${chapterState}${open ? " open" : ""}`} key={chapter.id}>
+                  <article className={`chapter-card ${chapterState}${open ? " open" : ""}`} id={`chapter-${chapter.id}`} key={chapter.id}>
                     <button
                       className="chapter-button"
                       onClick={() => catalogFilter !== "all"
@@ -2822,61 +3045,98 @@ export function StudyDashboard() {
                         <strong>{chapter.title}</strong>
                         <span className="chapter-meta">
                           <em>{formatPlanRange(baseDates, "基础")}</em>
-                          {reviewDates.length > 0 && <em>{formatPlanRange(reviewDates, "强化")}</em>}
-                          {(learnedCompletedAt || reviewedCompletedAt) && (
+                          {review.reviewedPlannedAt && <em>强化 {formatDateChinese(review.reviewedPlannedAt)}</em>}
+                          {(learnedCompletedAt || review.reviewedAt) && (
                             <span className="chapter-completion-dates">
                               {learnedCompletedAt && <span className="chapter-completion-date learned">基础 {formatDateChinese(learnedCompletedAt)}</span>}
-                              {reviewedCompletedAt && <span className="chapter-completion-date reviewed">强化 {formatDateChinese(reviewedCompletedAt)}</span>}
+                              {review.reviewedAt && <span className="chapter-completion-date reviewed">强化 {formatDateChinese(review.reviewedAt)}</span>}
                             </span>
                           )}
                         </span>
                       </span>
                       <span
                         className={`chapter-count${chapterComplete ? " complete" : ""}`}
-                        aria-label={`本章${activeProgressLabel}进度 ${chapterCompleted} / ${chapter.sections.length}`}
+                        aria-label={`本章新学 ${review.learnedCount}/${review.sectionCount} 小节，${review.reviewed ? "已复习" : "未复习"}`}
                       >
-                        {chapterComplete && <i>✓</i>}{chapterCompleted} / {chapter.sections.length}
+                        <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
+                        <span className="chapter-count-review">复习 {review.reviewed ? "✓" : "—"}</span>
                       </span>
                       <span className="chevron" aria-hidden="true" />
                     </button>
+
+                    <div className="chapter-review-bar">
+                      <div className="chapter-review-plan">
+                        <span>本章复习计划</span>
+                        <EditableDate
+                          value={review.reviewedPlannedAt}
+                          emptyLabel="未设置"
+                          tone={planTone(reviewScheduleStatus === "today" ? "due_today" : reviewScheduleStatus)}
+                          ariaLabel={`第${chapter.number}章 ${chapter.title} 复习计划日期`}
+                          onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
+                        />
+                      </div>
+                      <label className="chapter-review-check" title={!review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
+                        <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
+                          aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}
+                          onChange={(event) => toggleChapterReviewed(chapter, event.target.checked)} />
+                        <span /><b>{review.reviewed ? "本章已复习" : "完成本章复习"}</b>
+                      </label>
+                      {review.reviewed && (
+                        <div className="chapter-review-date">
+                          <span>完成日期</span>
+                          {review.canReview ? (
+                            <EditableDate value={review.reviewedAt} emptyLabel="未记录"
+                              ariaLabel={`第${chapter.number}章 ${chapter.title} 复习完成日期`}
+                              validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : null}
+                              onError={setFeedbackMessage}
+                              onChange={(value) => toggleChapterReviewed(chapter, true, value)} />
+                          ) : (
+                            <span title="补齐本章全部小节的新学记录后可修改复习日期">{review.reviewedAt ? formatDateChinese(review.reviewedAt) : "未记录"}</span>
+                          )}
+                        </div>
+                      )}
+                      {planEditMode && chapter.sections[0] && (
+                        <div className="shift-anchor chapter-review-shift">
+                          <button type="button" onClick={() => setShiftSectionId(shiftSectionId === chapter.id ? null : chapter.id)}>移动复习计划</button>
+                          {shiftSectionId === chapter.id && (
+                            <div className="shift-popover">
+                              <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="复习计划移动范围"><option value="chapter">本章</option><option value="subject">本章及后续章节</option></select>
+                              {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, days, "review")}>{days > 0 ? "+" : ""}{days}天</button>)}
+                              <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
+                              <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(chapter.sections[0].id, shiftScope, shiftDays, "review")}>确定</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {open && (
                       <>
                       {planEditMode && (
                         <div className="chapter-plan-editor">
-                          <div className="chapter-plan-phase-toggle" role="group" aria-label="排期阶段">
-                            <button type="button" className={chapterPlanTarget === "base" ? "active" : ""} onClick={() => setChapterPlanTarget("base")}>基础新学</button>
-                            <button type="button" className={chapterPlanTarget === "review" ? "active" : ""} onClick={() => setChapterPlanTarget("review")}>强化复习</button>
-                          </div>
-                          <span>计划区间</span>
-                          <input type="date" value={range.start} aria-label={`${chapter.title}${chapterPlanTarget === "review" ? "强化复习" : "基础新学"}计划开始日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, start: event.target.value } }))} />
+                          <span>新学计划区间</span>
+                          <input type="date" value={range.start} aria-label={`${chapter.title}基础新学计划开始日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, start: event.target.value } }))} />
                           <b>—</b>
-                          <input type="date" value={range.end} aria-label={`${chapter.title}${chapterPlanTarget === "review" ? "强化复习" : "基础新学"}计划结束日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, end: event.target.value } }))} />
+                          <input type="date" value={range.end} aria-label={`${chapter.title}基础新学计划结束日期`} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, end: event.target.value } }))} />
                           <label><input type="checkbox" checked={range.includeCompleted} onChange={(event) => setChapterRanges((current) => ({ ...current, [chapter.id]: { ...range, includeCompleted: event.target.checked } }))} />包含已完成项</label>
-                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "uniform", chapterPlanTarget)}>统一日期</button>
-                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "spread", chapterPlanTarget)}>按天均分</button>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "uniform")}>统一日期</button>
+                          <button type="button" onClick={() => setChapterPlan(chapter.sections, range, "spread")}>按天均分</button>
                         </div>
                       )}
                       <div className={`section-table${planEditMode ? " editing" : ""}`}>
                         <div className="section-head" aria-hidden="true">
-                          <span>小节</span><span>新学计划</span><span>新学</span><span>复习计划</span><span>复习</span>
+                          <span>小节</span><span>新学计划</span><span>新学</span>
                         </div>
                         {visibleSections.map((section) => {
                           const state = progress[section.id];
                           const baseStatus = basePlanStatus(state);
-                          const reviewStatus = reviewPlanStatus(state);
-                          const rowStatus = studyPlanStatus(state);
-                          const isCurrent = currentSection?.id === section.id;
+                          const rowStatus = baseStatus;
+                          const isCurrent = !isReviewPhase && currentSection?.id === section.id;
                           const sectionJournals = journalsBySection[section.id] ?? [];
                           const detailsOpen = expandedSectionRows.includes(section.id);
-                          const nextPhase = !state?.learned ? "新学" : !state.reviewed ? "复习" : "完成";
-                          const needsLearnedDate = nextPhase === "复习" && !state?.learnedAt;
-                          const nextPlannedAt = !state?.learned ? state?.plannedAt : state.reviewed ? "" : state.reviewedPlannedAt;
-                          const nextPlanLabel = needsLearnedDate
-                            ? "新学完成日期未记录"
-                            : nextPhase === "完成"
-                            ? state?.reviewedAt ? `复习于 ${formatDateChinese(state.reviewedAt)}` : "新学和复习已完成"
-                            : `${nextPhase}计划${nextPlannedAt ? ` ${formatDateChinese(nextPlannedAt)}` : "未设置"}`;
+                          const nextPlanLabel = state?.learned
+                            ? `新学于 ${formatDateChinese(state.learnedAt)}`
+                            : `新学计划${state?.plannedAt ? ` ${formatDateChinese(state.plannedAt)}` : "未设置"}`;
                           return (
                             <div
                               className={`section-row ${rowStatus}${isCurrent ? " is-current" : ""}${detailsOpen && !planEditMode ? " is-detail-open" : ""}`}
@@ -2889,7 +3149,7 @@ export function StudyDashboard() {
                                   type="button"
                                   className="section-mobile-disclosure"
                                   aria-expanded={detailsOpen}
-                                  aria-label={`${section.number} ${section.title}，${nextPhase === "完成" ? "已完成" : `待${nextPhase}`}，${nextPlanLabel}，${detailsOpen ? "收起详情" : "展开详情"}`}
+                                  aria-label={`${section.number} ${section.title}，${state?.learned ? "已新学" : "待新学"}，${nextPlanLabel}，${detailsOpen ? "收起详情" : "展开详情"}`}
                                   onClick={() => setExpandedSectionRows((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id])}
                                 >
                                   <span className="section-mobile-number">{section.number}</span>
@@ -2897,7 +3157,7 @@ export function StudyDashboard() {
                                     <strong>{section.title}</strong>
                                     <span className="section-mobile-meta">
                                       {isCurrent && <em>当前</em>}
-                                      <span>{nextPhase === "完成" ? "已完成" : `待${nextPhase}`}</span>
+                                      <span>{state?.learned ? "已新学" : "待新学"}</span>
                                       <span aria-hidden="true">·</span>
                                       <span>{nextPlanLabel}</span>
                                       {sectionJournals.length > 0 && <span>· 日志 {sectionJournals.length}</span>}
@@ -2906,19 +3166,15 @@ export function StudyDashboard() {
                                   <span className="section-mobile-chevron" aria-hidden="true" />
                                 </button>
                                 <div className="section-mobile-primary">
-                                  {nextPhase === "完成" ? (
-                                    <span className="section-mobile-complete" aria-label="新学与复习均已完成">✓</span>
+                                  {state?.learned ? (
+                                    <span className="section-mobile-complete" aria-label="新学已完成">✓</span>
                                   ) : (
                                     <button
                                       type="button"
-                                      aria-label={needsLearnedDate
-                                        ? `展开 ${section.number} ${section.title}，补记新学完成日期`
-                                        : `标记 ${section.number} ${section.title} ${nextPhase}完成`}
-                                      onClick={() => needsLearnedDate
-                                        ? setExpandedSectionRows((current) => current.includes(section.id) ? current : [...current, section.id])
-                                        : nextPhase === "新学" ? toggleLearned(section.id, true) : toggleReviewed(section.id, true)}
+                                      aria-label={`标记 ${section.number} ${section.title} 新学完成`}
+                                      onClick={() => toggleLearned(section.id, true)}
                                     >
-                                      <b>{needsLearnedDate ? "补记日期" : `完成${nextPhase}`}</b>
+                                      <b>完成新学</b>
                                     </button>
                                   )}
                                 </div>
@@ -2987,26 +3243,7 @@ export function StudyDashboard() {
 
                               <div className="check-with-date check-with-date--learned">
                                 <label aria-label={`${section.number} 新学`}><input type="checkbox" checked={state?.learned ?? false} onChange={(event) => toggleLearned(section.id, event.target.checked)} /><span /><b className="mobile-check-label">新学</b></label>
-                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 新学完成日期`} validate={(value) => !value ? "新学日期不能为空；如需取消，请取消勾选" : state.reviewedAt && value > state.reviewedAt ? "新学日期不能晚于复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
-                              </div>
-
-                              <div className="section-plan section-plan--review">
-                                {planEditMode ? (
-                                  <input className="inline-plan-input" type="date" value={state?.reviewedPlannedAt ?? ""} aria-label={`${section.number} 复习计划日期`} onChange={(event) => updateReviewedPlannedAt(section.id, event.target.value)} />
-                                ) : (
-                                  <EditableDate
-                                    value={state?.reviewedPlannedAt ?? ""}
-                                    emptyLabel="未设置"
-                                    tone={planTone(reviewStatus)}
-                                    ariaLabel={`${section.number} 复习计划日期`}
-                                    onChange={(value) => updateReviewedPlannedAt(section.id, value)}
-                                  />
-                                )}
-                              </div>
-
-                              <div className="check-with-date check-with-date--reviewed">
-                                <label aria-label={`${section.number} 复习`} title={!state?.learnedAt ? "完成新学后可标记复习" : undefined}><input type="checkbox" checked={state?.reviewed ?? false} disabled={!state?.learnedAt} onChange={(event) => toggleReviewed(section.id, event.target.checked)} /><span /><b className="mobile-check-label">复习</b></label>
-                                {state?.reviewed && <EditableDate value={state.reviewedAt} emptyLabel="未记录" ariaLabel={`${section.number} 复习完成日期`} validate={(value) => !value ? "复习日期不能为空；如需取消，请取消勾选" : state.learnedAt && value < state.learnedAt ? "复习日期不能早于新学日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { reviewedAt: value })} />}
+                                {state?.learned && <EditableDate value={state.learnedAt} emptyLabel="未记录" ariaLabel={`${section.number} 新学完成日期`} validate={(value) => !value ? "新学日期不能为空；如需取消，请取消勾选" : review.reviewedAt && value > review.reviewedAt ? "新学日期不能晚于本章复习日期" : null} onError={setFeedbackMessage} onChange={(value) => updateProgress(section.id, { learnedAt: value })} />}
                               </div>
 
                               {planEditMode && (
@@ -3014,11 +3251,10 @@ export function StudyDashboard() {
                                   <button type="button" onClick={() => setShiftSectionId(shiftSectionId === section.id ? null : section.id)}>移动</button>
                                   {shiftSectionId === section.id && (
                                     <div className="shift-popover">
-                                      <select value={shiftPlanTarget} onChange={(event) => setShiftPlanTarget(event.target.value as "base" | "review")} aria-label="移动目标阶段"><option value="base">基础新学计划</option><option value="review">强化复习计划</option></select>
                                       <select value={shiftScope} onChange={(event) => setShiftScope(event.target.value as ShiftScope)} aria-label="移动范围"><option value="chapter">本章后续</option><option value="subject">本科目后续</option></select>
-                                      {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days, shiftPlanTarget)}>{days > 0 ? "+" : ""}{days}天</button>)}
+                                      {[-3, -2, -1, 1, 2, 3].map((days) => <button type="button" key={days} onClick={() => shiftPlans(section.id, shiftScope, days, "base")}>{days > 0 ? "+" : ""}{days}天</button>)}
                                       <input type="number" value={shiftDays} onChange={(event) => setShiftDays(Number(event.target.value))} aria-label="自定义移动天数" />
-                                      <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(section.id, shiftScope, shiftDays, shiftPlanTarget)}>确定</button>
+                                      <button type="button" disabled={!Number.isInteger(shiftDays) || shiftDays === 0} onClick={() => shiftPlans(section.id, shiftScope, shiftDays, "base")}>确定</button>
                                     </div>
                                   )}
                                 </div>
@@ -3970,7 +4206,7 @@ export function StudyDashboard() {
                     </div>
                     <div className="macro-card__meta">
                       <span>已新学 {forecast.learnedTotal}/{forecast.totalSections} 节</span>
-                      <span>已复习 {forecast.reviewedTotal} 节</span>
+                      <span>已复习 {analyticsReviewedChapters}/{analyticsChapterCount} 章</span>
                     </div>
                   </div>
                 </article>
@@ -4182,12 +4418,20 @@ export function StudyDashboard() {
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="plan-preview-title">
             <span className="dialog-kicker">变更预览</span><h2 id="plan-preview-title">确认调整学习计划？</h2>
-            <p>{planPreview.message}，共影响 {Object.keys(planPreview.values).length} 个未完成小节。</p>
+            <p>{planPreview.message}，共影响 {visiblePlanPreviewEntries(planPreview.values, planPreview.field).length} 个未完成{planPreview.field === "reviewedPlannedAt" ? "章节" : "小节"}。</p>
             <div className="plan-preview-list">
-              {Object.entries(planPreview.values).map(([sectionId, nextDate]) => {
+              {visiblePlanPreviewEntries(planPreview.values, planPreview.field).map(([sectionId, nextDate]) => {
                 const task = projectTasks.find(({ section }) => section.id === sectionId) ?? projectTaskEntries(activeArea === "408" ? "math" : "408").find(({ section }) => section.id === sectionId);
-                const currentVal = progress[sectionId]?.[planPreview.field || "plannedAt"];
-                return <article key={sectionId}><div><strong>{task ? `${task.book.shortTitle} · ${task.section.number} ${task.section.title}` : sectionId}</strong><span>{task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
+                const isReviewPlan = planPreview.field === "reviewedPlannedAt";
+                const currentVal = isReviewPlan && task
+                  ? summarizeChapterReview(task.chapter, progress).reviewedPlannedAt
+                  : progress[sectionId]?.[planPreview.field || "plannedAt"];
+                const title = task
+                  ? isReviewPlan
+                    ? `${task.book.shortTitle} · 第${task.chapter.number}章 ${task.chapter.title}`
+                    : `${task.book.shortTitle} · ${task.section.number} ${task.section.title}`
+                  : sectionId;
+                return <article key={sectionId}><div><strong>{title}</strong><span>{isReviewPlan ? "整章复习计划" : task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
               })}
             </div>
             <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source, planPreview.field); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
@@ -4252,8 +4496,8 @@ export function StudyDashboard() {
       {pendingClearSectionId && (
         <div className="confirm-overlay" role="presentation">
           <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-progress-title">
-            <h2 id="clear-progress-title">清除学习与复习记录？</h2>
-            <p>该小节已经记录过复习。取消“新学”会同时清除复习记录。</p>
+            <h2 id="clear-progress-title">取消本章复习记录？</h2>
+            <p>取消此小节的新学会同时取消本章复习并清除本章复习完成日期；其他小节的新学记录保留。</p>
             <div><button type="button" onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
           </div>
         </div>

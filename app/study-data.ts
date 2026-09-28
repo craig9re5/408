@@ -1,4 +1,6 @@
 import type { Book } from "./data/books";
+import { books } from "./data/books.ts";
+import { migrateLegacyChapterReviews, summarizeChapterReview } from "./chapter-review.ts";
 import type {
   StudyArea,
   SectionProgress,
@@ -426,7 +428,70 @@ function rebaseSyncValue(base: unknown, local: unknown, remote: unknown): unknow
 
 export function rebaseAppData(base: StudyAppData, local: StudyAppData, remote: StudyAppData): StudyAppData {
   const merged = rebaseSyncValue(base, local, remote);
-  return normalizeAppData(merged, remote.progress) ?? remote;
+  const normalized = normalizeAppData(merged, remote.progress);
+  if (!normalized) return remote;
+
+  // Review completion and scheduling are chapter actions. Resolve each vector
+  // as one unit so a concurrent cancel/complete cannot leave a mixed chapter.
+  const progress = { ...normalized.progress };
+  const migratedBaseProgress = migrateLegacyChapterReviews(books, base.progress).progress;
+  for (const book of books) {
+    if (book.area !== "408" && book.area !== "math") continue;
+    for (const chapter of book.chapters) {
+      const ids = chapter.sections.map((section) => section.id);
+      const reviewVector = (data: StudyAppData) => ids.map((id) => ({
+        reviewed: Boolean(data.progress[id]?.reviewed),
+        reviewedAt: data.progress[id]?.reviewedAt ?? "",
+      }));
+      const planVector = (data: StudyAppData) => ids.map((id) => data.progress[id]?.reviewedPlannedAt ?? "");
+      const baseReview = reviewVector(base);
+      const localReview = reviewVector(local);
+      const migratedBaseReview = ids.map((id) => ({
+        reviewed: Boolean(migratedBaseProgress[id]?.reviewed),
+        reviewedAt: migratedBaseProgress[id]?.reviewedAt ?? "",
+      }));
+      const basePlan = planVector(base);
+      const localPlan = planVector(local);
+      const migratedBasePlan = ids.map((id) => migratedBaseProgress[id]?.reviewedPlannedAt ?? "");
+      // A local vector produced solely by automatic legacy migration is not a
+      // user edit. Preserve a newer remote chapter action in that case.
+      const localReviewChanged = !sameSyncValue(localReview, baseReview)
+        && !sameSyncValue(localReview, migratedBaseReview);
+      const localPlanChanged = !sameSyncValue(localPlan, basePlan)
+        && !sameSyncValue(localPlan, migratedBasePlan);
+      const reviewSource = localReviewChanged ? local : remote;
+      const planSource = localPlanChanged ? local : remote;
+      const selectedReview = reviewVector(reviewSource);
+      const isSingleChapterCompletion = selectedReview.length > 0
+        && Boolean(selectedReview[0].reviewedAt)
+        && selectedReview.every((entry) => entry.reviewed && entry.reviewedAt === selectedReview[0].reviewedAt);
+
+      for (const id of ids) {
+        const state = progress[id];
+        if (!state) continue;
+        const review = reviewSource.progress[id];
+        const plan = planSource.progress[id];
+        // A concurrent learnedAt edit can make a selected review date invalid.
+        // Normalize against the merged learning fields before persisting it.
+        progress[id] = normalizeSectionProgress({
+          ...state,
+          reviewed: Boolean(review?.reviewed),
+          reviewedAt: review?.reviewedAt ?? "",
+          reviewedPlannedAt: plan?.reviewedPlannedAt ?? "",
+        }, state);
+      }
+      // If a concurrent learning edit invalidates one section of a newly
+      // completed chapter, clear the entire completion rather than saving a
+      // partially reviewed chapter. Older partial reviews remain untouched.
+      if (isSingleChapterCompletion && ids.some((id) => !progress[id]?.reviewed)) {
+        for (const id of ids) {
+          const state = progress[id];
+          if (state) progress[id] = { ...state, reviewed: false, reviewedAt: "" };
+        }
+      }
+    }
+  }
+  return { ...normalized, progress };
 }
 
 export type AppDataPatch = {
@@ -913,10 +978,9 @@ export function normalizeSectionProgress(value: unknown, fallback?: SectionProgr
   const learnedAt = isDate(value.learnedAt) ? value.learnedAt : "";
   const candidateReviewedAt = isDate(value.reviewedAt) ? value.reviewedAt : "";
   const reviewed = learned
-    && Boolean(learnedAt)
     && Boolean(value.reviewed)
     && Boolean(candidateReviewedAt)
-    && candidateReviewedAt >= learnedAt;
+    && (!learnedAt || candidateReviewedAt >= learnedAt);
 
   const plannedAt = value.plannedAt === "" || isDate(value.plannedAt) ? value.plannedAt : base.plannedAt;
   const reviewedPlannedAt = value.reviewedPlannedAt === "" || isDate(value.reviewedPlannedAt)
@@ -1604,5 +1668,244 @@ export class StorageRepository {
       // 删除时配额异常极少见，忽略以避免打断交互。
     }
     return next;
+  }
+}
+
+export type RecentStudyTarget = {
+  area: StudyArea;
+  bookId: string;
+  chapterId: string;
+  sectionId: string;
+  isReview: boolean;
+};
+
+/**
+ * 根据书籍列表和用户当前 progress，智能推导当前每个领域的最佳进行中书籍
+ */
+export function resolveRecentBookByArea(
+  bookList: Book[],
+  progress: ProgressMap,
+): Record<StudyArea, string> {
+  const result: Record<StudyArea, string> = {
+    "408": "computer-network",
+    math: "probability",
+    english: "",
+    politics: "",
+  };
+
+  const areas: StudyArea[] = ["408", "math"];
+  for (const area of areas) {
+    const areaBooks = bookList.filter((b) => b.area === area);
+    if (areaBooks.length === 0) continue;
+
+    // 1. 优先找有 isCurrent == true 且未学完的科目
+    const bookWithCurrent = areaBooks.find((book) =>
+      book.chapters.some((c) =>
+        c.sections.some((s) => progress[s.id]?.isCurrent && !progress[s.id]?.learned)
+      )
+    );
+    if (bookWithCurrent) {
+      result[area] = bookWithCurrent.id;
+      continue;
+    }
+
+    // 2. 统计每本书的完成情况与最新打卡日期
+    const bookStats = areaBooks.map((book) => {
+      const sections = book.chapters.flatMap((c) => c.sections);
+      const learnedCount = sections.filter((s) => progress[s.id]?.learned).length;
+      const reviewedCount = book.chapters.filter((chapter) => summarizeChapterReview(chapter, progress).reviewed).length;
+      const total = sections.length;
+      const isFullyCompleted = total > 0 && learnedCount === total && reviewedCount === book.chapters.length;
+      const isReviewPhase = total > 0 && learnedCount === total && reviewedCount < book.chapters.length;
+      const isInProgressLearning = learnedCount > 0 && learnedCount < total;
+
+      let latestDate = "";
+      for (const s of sections) {
+        const p = progress[s.id];
+        if (p?.learnedAt && p.learnedAt > latestDate) latestDate = p.learnedAt;
+        if (p?.reviewedAt && p.reviewedAt > latestDate) latestDate = p.reviewedAt;
+      }
+
+      return {
+        book,
+        learnedCount,
+        reviewedCount,
+        total,
+        isFullyCompleted,
+        isReviewPhase,
+        isInProgressLearning,
+        latestDate,
+      };
+    });
+
+    // 优先：有最近打卡记录且未完全学完/复习完的书，按打卡日期降序
+    const activeWithDate = bookStats
+      .filter((b) => !b.isFullyCompleted && b.latestDate)
+      .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+    if (activeWithDate.length > 0) {
+      result[area] = activeWithDate[0].book.id;
+      continue;
+    }
+
+    // 其次：处于进行中 (新学进行中 0 < learned < total，或正在复习) 的书
+    const inProgress = bookStats.find((b) => b.isInProgressLearning || b.isReviewPhase);
+    if (inProgress) {
+      result[area] = inProgress.book.id;
+      continue;
+    }
+
+    // 再次：首本有未学完小节的书 (新学优先)
+    const unlearnedBook = bookStats.find((b) => b.learnedCount < b.total);
+    if (unlearnedBook) {
+      result[area] = unlearnedBook.book.id;
+      continue;
+    }
+
+    // 再次：第一本未完全结束的书
+    const uncompleted = bookStats.find((b) => !b.isFullyCompleted);
+    result[area] = uncompleted ? uncompleted.book.id : areaBooks[0].id;
+  }
+
+  return result;
+}
+
+/**
+ * 找出全局最近正在进行的学习目标（领域、科目、章节与小节）
+ */
+export function resolveGlobalRecentTarget(
+  bookList: Book[],
+  progress: ProgressMap,
+): RecentStudyTarget | null {
+  const booksByArea = resolveRecentBookByArea(bookList, progress);
+
+  // 1. 是否有跨科目的 isCurrent 标记？
+  for (const area of ["408", "math"] as StudyArea[]) {
+    const areaBooks = bookList.filter((b) => b.area === area);
+    for (const book of areaBooks) {
+      for (const chapter of book.chapters) {
+        for (const section of chapter.sections) {
+          if (progress[section.id]?.isCurrent && !progress[section.id]?.learned) {
+            return {
+              area,
+              bookId: book.id,
+              chapterId: chapter.id,
+              sectionId: section.id,
+              isReview: false,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // 2. 比较 408 和 数学 中候选书的最新打卡日期
+  let bestArea: StudyArea = "408";
+  let maxDate = "";
+
+  for (const area of ["408", "math"] as StudyArea[]) {
+    const bookId = booksByArea[area];
+    const book = bookList.find((b) => b.id === bookId);
+    if (!book) continue;
+
+    for (const chapter of book.chapters) {
+      for (const section of chapter.sections) {
+        const p = progress[section.id];
+        if (p?.learnedAt && p.learnedAt > maxDate) {
+          maxDate = p.learnedAt;
+          bestArea = area;
+        }
+        if (p?.reviewedAt && p.reviewedAt > maxDate) {
+          maxDate = p.reviewedAt;
+          bestArea = area;
+        }
+      }
+    }
+  }
+
+  const selectedBook = bookList.find((b) => b.id === booksByArea[bestArea])
+    ?? bookList.find((b) => b.area === bestArea)
+    ?? bookList[0];
+
+  if (!selectedBook) return null;
+
+  const sections = selectedBook.chapters.flatMap((c) => c.sections);
+  const learnedCount = sections.filter((s) => progress[s.id]?.learned).length;
+  const isReview = sections.length > 0 && learnedCount === sections.length;
+
+  const reviewChapter = isReview
+    ? selectedBook.chapters.find((chapter) => !summarizeChapterReview(chapter, progress).reviewed)
+      ?? selectedBook.chapters.at(-1)
+    : undefined;
+  const targetSection = isReview
+    ? reviewChapter?.sections[0]
+    : sections.find((s) => progress[s.id]?.isCurrent && !progress[s.id]?.learned)
+      ?? sections.find((s) => !progress[s.id]?.learned)
+      ?? sections[sections.length - 1]
+      ?? sections[0];
+
+  if (!targetSection) return null;
+
+  const targetChapter = selectedBook.chapters.find((c) =>
+    c.sections.some((s) => s.id === targetSection.id)
+  ) ?? selectedBook.chapters[0];
+
+  return {
+    area: bestArea,
+    bookId: selectedBook.id,
+    chapterId: targetChapter.id,
+    sectionId: targetSection.id,
+    isReview,
+  };
+}
+
+export const LAST_VIEWED_STUDY_STATE_KEY = "study-last-viewed-state-v1";
+
+export type LastViewedStudyState = {
+  activeArea?: StudyArea;
+  selectedBookByArea?: Partial<Record<StudyArea, string>>;
+};
+
+export function loadLastViewedStudyState(storage?: Storage): LastViewedStudyState | null {
+  if (typeof window === "undefined" && !storage) return null;
+  const store = storage ?? window.localStorage;
+  try {
+    const raw = store.getItem(LAST_VIEWED_STUDY_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    const state: LastViewedStudyState = {};
+    if (parsed.activeArea === "408" || parsed.activeArea === "math") {
+      state.activeArea = parsed.activeArea;
+    }
+    if (isRecord(parsed.selectedBookByArea)) {
+      state.selectedBookByArea = {};
+      if (typeof parsed.selectedBookByArea["408"] === "string") {
+        state.selectedBookByArea["408"] = parsed.selectedBookByArea["408"];
+      }
+      if (typeof parsed.selectedBookByArea.math === "string") {
+        state.selectedBookByArea.math = parsed.selectedBookByArea.math;
+      }
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastViewedStudyState(state: LastViewedStudyState, storage?: Storage): void {
+  if (typeof window === "undefined" && !storage) return;
+  const store = storage ?? window.localStorage;
+  try {
+    const existing = loadLastViewedStudyState(store) ?? {};
+    const merged: LastViewedStudyState = {
+      activeArea: state.activeArea ?? existing.activeArea,
+      selectedBookByArea: {
+        ...existing.selectedBookByArea,
+        ...state.selectedBookByArea,
+      },
+    };
+    store.setItem(LAST_VIEWED_STUDY_STATE_KEY, JSON.stringify(merged));
+  } catch {
+    // 忽略配额超限错误
   }
 }

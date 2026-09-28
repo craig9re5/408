@@ -257,7 +257,7 @@ function normalizeProgress(value: unknown): ProgressValue | null {
   const learned = Boolean(entry.learned);
   const learnedAt = date(entry.learnedAt);
   const candidateReviewedAt = date(entry.reviewedAt);
-  const reviewed = learned && Boolean(learnedAt) && Boolean(entry.reviewed) && Boolean(candidateReviewedAt) && candidateReviewedAt >= learnedAt;
+  const reviewed = learned && Boolean(entry.reviewed) && Boolean(candidateReviewedAt) && (!learnedAt || candidateReviewedAt >= learnedAt);
   return {
     learned,
     learnedAt,

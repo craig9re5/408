@@ -12,6 +12,38 @@
 }
 
 @media (max-width: 768px) {
+  .chapter-review-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+
+  .chapter-review-plan {
+    justify-content: space-between;
+    gap: 4px;
+    margin-right: 0;
+  }
+
+  .chapter-review-check,
+  .chapter-review-bar .date-text,
+  .chapter-review-bar .date-editor,
+  .chapter-review-bar input[type="date"] {
+    min-height: 44px;
+  }
+
+  .chapter-review-check {
+    padding: 0 9px;
+  }
+
+  .chapter-review-date {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    padding-top: 3px;
+    border-top: 1px solid #deebe6;
+  }
+
   .section-table .section-row {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "summary";
@@ -142,7 +174,7 @@
 
   .section-table .section-row.is-detail-open {
     grid-template-columns: minmax(96px, .8fr) minmax(0, 1.2fr);
-    grid-template-areas: "summary summary" "name name" "base-plan learned" "review-plan reviewed";
+    grid-template-areas: "summary summary" "name name" "base-plan learned";
     column-gap: 8px;
     row-gap: 5px;
     padding-bottom: 10px;
@@ -235,7 +267,7 @@
 
   .section-table.editing .section-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas: "name name" "base-plan review-plan";
+    grid-template-areas: "name name" "base-plan base-plan";
     padding: 10px 0;
   }
 }
@@ -243,12 +275,23 @@
 @media (min-width: 601px) and (max-width: 768px) {
   .section-table .section-row.is-detail-open {
     grid-template-columns: minmax(120px, .8fr) minmax(140px, 1fr) minmax(200px, 1.2fr);
-    grid-template-areas: "summary summary summary" "name base-plan learned" "name review-plan reviewed";
+    grid-template-areas: "summary summary summary" "name base-plan learned";
   }
 
   .section-row.is-detail-open .section-name {
     align-items: flex-start;
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .chapter-review-bar {
+    margin: 0;
+    padding: 4px 12px 6px 14px;
+    border: 0;
+    border-top: 1px solid #e4ece6;
+    border-radius: 0;
+    background: #f7faf6;
   }
 }
 

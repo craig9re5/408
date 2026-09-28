@@ -106,6 +106,26 @@ test("versioned writes reject stale clients without overwriting progress", async
   }
 });
 
+test("server retains chapter reviews for historically learned sections without dates", async () => {
+  const { sqlite, env } = makeEnv();
+  try {
+    const response = await login(env, "123456");
+    assert.equal(response.status, 200);
+    const cookie = response.headers.get("set-cookie").split(";")[0];
+    const progress = { "legacy-section": {
+      learned: true, learnedAt: "", reviewed: true, reviewedAt: "2026-09-28",
+      plannedAt: "", reviewedPlannedAt: "", isCurrent: false,
+    } };
+    const saved = await handleApi(dataRequest(cookie, 0, progress), env);
+    assert.equal(saved.status, 200);
+    const loaded = await handleApi(new Request("https://example.test/api/app-data", { headers: { cookie } }), env);
+    assert.equal(loaded.status, 200);
+    assert.deepEqual((await loaded.json()).progress["legacy-section"], progress["legacy-section"]);
+  } finally {
+    sqlite.close();
+  }
+});
+
 test("guest workspace cannot publish and repeated login attempts are throttled", async () => {
   const { sqlite, env } = makeEnv();
   try {

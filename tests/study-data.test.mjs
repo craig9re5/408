@@ -19,7 +19,14 @@ import {
   isUnreviewedTask,
   normalizeAppData,
   normalizeSectionProgress,
+  resolveRecentBookByArea,
+  resolveGlobalRecentTarget,
+  loadLastViewedStudyState,
+  saveLastViewedStudyState,
+  LAST_VIEWED_STUDY_STATE_KEY,
 } from "../app/study-data.ts";
+import { books } from "../app/data/books.ts";
+
 
 const createSection = (overrides = {}) => ({
   learned: false,
@@ -201,6 +208,17 @@ test("数据标准化与状态清洗: 修复非法复习时序，校验项目配
   assert.equal(unlearnedButReviewed.reviewed, false);
   assert.equal(unlearnedButReviewed.reviewedAt, "");
 
+  // 旧主空间可标记为已新学但没有新学日期；复习完成日期仍需保留。
+  const undatedLearnedReview = normalizeSectionProgress(createSection({
+    learned: true,
+    learnedAt: "",
+    reviewed: true,
+    reviewedAt: "2026-09-28",
+  }));
+  assert.equal(undatedLearnedReview.learnedAt, "");
+  assert.equal(undatedLearnedReview.reviewed, true);
+  assert.equal(undatedLearnedReview.reviewedAt, "2026-09-28");
+
   // 3. normalizeAppData 整体校验与非法考研日期纠错
   const normalizedApp = normalizeAppData(
     {
@@ -318,4 +336,164 @@ test("本地存储仓储: V1历史数据平滑迁移、非法数据隔离防丢�
   const afterDelete = cleanRepo.deleteBackup(deleteTarget.id);
   assert.equal(afterDelete.length, MAX_BACKUPS - 1);
   assert.ok(!afterDelete.some((b) => b.id === deleteTarget.id));
+});
+
+test("最近学习目标推导: 模拟真实用户数据，408 必须选定计算机网络且定位到 5.1", () => {
+  const progress = {};
+
+  // 数据结构：全部学完 (2026-03 ~ 2026-06)
+  const ds = books.find((b) => b.id === "data-structure");
+  ds.chapters.forEach((c) => c.sections.forEach((s) => {
+    progress[s.id] = createSection({ learned: true, learnedAt: "2026-06-01" });
+  }));
+
+  // 计组：全部学完 (2026-03 ~ 2026-07)
+  const co = books.find((b) => b.id === "computer-organization");
+  co.chapters.forEach((c) => c.sections.forEach((s) => {
+    progress[s.id] = createSection({ learned: true, learnedAt: "2026-07-22" });
+  }));
+
+  // 操作系统：全部学完 (2026-08 ~ 2026-09-06)
+  const os = books.find((b) => b.id === "operating-system");
+  os.chapters.forEach((c) => c.sections.forEach((s) => {
+    progress[s.id] = createSection({ learned: true, learnedAt: "2026-09-06" });
+  }));
+
+  // 计算机网络：学到 4.7 (2026-09-06 ~ 2026-09-15)
+  const cn = books.find((b) => b.id === "computer-network");
+  cn.chapters.forEach((c) => c.sections.forEach((s) => {
+    const isLearned = s.id.startsWith("computer-network-1-")
+      || s.id.startsWith("computer-network-2-")
+      || s.id.startsWith("computer-network-3-")
+      || s.id.startsWith("computer-network-4-");
+    progress[s.id] = createSection({
+      learned: isLearned,
+      learnedAt: isLearned ? "2026-09-15" : "",
+    });
+  }));
+
+  // 测试单领域推导
+  const recentBooks = resolveRecentBookByArea(books, progress);
+  assert.equal(recentBooks["408"], "computer-network", "408 不应再回退到操作系统，必须是正在学的计算机网络");
+
+  // 测试全局目标推导：应当定位到 5.1 (传输层第1节)
+  const target = resolveGlobalRecentTarget(books, progress);
+  assert.ok(target);
+  assert.equal(target.area, "408");
+  assert.equal(target.bookId, "computer-network");
+  assert.equal(target.sectionId, "computer-network-5-1");
+  assert.equal(target.chapterId, "computer-network-chapter-5");
+  assert.equal(target.isReview, false);
+});
+
+test("最近学习目标推导: 模拟数学已完成高数线代，概率论强化复习中", () => {
+  const progress = {};
+
+  // 高数、线代全部完成新学与复习
+  for (const bookId of ["advanced-math", "linear-algebra"]) {
+    const b = books.find((x) => x.id === bookId);
+    b.chapters.forEach((c) => c.sections.forEach((s) => {
+      progress[s.id] = createSection({
+        learned: true,
+        learnedAt: "2026-06-01",
+        reviewed: true,
+        reviewedAt: "2026-09-10",
+      });
+    }));
+  }
+
+  // 概率论：全部学完，第1章已复习 (2026-09-18)，第2章未复习
+  const prob = books.find((x) => x.id === "probability");
+  prob.chapters.forEach((c) => c.sections.forEach((s) => {
+    const isFirstChapter = s.id.startsWith("probability-1-");
+    progress[s.id] = createSection({
+      learned: true,
+      learnedAt: "2026-07-01",
+      reviewed: isFirstChapter,
+      reviewedAt: isFirstChapter ? "2026-09-18" : "",
+    });
+  }));
+
+  const recentBooks = resolveRecentBookByArea(books, progress);
+  assert.equal(recentBooks.math, "probability", "数学必须是正在复习的概率论，而不是已完结的高数或线代");
+
+  const target = resolveGlobalRecentTarget(books, progress);
+  assert.ok(target);
+  assert.equal(target.area, "math");
+  assert.equal(target.bookId, "probability");
+  assert.equal(target.sectionId, "probability-2-1", "应当定位到首个未复习小节 2.1");
+  assert.equal(target.chapterId, "probability-chapter-2");
+  assert.equal(target.isReview, true);
+});
+
+test("最近学习目标推导: 旧数据中部分小节复习过的章视为整章完成", () => {
+  const progress = {};
+  const probability = books.find((book) => book.id === "probability");
+  probability.chapters.forEach((chapter) => chapter.sections.forEach((section) => {
+    progress[section.id] = createSection({ learned: true, learnedAt: "2026-07-01" });
+  }));
+  progress[probability.chapters[0].sections[0].id] = createSection({
+    learned: true,
+    learnedAt: "2026-07-01",
+    reviewed: true,
+    reviewedAt: "2026-09-18",
+  });
+
+  const target = resolveGlobalRecentTarget(books, progress);
+  assert.equal(target?.bookId, "probability");
+  assert.equal(target?.chapterId, probability.chapters[1].id);
+  assert.equal(target?.sectionId, probability.chapters[1].sections[0].id);
+  assert.equal(target?.isReview, true);
+});
+
+test("最近学习目标推导: isCurrent 手动标记具有最高优先级", () => {
+  const progress = {};
+
+  // 即使计算机网络有更新的完成日期
+  const cn = books.find((b) => b.id === "computer-network");
+  cn.chapters.forEach((c) => c.sections.forEach((s) => {
+    progress[s.id] = createSection({ learned: true, learnedAt: "2026-09-25" });
+  }));
+
+  // 但用户在组成原理中手动标记了某一节为当前新学
+  progress["computer-organization-3-2"] = createSection({
+    learned: false,
+    isCurrent: true,
+  });
+
+  const recentBooks = resolveRecentBookByArea(books, progress);
+  assert.equal(recentBooks["408"], "computer-organization");
+
+  const target = resolveGlobalRecentTarget(books, progress);
+  assert.ok(target);
+  assert.equal(target.area, "408");
+  assert.equal(target.bookId, "computer-organization");
+  assert.equal(target.sectionId, "computer-organization-3-2");
+  assert.equal(target.chapterId, "computer-organization-chapter-3");
+});
+
+test("最近学习导航记忆: LocalStorage 状态安全读写", () => {
+  const mockStorage = new MockLocalStorage();
+
+  assert.equal(loadLastViewedStudyState(mockStorage), null);
+
+  saveLastViewedStudyState({
+    activeArea: "408",
+    selectedBookByArea: { "408": "computer-network" },
+  }, mockStorage);
+
+  const loaded = loadLastViewedStudyState(mockStorage);
+  assert.ok(loaded);
+  assert.equal(loaded.activeArea, "408");
+  assert.equal(loaded.selectedBookByArea["408"], "computer-network");
+
+  // 增量合并其他领域
+  saveLastViewedStudyState({
+    selectedBookByArea: { math: "probability" },
+  }, mockStorage);
+
+  const merged = loadLastViewedStudyState(mockStorage);
+  assert.equal(merged.activeArea, "408");
+  assert.equal(merged.selectedBookByArea["408"], "computer-network");
+  assert.equal(merged.selectedBookByArea.math, "probability");
 });
