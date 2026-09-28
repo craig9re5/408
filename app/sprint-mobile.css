@@ -113,3 +113,87 @@
   .bento-mobile-actions .bento-mobile-more { width: 44px; padding: 0; font-size: 0; }
   .bento-mobile-more span { font-size: 18px; }
 }
+
+.bento-mobile-footer { display: none; }
+
+@media (max-width: 600px) {
+  .sprint-mobile-intro {
+    padding: 16px 17px 13px;
+    border: 1px solid #e6e7e2;
+    border-radius: 17px;
+    background: #fffefa;
+    box-shadow: 0 2px 12px rgba(23, 33, 41, .025);
+  }
+  .sprint-mobile-heading { align-items: flex-start; }
+  .sprint-mobile-eyebrow { color: #667b7e; font-size: 13px; }
+  .sprint-mobile-heading h2 { font: 700 26px/1.2 var(--sans); }
+  .sprint-mobile-subject { width: 86px; height: 42px; flex-basis: 86px; }
+  .sprint-mobile-subject > span[aria-hidden="true"] { height: 40px; margin-top: 0; border-radius: 11px; background: #fff; font-size: 14px; }
+  .sprint-mobile-summary { margin: 10px 0 21px; color: #6d7d80; font-size: 12px; }
+  .sprint-mobile-focus > span { font-size: 16px; }
+  .sprint-mobile-focus button { min-height: 44px; padding: 0 12px; border-radius: 10px; background: #22575e; font-size: 12px; }
+  .sprint-mobile-library { min-height: 29px; margin-top: 4px; padding: 0; color: #346b77; font-size: 13px; }
+
+  .sprint-mobile-controls { margin-top: 23px; padding: 0; }
+  .sprint-mobile-type select { max-width: 170px; padding-right: 24px; font: 700 20px var(--sans); }
+  .sprint-mobile-type::after { color: #557178; font-size: 18px; }
+  .sprint-mobile-filter summary { padding: 0; font-size: 15px; }
+  .sprint-mobile-filter summary::after { margin-left: 7px; font-size: 18px; }
+  .sprint-mobile-filter-dot { font-size: 11px; }
+  .sprint-mobile-add-mock { width: 100%; min-height: 42px; margin: 0; border: 1px solid #dfe4dd; background: #fff; font-size: 13px; }
+
+  .sprint-bento-container { gap: 20px; margin-top: 8px; }
+  .sprint-section { gap: 10px; }
+  .sprint-section-header,
+  .sprint-section-header--mobile-collapsed { position: static; width: auto; height: auto; min-height: 29px; overflow: visible; padding: 0; border: 0; clip-path: none; }
+  .sprint-section-header h3 { color: #6c7676; font: 650 14px var(--sans); }
+  .sprint-count-badge { color: #889293; font-size: 13px; }
+  .sprint-bento-grid { display: grid; gap: 8px; overflow: visible; border: 0; border-radius: 0; background: transparent; }
+  .sprint-bento-card,
+  .sprint-bento-card.completed { display: block; padding: 0 16px; border: 1px solid #e6e7e2; border-radius: 16px; background: #fff; box-shadow: 0 1px 5px rgba(23, 33, 41, .02); }
+  .sprint-bento-card + .sprint-bento-card { border-top: 1px solid #e6e7e2; }
+  .sprint-bento-card.is-expanded { background: #fff; }
+  .bento-mobile-summary { display: block; }
+  .bento-mobile-toggle { display: flex; width: 100%; min-height: 68px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+  .bento-mobile-heading { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; }
+  .bento-mobile-title { max-width: 100%; overflow: hidden; font: 700 17px/1.35 var(--sans); text-overflow: ellipsis; white-space: nowrap; }
+  .bento-mobile-score { color: var(--coral); font-size: 17px; font-weight: 700; }
+  .is-expanded .bento-mobile-score { display: none; }
+  .bento-mobile-chevron { flex: 0 0 auto; color: #50727a; font-size: 22px; line-height: 1; }
+  .sprint-bento-card.is-expanded .bento-card-details { display: flex; gap: 0; margin: 0; padding: 0 0 14px; border: 0; }
+  .bento-card-details .bento-card-top { display: flex; min-height: 36px; justify-content: flex-start; padding: 0 0 11px; border-bottom: 1px solid #e8e9e5; }
+  .bento-card-details .bento-card-top--mock { padding-right: 30px; }
+  .bento-card-details .bento-top-controls { justify-content: flex-start; margin: 0; }
+  .bento-card-details .bento-check-label { display: none; }
+  .bento-score-inline { height: 30px; padding: 0; }
+  .bento-score-input { min-width: 48px; height: 28px; font: 700 22px/28px var(--sans); }
+  .bento-score-input::placeholder { font-size: 16px; line-height: 28px; }
+  .bento-score-unit { font: 700 20px/28px var(--sans); }
+  .paper-btn-del { top: 0; right: 0; width: 30px; height: 30px; opacity: .7; pointer-events: auto; }
+  .bento-mini-heatmap { gap: 0; padding: 13px 0 12px; border: 0; border-radius: 0; background: transparent; }
+  .mini-heatmap-head { display: none; }
+  .mini-heatmap-rows-stack { gap: 8px; }
+  .mini-heatmap-row { min-height: 20px; gap: 10px; }
+  .mini-row-label { width: 34px; color: #637981; font-size: 13px; text-align: left; }
+  .mini-group-dots { gap: 5px; }
+  .mini-dot { width: 11px; height: 11px; }
+  .bento-card-footer { display: none; }
+  .bento-mobile-footer { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; }
+  .bento-mobile-note-actions { display: flex; min-width: 0; align-items: center; gap: 5px; }
+  .bento-mobile-note { min-height: 40px; padding: 0 3px; color: #55747b; background: transparent; font-size: 14px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+  .bento-mobile-note-count { padding: 5px; color: #738589; background: transparent; font-size: 11px; cursor: pointer; }
+  .bento-mobile-answer { min-height: 42px; padding: 0 12px; border: 1px solid #bdcdd1; border-radius: 10px; color: #456f78; background: #fff; font-size: 13px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+  .bento-mobile-toggle:focus-visible,
+  .bento-mobile-note:focus-visible,
+  .bento-mobile-note-count:focus-visible,
+  .bento-mobile-answer:focus-visible { outline: 2px solid #507d8a; outline-offset: 2px; }
+}
+
+@media (max-width: 375px) {
+  .sprint-mobile-intro { padding-right: 14px; padding-left: 14px; }
+  .sprint-mobile-focus > span { font-size: 14px; }
+  .sprint-mobile-focus button { padding: 0 9px; font-size: 11px; }
+  .sprint-mobile-summary { font-size: 11px; }
+  .mini-group-dots { gap: 4px; }
+  .mini-dot { width: 10px; height: 10px; }
+}

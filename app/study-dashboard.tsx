@@ -3767,13 +3767,13 @@ export function StudyDashboard() {
                   </label>
                 </div>
                 <p className="sprint-mobile-summary">
-                  真题已完成 <strong>{sprintPastCompleted}/{sprintPastTotal}</strong> 套
+                  真题完成 <strong>{sprintPastCompleted}/{sprintPastTotal}</strong> 套
                   {sprintPastAvgScore !== "--" && <span> · 均分 {sprintPastAvgScore}</span>}
                   {sprintMockTotal > 0 && <span> · 模拟 {sprintMockCompleted}/{sprintMockTotal}</span>}
                 </p>
                 {featuredSprintPaper && (
                   <div className="sprint-mobile-focus">
-                    <span>{featuredSprintPaper.kind === "past" ? `${featuredSprintPaper.year} 年真题` : featuredSprintPaper.title}</span>
+                    <span>{featuredSprintPaper.title}</span>
                     <button type="button" onClick={() => setActivePaperQuestionModalId(featuredSprintPaper.id)} aria-label={`打开${featuredSprintPaper.title}答题卡`}>
                       打开答题卡 <span aria-hidden="true">↗</span>
                     </button>
@@ -3977,8 +3977,7 @@ export function StudyDashboard() {
               </div>
 
               <div className="sprint-mobile-controls">
-                {(activeArea === "408" || activeArea === "math") && (sprintMockTotal > 0 || effectiveSprintTab === "mock") && (
-                  <label className="sprint-mobile-type">
+                <label className="sprint-mobile-type">
                     <span className="visually-hidden">试卷类型</span>
                     <select value={effectiveSprintTab} onChange={(event) => {
                       const value = event.target.value;
@@ -3986,14 +3985,9 @@ export function StudyDashboard() {
                     }}>
                       <option value="all">全部试卷</option>
                       <option value="past">历年真题</option>
-                      <option value="mock">模拟试题</option>
+                      {(activeArea === "408" || activeArea === "math") && <option value="mock">模拟试题</option>}
                     </select>
-                  </label>
-                )}
-                {((activeArea === "english" || activeArea === "politics") || (sprintMockTotal === 0 && effectiveSprintTab !== "mock")) && <span className="sprint-mobile-type-label">真题 <small>{visiblePastPapers.length} 套</small></span>}
-                {(activeArea === "408" || activeArea === "math") && sprintMockTotal === 0 && (
-                  <button type="button" className="sprint-mobile-add-mock" onClick={() => setIsAddMockModalOpen(true)}>+ 添加模拟卷</button>
-                )}
+                </label>
                 <details className="sprint-mobile-filter">
                   <summary>筛选{(sprintStatusFilter !== "all" || pastPaperSortOrder !== "desc") && <span className="sprint-mobile-filter-dot"> · 已调整</span>}</summary>
                   <div className="sprint-mobile-filter-panel">
@@ -4013,6 +4007,7 @@ export function StudyDashboard() {
                         <option value="asc">最早优先</option>
                       </select>
                     </label>
+                    {(activeArea === "408" || activeArea === "math") && <button type="button" className="sprint-mobile-add-mock" onClick={() => setIsAddMockModalOpen(true)}>+ 添加模拟卷</button>}
                   </div>
                 </details>
               </div>

@@ -100,33 +100,20 @@ export function PaperCard({
   return (
     <div className={`sprint-bento-card ${paper.completed ? "completed" : ""} ${mobileExpanded ? "is-expanded" : ""}`} key={paper.id}>
       <div className="bento-mobile-summary">
-        <div className="bento-mobile-heading">
-          <strong className="bento-mobile-title">{paper.title}</strong>
-          <span className={`bento-mobile-status ${paper.completed ? "is-complete" : ""}`}>
-            {paper.completed ? "已做" : "未做"}
+        <button
+          type="button"
+          className="bento-mobile-toggle"
+          aria-label={`${mobileExpanded ? "收起" : "展开"}${paper.title}`}
+          aria-expanded={mobileExpanded}
+          aria-controls={mobileDetailsId}
+          onClick={() => setMobileExpanded((expanded) => !expanded)}
+        >
+          <span className="bento-mobile-heading">
+            <strong className="bento-mobile-title">{paper.title}</strong>
+            {paper.score !== null && paper.score !== undefined && <span className="bento-mobile-score">{paper.score} 分</span>}
           </span>
-        </div>
-        <div className="bento-mobile-actions">
-          <button
-            type="button"
-            className="bento-mobile-open"
-            aria-label={`打开${paper.title}答题卡`}
-            onClick={() => onOpenAnswerSheet(paper.id)}
-          >
-            答题卡 <span aria-hidden="true">↗</span>
-          </button>
-          <button
-            type="button"
-            className="bento-mobile-more"
-            aria-label={`${mobileExpanded ? "收起操作" : "更多操作"}：${paper.title}`}
-            aria-expanded={mobileExpanded}
-            aria-controls={mobileDetailsId}
-            onClick={() => setMobileExpanded((expanded) => !expanded)}
-          >
-            {mobileExpanded ? "收起操作" : "更多操作"}
-            <span aria-hidden="true">{mobileExpanded ? "⌃" : "⌄"}</span>
-          </button>
-        </div>
+          <span className="bento-mobile-chevron" aria-hidden="true">{mobileExpanded ? "⌃" : "⌄"}</span>
+        </button>
       </div>
       <div className="bento-card-details" id={mobileDetailsId}>
       <div className={`bento-card-top ${isMock ? "bento-card-top--mock" : ""}`}>
@@ -315,6 +302,15 @@ export function PaperCard({
             <span className="record-label">记</span>
           </button>
         </div>
+      </div>
+      <div className="bento-mobile-footer">
+        <div className="bento-mobile-note-actions">
+          <button type="button" className="bento-mobile-note" onClick={() => onOpenCreateJournal(paper)}>+ 笔记</button>
+          {paperJournals.length > 0 && (
+            <button type="button" className="bento-mobile-note-count" aria-label={`查看${paper.title}的${paperJournals.length}条笔记`} onClick={() => onViewJournals(paper)}>{paperJournals.length} 条</button>
+          )}
+        </div>
+        <button type="button" className="bento-mobile-answer" onClick={() => onOpenAnswerSheet(paper.id)}>打开答题卡 <span aria-hidden="true">↗</span></button>
       </div>
       </div>
     </div>
