@@ -114,7 +114,8 @@
   .bento-mobile-more span { font-size: 18px; }
 }
 
-.bento-mobile-footer { display: none; }
+.bento-mobile-footer,
+.bento-mobile-record-menu { display: none; }
 
 @media (max-width: 600px) {
   .sprint-mobile-intro {
@@ -169,6 +170,14 @@
   .bento-score-input { min-width: 48px; height: 28px; font: 700 22px/28px var(--sans); }
   .bento-score-input::placeholder { font-size: 16px; line-height: 28px; }
   .bento-score-unit { font: 700 20px/28px var(--sans); }
+  .bento-mobile-record-menu { position: absolute; top: 0; right: 0; z-index: 12; display: block; }
+  .bento-card-top--mock .bento-mobile-record-menu { right: 30px; }
+  .bento-mobile-record-menu summary { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; color: #617d82; font-size: 23px; line-height: 1; cursor: pointer; list-style: none; }
+  .bento-mobile-record-menu summary::-webkit-details-marker { display: none; }
+  .bento-mobile-record-panel { position: absolute; top: 35px; right: 0; display: grid; width: 184px; gap: 2px; padding: 7px; border: 1px solid #dde4e3; border-radius: 10px; background: #fff; box-shadow: 0 9px 25px rgba(17, 27, 36, .13); }
+  .bento-mobile-record-panel > button { min-height: 40px; padding: 0 9px; border-radius: 6px; color: var(--ink); background: transparent; font-size: 12px; text-align: left; cursor: pointer; }
+  .bento-mobile-record-panel > button:hover { background: #f4f7f5; }
+  .bento-mobile-record-date { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 5px; padding: 0 9px; color: #67777a; font-size: 12px; }
   .paper-btn-del { top: 0; right: 0; width: 30px; height: 30px; opacity: .7; pointer-events: auto; }
   .bento-mini-heatmap { gap: 0; padding: 13px 0 12px; border: 0; border-radius: 0; background: transparent; }
   .mini-heatmap-head { display: none; }
@@ -186,7 +195,9 @@
   .bento-mobile-toggle:focus-visible,
   .bento-mobile-note:focus-visible,
   .bento-mobile-note-count:focus-visible,
-  .bento-mobile-answer:focus-visible { outline: 2px solid #507d8a; outline-offset: 2px; }
+  .bento-mobile-answer:focus-visible,
+  .bento-mobile-record-menu summary:focus-visible,
+  .bento-mobile-record-panel button:focus-visible { outline: 2px solid #507d8a; outline-offset: 2px; }
 }
 
 @media (max-width: 375px) {

@@ -182,6 +182,29 @@ export function PaperCard({
           </label>
         </div>
 
+        <details className="bento-mobile-record-menu">
+          <summary aria-label={`${paper.title}记录操作`} title="记录操作">···</summary>
+          <div className="bento-mobile-record-panel">
+            <button type="button" onClick={() => onToggleCompleted(paper.id, !paper.completed)}>
+              {paper.completed ? "取消完成记录" : "标记本套完成"}
+            </button>
+            <button type="button" onClick={() => onToggleSecondRound(paper.id, !paper.secondRound)}>
+              {paper.secondRound ? "取消再次练习" : "记录再次练习"}
+            </button>
+            {paper.completed && (
+              <div className="bento-mobile-record-date">
+                <span>完成日期</span>
+                <EditableDate
+                  value={paper.completedAt}
+                  emptyLabel="设置日期"
+                  ariaLabel={`${paper.title}完成日期`}
+                  onChange={(val) => onChangeCompletedAt(paper.id, val)}
+                />
+              </div>
+            )}
+          </div>
+        </details>
+
         {isMock && onDelete && (
           <button
             type="button"
