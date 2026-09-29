@@ -9,7 +9,7 @@
 .mobile-progress-overview,
 .catalog-filter-mobile,
 .chapter-mobile-meta,
-.chapter-review-mobile-toggle {
+.chapter-review-plan-mobile-label {
   display: none;
 }
 
@@ -322,8 +322,8 @@
   }
   .mobile-week-disclosure > summary::-webkit-details-marker { display: none; }
   .mobile-week-disclosure > summary span { color: #426f79; white-space: nowrap; }
-  .mobile-week-disclosure > summary span::after { margin-left: 4px; content: "⌄"; }
-  .mobile-week-disclosure[open] > summary span::after { content: "⌃"; }
+  .mobile-week-disclosure > summary span::after { display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg) translateY(-2px); }
+  .mobile-week-disclosure[open] > summary span::after { transform: rotate(225deg) translateY(-2px); }
   .mobile-week-disclosure > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
   .mobile-week-content { padding: 0 0 12px; }
   .mobile-week-content p { margin: 0 0 9px; color: #65716f; font-size: 12px; }
@@ -341,7 +341,7 @@
   .page-content--progress .catalog-heading h2 { font: 600 18px/1.2 var(--sans); }
   .page-content--progress .catalog-filters { display: none; }
   .catalog-filter-mobile { position: relative; display: block; grid-column: 2; grid-row: 1; }
-  .catalog-filter-mobile::after { position: absolute; top: 50%; right: 11px; color: #426f79; content: "⌄"; pointer-events: none; transform: translateY(-55%); }
+  .catalog-filter-mobile::after { position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: #426f79; content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); }
   .catalog-filter-mobile select {
     min-width: 88px;
     min-height: 44px;
@@ -368,7 +368,7 @@
   .page-content--progress .chapter-expand-button { min-height: 63px; }
   .page-content--progress .chapter-name { gap: 4px; }
   .page-content--progress .chapter-name strong { font: 600 15px/1.3 var(--sans); }
-  .page-content--progress .chapter-meta { display: none; }
+  .page-content--progress .chapter-card .chapter-meta { display: none; }
   .chapter-mobile-meta { display: block; overflow: hidden; color: #65716f; font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
   .page-content--progress .chapter-progress { display: none; }
   .page-content--progress .chapter-card.open .chapter-progress {
@@ -380,33 +380,31 @@
     padding: 0 13px 0 47px;
   }
   .page-content--progress .chapter-progress > .chapter-count-group { display: none; }
-  .chapter-review-mobile-toggle {
-    display: flex;
-    width: 100%;
-    min-height: 44px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0;
-    border-top: 1px solid #e8ece6;
-    color: #426f79;
-    background: transparent;
-    font: 500 12px var(--sans);
-    text-align: left;
-    cursor: pointer;
-  }
-  .chapter-review-mobile-toggle span { font-size: 19px; }
-  .chapter-review-mobile-toggle[aria-expanded="true"] span { transform: rotate(90deg); }
-  .chapter-review-mobile-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-  .page-content--progress .chapter-card.open .chapter-review-inline { display: none; }
-  .page-content--progress .chapter-card.open .chapter-review-inline.mobile-open {
+  .page-content--progress .chapter-card.open .chapter-review-inline {
     display: flex;
     grid-column: 1;
-    flex-wrap: wrap;
-    margin: 0 0 9px;
-    padding: 8px 0 0;
+    min-width: 0;
+    min-height: 47px;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 5px;
+    margin: 0 0 5px;
+    padding: 5px 0;
     border-top: 1px solid #e8ece6;
     border-left: 0;
   }
+  .chapter-review-plan-desktop-label,
+  .chapter-review-arrow,
+  .chapter-review-date > span:first-child { display: none; }
+  .chapter-review-plan-mobile-label { display: inline; color: #687875; }
+  .chapter-review-plan,
+  .chapter-review-date { gap: 3px; }
+  .chapter-review-check { min-height: 34px; gap: 4px; padding: 0 6px; border-radius: 7px; }
+  .chapter-review-check > span { width: 15px; height: 15px; }
+  .chapter-review-check input:checked + span::after { top: 1px; left: 4px; }
+  .chapter-review-inline .date-text { min-height: 34px; padding: 4px 5px; font-size: 11px; }
+  .chapter-review-inline .date-editor { width: 62px; min-height: 34px; padding: 0 4px; }
+  .page-content--progress .chapter-card.open .chapter-review-inline:has(.chapter-review-shift) { flex-wrap: wrap; }
   .page-content--progress .section-table { margin: 0 12px 4px 47px; }
   .page-content--progress .section-head { display: none; }
   .page-content--progress .section-mobile-summary { min-height: 53px; padding: 0; }

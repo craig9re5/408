@@ -508,7 +508,6 @@ export function StudyDashboard() {
   const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
   const [collapsedCurrentChapterId, setCollapsedCurrentChapterId] = useState<string | null>(null);
   const [expandedSectionRows, setExpandedSectionRows] = useState<string[]>([]);
-  const [expandedChapterReviewControls, setExpandedChapterReviewControls] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(() => defaultProgress(false));
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProjectSettings);
   const [planHistory, setPlanHistory] = useState<PlanHistoryEntry[]>([]);
@@ -1417,13 +1416,6 @@ export function StudyDashboard() {
       return true;
     });
   }, [mockPapers, sprintStatusFilter]);
-  const featuredSprintPapers = effectiveSprintTab === "mock"
-    ? visibleMockPapers
-    : effectiveSprintTab === "past"
-      ? visiblePastPapers
-      : [...visiblePastPapers, ...visibleMockPapers];
-  const featuredSprintPaper = featuredSprintPapers.find((paper) => !paper.completed) ?? featuredSprintPapers[0] ?? null;
-
   const activeQuestionPaper = useMemo(() => {
     if (!activePaperQuestionModalId) return null;
     return papers.find((p) => p.id === activePaperQuestionModalId) ?? null;
@@ -3118,7 +3110,7 @@ export function StudyDashboard() {
                             {!review.allLearned && baseDates.length > 0 && <em>{formatPlanRange(baseDates, "基础")}</em>}
                           </span>
                           <span className="chapter-mobile-meta">
-                            {chapter.id === currentChapterId && "当前章 · "}新学 {review.learnedCount}/{review.sectionCount} · {review.reviewed ? `已复习${review.reviewedAt ? ` ${formatDateShort(review.reviewedAt)}` : ""}` : review.canReview ? "待复习" : "未复习"}
+                            新学 {review.learnedCount}/{review.sectionCount}{open ? "" : ` · ${review.reviewed ? `已复习${review.reviewedAt ? ` ${formatDateShort(review.reviewedAt)}` : ""}` : review.canReview ? "待复习" : "未复习"}`}
                           </span>
                         </span>
                       </button>
@@ -3128,14 +3120,13 @@ export function StudyDashboard() {
                           <span className="chapter-count-learned">新学 {review.learnedCount}/{review.sectionCount}</span>
                           {baseDateLabel && <span className={`chapter-count-date${overdueBaseDate && !learnedCompletedAt ? " overdue" : ""}`}>{baseDateLabel}</span>}
                         </span>
-                        {open ? <>
-                          <button className="chapter-review-mobile-toggle" type="button" aria-expanded={expandedChapterReviewControls.includes(chapter.id)} aria-controls={`chapter-review-controls-${chapter.id}`} onClick={() => setExpandedChapterReviewControls((current) => current.includes(chapter.id) ? current.filter((id) => id !== chapter.id) : [...current, chapter.id])}>复习记录与计划<span aria-hidden="true">›</span></button>
-                          <div className={`chapter-review-inline${expandedChapterReviewControls.includes(chapter.id) ? " mobile-open" : ""}`} id={`chapter-review-controls-${chapter.id}`}>
+                        {open ? <div className="chapter-review-inline">
                           <div className="chapter-review-plan">
-                            <span>复习计划</span>
+                            <span className="chapter-review-plan-desktop-label">复习计划</span>
+                            <span className="chapter-review-plan-mobile-label">计划</span>
                             <EditableDate
                               value={review.reviewedPlannedAt}
-                              emptyLabel="未设置"
+                              emptyLabel="未安排"
                               tone={planTone(reviewScheduleStatus === "today" ? "due_today" : reviewScheduleStatus)}
                               ariaLabel={`第${chapter.number}章 ${chapter.title} 复习计划日期`}
                               onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
@@ -3146,7 +3137,7 @@ export function StudyDashboard() {
                             <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
                               aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}
                               onChange={(event) => toggleChapterReviewed(chapter, event.target.checked)} />
-                            <span /><b>{review.reviewed ? "已复习" : "完成复习"}</b>
+                            <span /><b>{review.reviewed ? "已复习" : "标记复习"}</b>
                           </label>
                           {review.reviewed && (
                             <div className="chapter-review-date">
@@ -3175,8 +3166,7 @@ export function StudyDashboard() {
                               )}
                             </div>
                           )}
-                          </div>
-                        </> : (
+                        </div> : (
                           <span className={`chapter-count-group chapter-review-summary${chapterComplete ? " complete" : ""}`} aria-label={`${review.reviewed ? "已复习" : "未复习"}${reviewDateLabel ? `，${reviewDateLabel}` : ""}`}>
                             <span className="chapter-count-review">{review.reviewed ? "已复习" : review.canReview ? "待复习" : "未复习"}</span>
                             {reviewDateLabel && <span className={`chapter-count-date${reviewScheduleStatus === "overdue" ? " overdue" : ""}`}>{reviewDateLabel}</span>}
@@ -3788,12 +3778,7 @@ export function StudyDashboard() {
             <section className="page-view sprint-page" aria-labelledby="sprint-title">
               <div className="sprint-mobile-intro">
                 <div className="sprint-mobile-heading">
-                  <div>
-                    <span className="sprint-mobile-eyebrow">套卷冲刺</span>
-                    <h2>{featuredSprintPaper
-                      ? (featuredSprintPaper.completed ? "回顾练习" : "下一套练习")
-                      : sprintStatusFilter === "completed" ? "暂无已完成试卷" : sprintStatusFilter === "uncompleted" ? "暂无未完成试卷" : "暂无试卷"}</h2>
-                  </div>
+                  <h2>套卷冲刺</h2>
                   <label className="sprint-mobile-subject">
                     <span className="visually-hidden">选择冲刺科目</span>
                     <span aria-hidden="true">{sprintAreaLabels[activeArea]} <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
@@ -3802,20 +3787,6 @@ export function StudyDashboard() {
                     </select>
                   </label>
                 </div>
-                <p className="sprint-mobile-summary">
-                  真题完成 <strong>{sprintPastCompleted}/{sprintPastTotal}</strong> 套
-                  {sprintPastAvgScore !== "--" && <span> · 均分 {sprintPastAvgScore}</span>}
-                  {sprintMockTotal > 0 && <span> · 模拟 {sprintMockCompleted}/{sprintMockTotal}</span>}
-                </p>
-                {featuredSprintPaper && (
-                  <div className="sprint-mobile-focus">
-                    <span>{featuredSprintPaper.title}</span>
-                    <button type="button" onClick={() => setActivePaperQuestionModalId(featuredSprintPaper.id)} aria-label={`打开${featuredSprintPaper.title}答题卡`}>
-                      打开答题卡 <span aria-hidden="true">↗</span>
-                    </button>
-                  </div>
-                )}
-                <button type="button" className="sprint-mobile-library" onClick={() => setIsPaperNetdiskOpen(true)}>查看试卷文件 <span aria-hidden="true">›</span></button>
               </div>
               <div className="sprint-macro-grid">
                 {/* Card 1: 历年统考真题 */}
@@ -3937,9 +3908,10 @@ export function StudyDashboard() {
                 </span>
                 <span className="sprint-library-copy">
                   <strong>试卷云盘</strong>
+                  <span className="sprint-library-mobile-copy">查看试卷文件</span>
                 </span>
                 <span className="sprint-library-action" aria-hidden="true">
-                  打开云盘
+                  <span>打开云盘</span>
                   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 10h11m-4-4 4 4-4 4" />
                   </svg>

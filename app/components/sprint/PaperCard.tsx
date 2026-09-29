@@ -112,7 +112,7 @@ export function PaperCard({
             <strong className="bento-mobile-title">{paper.title}</strong>
             {paper.score !== null && paper.score !== undefined && <span className="bento-mobile-score">{paper.score} 分</span>}
           </span>
-          <span className="bento-mobile-chevron" aria-hidden="true">{mobileExpanded ? "⌃" : "⌄"}</span>
+          <span className="bento-mobile-chevron" aria-hidden="true" />
         </button>
       </div>
       <div className="bento-card-details" id={mobileDetailsId}>
