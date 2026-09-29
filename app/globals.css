@@ -757,7 +757,7 @@ input[type="number"] {
 }
 
 @media (min-width: 1281px) {
-  .chapter-header { grid-template-columns: minmax(0, 1fr) 600px 32px; }
+  .chapter-header { grid-template-columns: minmax(0, 1fr) 560px 32px; }
   .chapter-progress { grid-template-columns: 110px minmax(0, 1fr); gap: 16px; }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PaperRecord, QuestionState } from "../../../shared/types.ts";
-import { CS408_PAPER_STRUCTURE, modalChoiceGroups } from "../../study-data.ts";
+import { bentoChoiceGroups, modalChoiceGroups } from "../../study-data.ts";
 
 export type QuestionSummaryMetrics = {
   correctCount: number;
@@ -543,13 +543,11 @@ export function AnswerSheetModal({
                   </button>
                 </div>
                 <div className="q-type-rows">
-                  {CS408_PAPER_STRUCTURE.groups
-                    .filter((g) => g.type === "选择题")
-                    .map((grp) => (
-                      <div className="q-heatmap-row" key={grp.subject}>
+                  {bentoChoiceGroups("408").map((grp) => (
+                      <div className="q-heatmap-row" key={grp.name}>
                         <div className="q-subject-label">
-                          <strong className="q-label-name">{grp.subject}</strong>
-                          <span className="q-label-range">{grp.start}~{grp.end}</span>
+                          <strong className="q-label-name" title={grp.label}>{grp.name}</strong>
+                          <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
                         </div>
                         <div className="q-heatmap-chips">
                           {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
@@ -559,8 +557,8 @@ export function AnswerSheetModal({
                                 key={num}
                                 type="button"
                                 className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                aria-label={`第 ${num} 题 [${grp.subject}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
-                                title={`第 ${num} 题 [${grp.subject}]：点击切换 正确 / 错题 / 取消`}
+                                aria-label={`第 ${num} 题 [${grp.label}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
+                                title={`第 ${num} 题 [${grp.label}]：点击切换 正确 / 错题 / 取消`}
                                 onClick={() => onToggleQuestion(num, true)}
                               >
                                 {num}
