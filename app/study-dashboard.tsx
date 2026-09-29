@@ -2845,7 +2845,7 @@ export function StudyDashboard() {
             </span>
             <div className="topbar-more-wrap" ref={topbarMoreRef}>
               <button
-                className={`topbar-more${activePage === "analytics" || activePage === "settings" ? " active" : ""}`}
+                className={`topbar-more${activePage === "schedule" || activePage === "analytics" || activePage === "settings" ? " active" : ""}`}
                 type="button"
                 ref={topbarMoreButtonRef}
                 aria-label={`更多页面，同步状态：${syncMeta.label}`}
@@ -2857,7 +2857,7 @@ export function StudyDashboard() {
                 <i className={`topbar-more-dot topbar-more-dot--${syncMeta.cls}`} aria-hidden="true" />
               </button>
               <div className="topbar-more-panel" id="mobile-more-pages" role="group" aria-label="更多页面" hidden={!topbarMoreOpen}>
-                {(["analytics", "settings"] as AppPage[]).map((page) => (
+                {(["schedule", "analytics", "settings"] as AppPage[]).map((page) => (
                   <button type="button" key={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
                     <MobileNavIcon page={page} />
                     <span>{pageTitles[page]}</span>

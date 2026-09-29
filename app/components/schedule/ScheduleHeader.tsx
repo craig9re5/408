@@ -46,7 +46,7 @@ export function ScheduleHeader({
             onChange={(e) => onSelectWeek(parseInt(e.target.value, 10))}
             className="schedule-week-native-select"
           >
-            {Array.from({ length: 24 }, (_, i) => i + 1).map((w) => (
+            {Array.from({ length: 25 }, (_, i) => i + 1).map((w) => (
               <option key={w} value={w}>
                 第 {w} 周 {w === currentCalculatedWeek ? "(当前周)" : ""}
               </option>
@@ -61,8 +61,8 @@ export function ScheduleHeader({
         <button
           type="button"
           className="schedule-week-arrow-btn"
-          disabled={activeWeek >= 24}
-          onClick={() => onSelectWeek(Math.min(24, activeWeek + 1))}
+          disabled={activeWeek >= 25}
+          onClick={() => onSelectWeek(Math.min(25, activeWeek + 1))}
           title="下一周"
           aria-label="下一周"
         >
@@ -116,7 +116,7 @@ export function ScheduleHeader({
             onClick={() => onChangeLayoutMode("transposed")}
             title="电脑宽屏推荐：横向时间轴甘特视图"
           >
-            💻 横向时间轴
+            <span className="layout-switch-full">💻 横向时间轴</span><span className="layout-switch-short">时间轴</span>
           </button>
           <button
             type="button"
@@ -126,7 +126,7 @@ export function ScheduleHeader({
             onClick={() => onChangeLayoutMode("portrait")}
             title="传统 7 列竖向课表视图"
           >
-            📱 竖向周课表
+            <span className="layout-switch-full">📱 竖向周课表</span><span className="layout-switch-short">周课表</span>
           </button>
         </div>
       )}

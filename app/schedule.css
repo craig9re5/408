@@ -1122,10 +1122,22 @@
 
 .task-panel--cockpit {
   flex: 1 1 0;
+  height: auto;
   min-height: 270px;
   max-height: 310px;
   display: flex;
   flex-direction: column;
+}
+
+.task-panel--cockpit:has(> .task-empty) {
+  flex: 0 0 auto;
+  min-height: 142px;
+  max-height: none;
+}
+
+.task-panel--cockpit > .task-empty {
+  min-height: 0;
+  padding: 14px 18px 20px;
 }
 
 .task-panel--cockpit .task-list {
@@ -1303,6 +1315,8 @@
   background: rgba(0, 0, 0, 0.04);
   border-radius: 10px;
 }
+
+.layout-switch-short { display: none; }
 
 .layout-switch-btn {
   padding: 5px 12px;
@@ -1800,6 +1814,20 @@
 }
 
 @media (max-width: 768px) {
+  .schedule-unified-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+  }
+  .schedule-unified-week-nav { grid-column: 1 / -1; }
+  .schedule-layout-mode-switch { grid-column: 1; min-width: 0; justify-self: start; }
+  .schedule-unified-actions { grid-column: 2; }
+  .schedule-header-status-indicator { grid-column: 1 / -1; grid-row: 3; min-width: 0; }
+  .layout-switch-full { display: none; }
+  .layout-switch-short { display: inline; }
+  .layout-switch-btn { padding-inline: 10px; white-space: nowrap; }
+  .schedule-reset-btn { padding-inline: 9px; white-space: nowrap; }
   .cockpit-right-tasks { height: auto; }
   .task-panel--cockpit { flex: none; height: auto; min-height: 0; max-height: none; }
   .task-panel--cockpit .task-empty {

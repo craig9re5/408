@@ -35,7 +35,7 @@ export function ScheduleView({
     [schedule.semesterStartDate, todayStr]
   );
 
-  const [activeWeek, setActiveWeek] = useState<number>(() => schedule.activeWeek || currentCalculatedWeek || 2);
+  const [activeWeek, setActiveWeek] = useState<number>(() => currentCalculatedWeek || schedule.activeWeek || 2);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
   // 用户手动选择的视图模式；null 表示跟随内容区宽度自动决定
   const [viewModeOverride, setViewModeOverride] = useState<"transposed" | "portrait" | null>(null);

@@ -440,7 +440,7 @@
 
 .sprint-bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -869,6 +869,13 @@
   height: 7.5px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+@media (min-width: 769px) {
+  .mini-heatmap-row { min-height: 20px; }
+  .mini-row-label { font-size: 11px; }
+  .mini-group-dots { gap: 4px; }
+  .mini-dot { width: 9px; height: 9px; }
 }
 
 .mini-dot.dot-correct {
