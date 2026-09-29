@@ -749,14 +749,21 @@ input[type="number"] {
 .chapter-review-inline:has(.chapter-review-shift) { flex-wrap: wrap; }
 .chapter-card:has(.chapter-review-shift .shift-popover) { z-index: 5; overflow: visible; }
 
-@media (min-width: 1101px) {
-  .chapter-header { grid-template-columns: minmax(0, 1fr) 466px 32px; }
-  .chapter-progress { grid-template-columns: 100px minmax(0, 1fr); gap: 14px; }
+@media (min-width: 769px) {
+  .chapter-review-inline { justify-content: flex-end; gap: 11px; }
+  .chapter-review-plan, .chapter-review-date { gap: 5px; }
+  .chapter-review-inline .date-text { min-height: 34px; }
+  .chapter-review-summary { align-items: flex-end; text-align: right; }
 }
 
-@media (min-width: 769px) and (max-width: 1100px) {
+@media (min-width: 1281px) {
+  .chapter-header { grid-template-columns: minmax(0, 1fr) 600px 32px; }
+  .chapter-progress { grid-template-columns: 110px minmax(0, 1fr); gap: 16px; }
+}
+
+@media (min-width: 769px) and (max-width: 1280px) {
   .chapter-card.open .chapter-header { grid-template-columns: minmax(0, 1fr) 32px; }
-  .chapter-card.open .chapter-progress { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; grid-template-columns: 100px minmax(0, 1fr); padding: 0 12px 8px 56px; }
+  .chapter-card.open .chapter-progress { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; grid-template-columns: 110px minmax(0, 1fr); padding: 0 12px 8px 56px; }
   .chapter-card.open .chapter-expand-button { grid-column: 2; grid-row: 1; }
 }
 
