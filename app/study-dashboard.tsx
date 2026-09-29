@@ -3122,7 +3122,7 @@ export function StudyDashboard() {
                         </span>
                         {open ? <div className="chapter-review-inline">
                           <div className="chapter-review-plan">
-                            <span className="chapter-review-plan-desktop-label">复习计划</span>
+                            <span className="chapter-review-plan-desktop-label">计划</span>
                             <span className="chapter-review-plan-mobile-label">计划</span>
                             <EditableDate
                               value={review.reviewedPlannedAt}
@@ -3132,7 +3132,6 @@ export function StudyDashboard() {
                               onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
                             />
                           </div>
-                          <span className="chapter-review-arrow" aria-hidden="true">→</span>
                           <label className="chapter-review-check" title={!review.canReview && !review.reviewed ? "请先完成本章全部小节的新学" : undefined}>
                             <input type="checkbox" checked={review.reviewed} disabled={!review.canReview && !review.reviewed}
                               aria-label={`第${chapter.number}章 ${chapter.title} 复习完成`}

@@ -728,9 +728,8 @@ input[type="number"] {
 .chevron { width: 8px; height: 8px; border-right: 1.5px solid #7f8989; border-bottom: 1.5px solid #7f8989; transform: rotate(45deg) translate(-2px, -2px); transition: transform 0.18s; }
 .chapter-card.open .chevron { transform: rotate(225deg) translate(-1px, -1px); }
 
-.chapter-review-inline { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid #dce7e5; color: #456673; font-size: 11px; }
+.chapter-review-inline { display: flex; min-width: 0; align-items: center; gap: 8px; color: #456673; font-size: 11px; }
 .chapter-review-plan, .chapter-review-date { display: inline-flex; min-width: 0; align-items: center; gap: 6px; white-space: nowrap; }
-.chapter-review-arrow { color: #9cacaa; font-size: 13px; }
 .chapter-review-date { color: #4f765b; }
 .chapter-review-inline .date-text { min-height: 32px; padding: 5px 8px; border: 1px solid #cad8d5; border-radius: 7px; background: #fff; color: #356d80; font-variant-numeric: tabular-nums; text-align: center; }
 .chapter-review-inline .date-text:hover { border-color: #85a8b0; }
@@ -747,20 +746,17 @@ input[type="number"] {
 .chapter-review-check b { font-weight: 600; }
 .chapter-review-inline .chapter-review-shift { position: relative; top: auto; right: auto; transform: none; }
 .chapter-review-inline .chapter-review-shift > button { min-height: 34px; padding: 0 10px; border: 1px solid #cad8d5; opacity: 1; color: #456673; background: #fff; }
+.chapter-review-inline:has(.chapter-review-shift) { flex-wrap: wrap; }
 .chapter-card:has(.chapter-review-shift .shift-popover) { z-index: 5; overflow: visible; }
 
-@media (min-width: 1201px) {
-  .chapter-header { grid-template-columns: minmax(0, 1fr) 188px 32px; }
-  .chapter-progress { grid-template-columns: 88px 88px; }
-  .chapter-card.open .chapter-progress { display: contents; }
-  .chapter-card.open .chapter-progress > .chapter-count-group { grid-column: 2; grid-row: 1; }
-  .chapter-card.open .chapter-review-inline { grid-column: 1 / 3; grid-row: 2; justify-self: end; margin-bottom: 8px; }
-  .chapter-card.open .chapter-expand-button { grid-column: 3; grid-row: 1; }
+@media (min-width: 1101px) {
+  .chapter-header { grid-template-columns: minmax(0, 1fr) 466px 32px; }
+  .chapter-progress { grid-template-columns: 100px minmax(0, 1fr); gap: 14px; }
 }
 
-@media (min-width: 769px) and (max-width: 1200px) {
+@media (min-width: 769px) and (max-width: 1100px) {
   .chapter-card.open .chapter-header { grid-template-columns: minmax(0, 1fr) 32px; }
-  .chapter-card.open .chapter-progress { grid-column: 1 / -1; grid-row: 2; justify-self: end; padding: 0 0 8px 56px; }
+  .chapter-card.open .chapter-progress { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; grid-template-columns: 100px minmax(0, 1fr); padding: 0 12px 8px 56px; }
   .chapter-card.open .chapter-expand-button { grid-column: 2; grid-row: 1; }
 }
 
