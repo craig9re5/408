@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import "./helpers/fixed-length-stream.mjs";
 
 import { handleApi } from "../worker/api.ts";
 import { handlePapersApi } from "../worker/papers.ts";
@@ -66,6 +67,28 @@ function dataRequest(cookie, revision, progress) {
     }),
   });
 }
+
+test("cloud journal patches retain independent offline IDs and legacy IDs", async () => {
+  const { sqlite, env } = makeEnv();
+  try {
+    const response = await login(env, "123456");
+    const cookie = response.headers.get("set-cookie").split(";")[0];
+    const ids = ["20261012001", `20261013001-${crypto.randomUUID()}`, `20261013001-${crypto.randomUUID()}`];
+    for (let i = 0; i < ids.length; i++) {
+      const saved = await handleApi(new Request("https://example.test/api/app-data", {
+        method: "PATCH",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({ baseRevision: i, progressChanges: {}, journalChanges: [{
+          id: ids[i], content: `日志 ${i}`, createdAt: "2026-10-13T10:00:00Z", updatedAt: "2026-10-13T10:00:00Z",
+        }], deletedJournalIds: [], paperChanges: [], deletedPaperIds: [] }),
+      }), env);
+      assert.equal(saved.status, 200);
+    }
+    const loaded = await handleApi(new Request("https://example.test/api/app-data", { headers: { cookie } }), env);
+    const data = await loaded.json();
+    assert.deepEqual(new Set(data.journals.map((j) => j.id)), new Set(ids));
+  } finally { sqlite.close(); }
+});
 
 test("versioned writes reject stale clients without overwriting progress", async () => {
   const { sqlite, env } = makeEnv();

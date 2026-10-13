@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { knownStreamLength } from "./helpers/fixed-length-stream.mjs";
 
 import { handlePapersApi } from "../worker/papers.ts";
 import { DEFAULT_USER_QUOTA_BYTES } from "../shared/constants.ts";
@@ -89,6 +90,7 @@ function makeEnvironment() {
   };
   const PAPERS_BUCKET = {
     async put(key, stream) {
+      assert.equal(typeof knownStreamLength(stream), "number", "R2 requires a stream with known length");
       objects.set(key, new Uint8Array(await new Response(stream).arrayBuffer()));
     },
     async get(key) {
@@ -197,6 +199,7 @@ test("stream validation rejects disguised and mis-sized files and releases quota
   const { env, objects, quotas } = makeEnvironment();
   assert.equal((await handlePapersApi(uploadRequest("fake.pdf", "<html>bad</html>"), env, "main")).status, 400);
   assert.equal((await handlePapersApi(uploadRequest("short.pdf", "%PDF-1.4", 6), env, "main")).status, 400);
+  assert.equal((await handlePapersApi(uploadRequest("truncated.pdf", "%PDF-1.4", 100), env, "main")).status, 400);
   assert.equal(objects.size, 0);
   assert.equal(quotas.get("main"), 0);
 });

@@ -50,6 +50,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
 
   // Upload Management
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
+  const uploadFilesRef = useRef(new Map<string, { file: File; subject: ExamPaperSubject }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Toast/Feedback
@@ -134,25 +135,33 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
       return;
     }
 
-    const defaultSubject = (selectedSubject !== "all" ? selectedSubject : "cs408") as ExamPaperSubject;
+    const defaultSubject = (selectedSubject !== "all" ? selectedSubject : "other") as ExamPaperSubject;
 
-    for (const file of files) {
+    const tasks = files.map((file) => {
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const newTask: UploadTask = {
         id: taskId,
         name: file.name,
-        progress: 30,
-        status: "uploading",
+        progress: 0,
+        status: "pending",
       };
+      uploadFilesRef.current.set(taskId, { file, subject: defaultSubject });
+      return newTask;
+    });
+    setUploadTasks((prev) => [...tasks, ...prev]);
+    for (const task of tasks) await runUploadTask(task.id);
+  };
 
-      setUploadTasks((prev) => [newTask, ...prev]);
-
+  const runUploadTask = async (taskId: string) => {
+    const source = uploadFilesRef.current.get(taskId);
+    if (!source) return;
+    const { file, subject } = source;
       try {
         setUploadTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, progress: 65 } : t))
+          prev.map((t) => (t.id === taskId ? { ...t, progress: 65, status: "uploading", error: undefined } : t))
         );
 
-        await uploadPaper(file, defaultSubject);
+        await uploadPaper(file, subject);
 
         setUploadTasks((prev) =>
           prev.map((t) => (t.id === taskId ? { ...t, progress: 100, status: "success" } : t))
@@ -163,6 +172,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
 
         setTimeout(() => {
           setUploadTasks((prev) => prev.filter((t) => t.id !== taskId));
+          uploadFilesRef.current.delete(taskId);
         }, 2000);
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -171,7 +181,6 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
         );
         showToast(errorMsg);
       }
-    }
   };
 
   // Single Actions
@@ -503,7 +512,11 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
           inputRef={fileInputRef}
           onFilesSelected={handleFilesSelected}
           uploadTasks={uploadTasks}
-          onDismissTask={(id) => setUploadTasks((prev) => prev.filter((t) => t.id !== id))}
+          onDismissTask={(id) => {
+            uploadFilesRef.current.delete(id);
+            setUploadTasks((prev) => prev.filter((t) => t.id !== id));
+          }}
+          onRetryTask={(id) => { void runUploadTask(id); }}
         />
 
         {/* Action Modals */}

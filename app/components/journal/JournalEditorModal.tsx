@@ -39,7 +39,7 @@ export type JournalEditorModalProps = {
   /** 学习空间标识，用于按空间隔离本机草稿 */
   draftScope: string;
   onClose: () => void;
-  onSave: (payload: JournalSavePayload) => void;
+  onSave: (payload: JournalSavePayload) => boolean | Promise<boolean>;
 };
 
 type JournalDraft = {
@@ -73,8 +73,9 @@ function readJournalDraft(key: string): JournalDraft | null {
 function writeJournalDraft(key: string, draft: JournalDraft) {
   try {
     window.localStorage.setItem(key, JSON.stringify(draft));
+    return true;
   } catch {
-    // localStorage 不可用（隐私模式 / 容量满）时静默失败，不阻断编辑
+    return false;
   }
 }
 
@@ -124,9 +125,15 @@ export function JournalEditorModal({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
   const [showMoreTools, setShowMoreTools] = useState(false);
-  const [draftSavedAt] = useState(() => initialDraft?.savedAt ?? null);
+  const [draftSavedAt, setDraftSavedAt] = useState(() => initialDraft?.savedAt ?? null);
+  const [draftCacheFailed, setDraftCacheFailed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveInFlightRef = useRef(false);
+  const draftFinishedRef = useRef(false);
   const [draftRestored, setDraftRestored] = useState(
-    () => Boolean(initialDraft && (initialDraft.content !== initialContent || initialDraft.title !== initialTitle))
+    () => Boolean(initialDraft && (initialDraft.content !== initialContent || initialDraft.title !== initialTitle
+      || initialDraft.important !== initialImportant || JSON.stringify(initialDraft.paper) !== JSON.stringify(initialPaper)
+      || JSON.stringify(initialDraft.sections) !== JSON.stringify(initialSections)))
   );
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -150,34 +157,53 @@ export function JournalEditorModal({
       sections: editorSections,
     }) !== initialFingerprint;
 
-  // 自动保存草稿到本机（防抖 600ms）
-  useEffect(() => {
-    if (!isDirty) return;
-    const timer = window.setTimeout(() => {
-      writeJournalDraft(draftStorageKey, {
-        title: editorTitle,
-        content: editorContent,
-        important: editorImportant,
-        paper: editorPaper,
-        sections: editorSections,
-        savedAt: new Date().toISOString(),
-      });
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [isDirty, draftStorageKey, editorTitle, editorContent, editorImportant, editorPaper, editorSections]);
-
   const flushDraft = useCallback(() => {
-    writeJournalDraft(draftStorageKey, {
+    if (draftFinishedRef.current) return true;
+    const savedAt = new Date().toISOString();
+    const saved = writeJournalDraft(draftStorageKey, {
       title: editorTitle,
       content: editorContent,
       important: editorImportant,
       paper: editorPaper,
       sections: editorSections,
-      savedAt: new Date().toISOString(),
+      savedAt,
     });
+    // Storage is synchronous; update the status after the persistence effect finishes.
+    queueMicrotask(() => {
+      setDraftCacheFailed(!saved);
+      if (saved) setDraftSavedAt(savedAt);
+    });
+    return saved;
   }, [draftStorageKey, editorTitle, editorContent, editorImportant, editorPaper, editorSections]);
 
+  // Persist each edit immediately so fast refreshes do not lose the last keystrokes.
+  useEffect(() => {
+    if (!isDirty) {
+      clearJournalDraft(draftStorageKey);
+      queueMicrotask(() => setDraftSavedAt(null));
+      return;
+    }
+    draftFinishedRef.current = false;
+    flushDraft();
+  }, [isDirty, draftStorageKey, flushDraft]);
+
+  useEffect(() => {
+    const preserveDraft = () => {
+      if (isDirty && !draftFinishedRef.current) flushDraft();
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) preserveDraft();
+    };
+    window.addEventListener("pagehide", preserveDraft);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", preserveDraft);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [isDirty, flushDraft]);
+
   const discardDraft = useCallback(() => {
+    draftFinishedRef.current = true;
     clearJournalDraft(draftStorageKey);
     setEditorTitle(initialTitle);
     setEditorContent(initialContent);
@@ -185,9 +211,12 @@ export function JournalEditorModal({
     setEditorPaper(initialPaper);
     setEditorSections(initialSections);
     setDraftRestored(false);
+    setDraftSavedAt(null);
+    setDraftCacheFailed(false);
   }, [draftStorageKey, initialTitle, initialContent, initialImportant, initialPaper, initialSections]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (saveInFlightRef.current) return;
     const trimmedContent = editorContent.trim();
     if (!trimmedContent) {
       setValidationError("日志内容不能为空");
@@ -201,15 +230,30 @@ export function JournalEditorModal({
         ? { type: "sections", sections: editorSections }
         : null;
 
-    clearJournalDraft(draftStorageKey);
-    onSave({
-      id: editingJournalId,
-      title: trimmedTitle,
-      content: editorContent,
-      important: editorImportant,
-      context: contextToSave,
-    });
-  }, [editorContent, editorTitle, editorImportant, editorPaper, editorSections, editingJournalId, draftStorageKey, onSave]);
+    flushDraft();
+    saveInFlightRef.current = true;
+    setIsSaving(true);
+    try {
+      const saved = await onSave({
+        id: editingJournalId,
+        title: trimmedTitle,
+        content: editorContent,
+        important: editorImportant,
+        context: contextToSave,
+      });
+      if (!saved) {
+        setValidationError("日志尚未保存成功，请检查本机存储空间或同步状态；编辑内容仍保留在这里。");
+        return;
+      }
+      draftFinishedRef.current = true;
+      clearJournalDraft(draftStorageKey);
+    } catch {
+      setValidationError("保存失败，请重试；草稿未被删除。");
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaving(false);
+    }
+  }, [editorContent, editorTitle, editorImportant, editorPaper, editorSections, editingJournalId, draftStorageKey, onSave, flushDraft]);
 
   // 关闭前保护：有未保存修改时弹出三选一确认
   const requestClose = useCallback(() => {
@@ -776,6 +820,7 @@ export function JournalEditorModal({
             />
             <div className="journal-editor-statusbar">
               <span>{editorContent.length} 字</span>
+              <span role="status">{draftCacheFailed ? "本机草稿缓存失败，请勿关闭页面" : draftSavedAt ? `草稿已缓存到本机 · ${formatDraftTime(draftSavedAt)}` : "输入后自动缓存草稿到本机"}</span>
               <span className="math-hint">快捷键：Ctrl+B 加粗 · Ctrl+K 链接 · Ctrl+M 公式 · Tab 切换焦点 · 多行选中 Tab 缩进 · Ctrl+]/[ 缩进</span>
             </div>
           </div>
@@ -806,8 +851,9 @@ export function JournalEditorModal({
               type="button"
               className="journal-btn journal-btn--primary"
               onClick={handleSave}
+              disabled={isSaving}
             >
-              {editingJournalId ? "保存修改" : "保存日志"}
+              {isSaving ? "正在保存…" : editingJournalId ? "保存修改" : "保存日志"}
             </button>
           </div>
         </footer>
@@ -851,6 +897,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-btn journal-btn--danger-ghost"
                 onClick={() => {
+                  draftFinishedRef.current = true;
                   clearJournalDraft(draftStorageKey);
                   onClose();
                 }}
@@ -861,8 +908,11 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-btn journal-btn--ghost"
                 onClick={() => {
-                  flushDraft();
-                  onClose();
+                  if (flushDraft()) onClose();
+                  else {
+                    setShowCloseConfirm(false);
+                    setValidationError("无法缓存到本机，请先保存日志或导出内容后再关闭。");
+                  }
                 }}
               >
                 保留草稿退出

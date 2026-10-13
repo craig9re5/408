@@ -837,6 +837,26 @@
   margin: 2px 0 0 0;
 }
 
+.netdisk-task-retry-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.netdisk-task-retry-actions button {
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--ink);
+  background: var(--paper, #fff);
+  cursor: pointer;
+}
+
+.netdisk-task-retry-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* 弹窗中的表单样式 */
 .netdisk-input-with-ext {
   display: flex;

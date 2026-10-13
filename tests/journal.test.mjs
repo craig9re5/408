@@ -6,11 +6,43 @@ import {
   createAppData,
   extractJournalSections,
   generateJournalId,
+  generateUniqueJournalId,
   mergeJournals,
   normalizeAppData,
   normalizeJournalContext,
   normalizeJournals,
+  StorageRepository,
+  rebaseAppData,
 } from "../app/study-data.ts";
+
+test("同一天离线新建日志使用独立编号，同步时两条都保留且兼容旧日志", () => {
+  const id1 = generateUniqueJournalId([], "2026-10-13");
+  const id2 = generateUniqueJournalId([], "2026-10-13");
+  assert.notEqual(id1, id2);
+  assert.match(id1, /^20261013001-[0-9a-f-]{36}$/);
+  const entry = (id, content) => ({ id, content, createdAt: "2026-10-13T10:00:00Z", updatedAt: "2026-10-13T10:00:00Z", title: null, context: null });
+  const old = entry("20261012001", "旧日志");
+  const first = entry(id1, "设备一");
+  const second = entry(id2, "设备二");
+  const base = createAppData({}, undefined, [], [old]);
+  const merged = rebaseAppData(base, { ...base, journals: [first, old] }, { ...base, journals: [second, old] });
+  assert.equal(merged.journals.length, 3);
+  assert.deepEqual(new Set(merged.journals.map((j) => j.content)), new Set(["旧日志", "设备一", "设备二"]));
+  assert.equal(generateJournalId([first], "2026-10-13"), "20261013002");
+  assert.equal(normalizeJournals([first, second, old]).length, 3);
+});
+
+test("日志本地写入明确报告成功或容量失败，未登录空间禁止保存", () => {
+  const data = createAppData({});
+  const values = new Map();
+  const storage = { setItem: (k, v) => values.set(k, v), getItem: (k) => values.get(k) ?? null };
+  const repo = new StorageRepository(storage, "main");
+  assert.equal(repo.save(data), true);
+  assert.equal(repo.load({}).journals.length, 0);
+  const fullStorage = { ...storage, setItem: () => { throw new Error("QuotaExceededError"); } };
+  assert.equal(new StorageRepository(fullStorage, "main").save(data), false);
+  assert.equal(new StorageRepository(storage, "").save(data), false);
+});
 
 test("Journal ID 生成: 单调自增，同一天多次记录序号递增，删除历史记录后不复用旧序号", () => {
   const date = "2026-08-15";

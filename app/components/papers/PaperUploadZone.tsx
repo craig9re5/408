@@ -14,6 +14,7 @@ interface PaperUploadZoneProps {
   onFilesSelected: (files: File[]) => void;
   uploadTasks: UploadTask[];
   onDismissTask: (id: string) => void;
+  onRetryTask: (id: string) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -21,6 +22,7 @@ export function PaperUploadZone({
   onFilesSelected,
   uploadTasks,
   onDismissTask,
+  onRetryTask,
   inputRef,
 }: PaperUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -106,7 +108,7 @@ export function PaperUploadZone({
       {uploadTasks.length > 0 && (
         <div className="netdisk-upload-drawer" role="region" aria-label="上传任务列表">
           <div className="netdisk-upload-drawer-header">
-            <h4>正在上传 ({uploadTasks.filter((t) => t.status === "uploading").length}/{uploadTasks.length})</h4>
+            <h4>{uploadTasks.some((t) => t.status === "uploading" || t.status === "pending") ? "正在上传" : "上传结果"}（{uploadTasks.filter((t) => t.status === "success").length}/{uploadTasks.length} 已完成）</h4>
           </div>
           <div className="netdisk-upload-task-list">
             {uploadTasks.map((task) => (
@@ -115,6 +117,7 @@ export function PaperUploadZone({
                   <span className="netdisk-task-name" title={task.name}>{task.name}</span>
                   <span className="netdisk-task-status">
                     {task.status === "uploading" && `${task.progress}%`}
+                    {task.status === "pending" && "等待上传"}
                     {task.status === "success" && "✓ 完成"}
                     {task.status === "error" && "✕ 失败"}
                   </span>
@@ -126,6 +129,12 @@ export function PaperUploadZone({
                 )}
                 {task.error && (
                   <p className="netdisk-task-error-msg">{task.error}</p>
+                )}
+                {task.status === "error" && (
+                  <div className="netdisk-task-retry-actions">
+                    <button type="button" onClick={() => onRetryTask(task.id)} disabled={uploadTasks.some((t) => t.status === "uploading" || t.status === "pending")} aria-label={`重试上传${task.name}`}>重试上传</button>
+                    <button type="button" onClick={() => onDismissTask(task.id)} aria-label={`关闭${task.name}的上传结果`}>关闭</button>
+                  </div>
                 )}
               </div>
             ))}

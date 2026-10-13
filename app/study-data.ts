@@ -256,6 +256,54 @@ export function choiceQuestionWeight(area: StudyArea, qNum: number): number {
   return 1;
 }
 
+// Only recorded answers contribute; an unscored subjective rating is not a numeric score.
+export function answerSheetScore(paper: PaperRecord) {
+  const structure = paperStructure(paper.area);
+  const maxChoice = paperMaxChoiceNum(paper.area);
+  let objective = 0;
+  let subjective = 0;
+  let recorded = 0;
+  for (let num = 1; num <= structure.total; num++) {
+    if (num <= maxChoice) {
+      const state = paper.questions?.[num];
+      if (state === "correct" || state === "wrong") {
+        recorded++;
+        if (state === "correct") objective += choiceQuestionWeight(paper.area, num);
+      }
+    } else {
+      const score = paper.questionScores?.[num];
+      if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+        recorded++;
+        subjective += score;
+      } else if (paper.questions?.[num] === "wrong") {
+        recorded++;
+      }
+    }
+  }
+  objective = Math.round(objective * 10) / 10;
+  subjective = Math.round(subjective * 10) / 10;
+  return {
+    objective,
+    subjective,
+    total: recorded > 0 ? clampPaperScore(objective + subjective, paper.area) : null,
+    remaining: structure.total - recorded,
+  };
+}
+
+export function syncAnswerSheetScore(paper: PaperRecord, completedDate = dateToday()): PaperRecord {
+  const score = answerSheetScore(paper).total;
+  const total = paperTotalQuestions(paper.area);
+  const hasAnswers = score !== null || Object.entries(paper.questions ?? {}).some(([num, state]) =>
+    Number.isInteger(Number(num)) && Number(num) >= 1 && Number(num) <= total
+      && (state === "correct" || state === "partial" || state === "wrong"));
+  return {
+    ...paper,
+    score,
+    completed: hasAnswers ? true : paper.completed,
+    completedAt: hasAnswers ? (paper.completedAt || completedDate) : paper.completedAt,
+  };
+}
+
 export type BentoChoiceGroup = { name: string; start: number; count: number; label: string };
 
 const SUBJECT_ABBR: Record<string, string> = {
@@ -1023,7 +1071,7 @@ export function generateJournalId(journals: JournalEntry[], dateStr = dateToday(
   const prefix = cleanDate;
   let maxSeq = 0;
   journals.forEach((entry) => {
-    if (typeof entry.id === "string" && entry.id.startsWith(prefix) && entry.id.length === prefix.length + 3) {
+    if (typeof entry.id === "string" && entry.id.startsWith(prefix) && /^\d{11}(?:-[0-9a-f-]{36})?$/.test(entry.id)) {
       const seq = parseInt(entry.id.slice(prefix.length), 10);
       if (!Number.isNaN(seq) && seq > maxSeq) {
         maxSeq = seq;
@@ -1032,6 +1080,11 @@ export function generateJournalId(journals: JournalEntry[], dateStr = dateToday(
   });
   const nextSeq = String(maxSeq + 1).padStart(3, "0");
   return `${prefix}${nextSeq}`;
+}
+
+// Keep the readable date/sequence while preventing offline devices from sharing an ID.
+export function generateUniqueJournalId(journals: JournalEntry[], dateStr = dateToday()): string {
+  return `${generateJournalId(journals, dateStr)}-${crypto.randomUUID()}`;
 }
 
 export function extractJournalSections(context: JournalContext | null): JournalSectionItem[] {
@@ -1605,12 +1658,13 @@ export class StorageRepository {
     return issue;
   }
 
-  save(data: StudyAppData): void {
-    if (this.isQuarantined()) return;
+  save(data: StudyAppData): boolean {
+    if (this.isQuarantined()) return false;
     try {
       this.storage.setItem(this.appDataKey(), JSON.stringify(data));
+      return true;
     } catch {
-      // 配额满时不抛错，云端仍是真源，调用方会提示用户导出文件清理。
+      return false;
     }
   }
 

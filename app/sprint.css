@@ -1656,11 +1656,30 @@
 
 .paper-q-modal-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--line-soft);
+}
+
+.paper-q-score-summary {
+  flex: 1 1 240px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.paper-q-score-summary strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.paper-q-score-summary small {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .btn-create-wrong-journal {

@@ -6,12 +6,62 @@ import {
   ENGLISH_PAPER_STRUCTURE,
   MATH_PAPER_STRUCTURE,
   clampPaperScore,
+  answerSheetScore,
+  syncAnswerSheetScore,
   defaultPastPapers,
   mergePapers,
   normalizePaperRecord,
   normalizePapers,
   parseQuestionRanges,
 } from "../app/study-data.ts";
+
+test("答题卡自动汇总截图中的数学成绩，并同步已有总分", () => {
+  const paper = {
+    ...defaultPastPapers().find((p) => p.area === "math"),
+    score: 150,
+    questions: Object.fromEntries(Array.from({ length: 22 }, (_, i) => [i + 1,
+      [10, 12, 13].includes(i + 1) ? "wrong" : i >= 17 && i <= 19 ? "partial" : "correct"])),
+    questionScores: { 17: 10, 18: 8, 19: 8, 20: 6, 21: 12, 22: 12 },
+  };
+  assert.deepEqual(answerSheetScore(paper), { objective: 65, subjective: 56, total: 121, remaining: 0 });
+  assert.equal(syncAnswerSheetScore(paper).score, 121);
+  assert.equal(syncAnswerSheetScore({ ...paper, questions: {}, questionScores: {} }).score, null);
+});
+
+test("答题卡按各科客观题权重计分，保留零分与小数，并提示未录入题目", () => {
+  const paper = (area, questions, questionScores = {}) => ({
+    ...defaultPastPapers().find((p) => p.area === area), questions, questionScores,
+  });
+  assert.deepEqual(answerSheetScore(paper("english", { 1: "correct", 21: "correct", 46: "partial", 51: "wrong" }, { 46: 1.5, 51: 0 })),
+    { objective: 2.5, subjective: 1.5, total: 4, remaining: 48 });
+  assert.deepEqual(answerSheetScore(paper("politics", { 1: "correct", 17: "correct", 18: "wrong" })),
+    { objective: 3, subjective: 0, total: 3, remaining: 30 });
+  assert.equal(answerSheetScore(paper("408", { 1: "correct", 41: "partial" }, { 41: 6.5 })).total, 8.5);
+  assert.equal(answerSheetScore(paper("math", { 1: "wrong" })).total, 0);
+  assert.equal(answerSheetScore(paper("math", { 17: "partial" })).remaining, 22);
+  assert.equal(answerSheetScore(paper("math", {}, { 999: 100, 17: NaN })).total, null);
+});
+
+test("录入任意一道题自动标记已做，零分和主观评级也算做题记录", () => {
+  const blank = defaultPastPapers().find((p) => p.area === "math");
+  const date = "2026-10-13";
+  for (const record of [
+    { questions: { 1: "correct" } },
+    { questions: { 1: "wrong" } },
+    { questions: { 17: "partial" } },
+    { questionScores: { 17: 0 } },
+    { questionScores: { 17: 8.5 } },
+  ]) {
+    const synced = syncAnswerSheetScore({ ...blank, ...record }, date);
+    assert.equal(synced.completed, true);
+    assert.equal(synced.completedAt, date);
+  }
+  const earlier = syncAnswerSheetScore({ ...blank, completedAt: "2026-10-12", questions: { 1: "correct" } }, date);
+  assert.equal(earlier.completedAt, "2026-10-12");
+  assert.equal(syncAnswerSheetScore(blank, date).completed, false);
+  assert.equal(syncAnswerSheetScore({ ...blank, questions: { 999: "correct" }, questionScores: { 17: NaN } }, date).completed, false);
+  assert.equal(syncAnswerSheetScore({ ...blank, completed: true, completedAt: date }, date).completed, true);
+});
 
 test("Sprint 真题骨架生成: 生成全四科61套真题基准数据且状态干净", () => {
   const papers = defaultPastPapers();

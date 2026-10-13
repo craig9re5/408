@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PaperRecord, QuestionState } from "../../../shared/types.ts";
-import { bentoChoiceGroups, modalChoiceGroups } from "../../study-data.ts";
+import { answerSheetScore, bentoChoiceGroups, maxPaperScore, modalChoiceGroups } from "../../study-data.ts";
 
 export type QuestionSummaryMetrics = {
   correctCount: number;
@@ -38,6 +38,7 @@ export function AnswerSheetModal({
   const clearTriggerRef = useRef<HTMLButtonElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
   const qSummary = getPaperQuestionSummary(paper);
+  const scoreSummary = answerSheetScore(paper);
 
   useEffect(() => {
     if (clearConfirmationOpen) clearCancelRef.current?.focus();
@@ -651,6 +652,14 @@ export function AnswerSheetModal({
 
         {/* Modal Actions Footer */}
         <div className="paper-q-modal-footer">
+          <div className="paper-q-score-summary" role="status" aria-live="polite" aria-atomic="true">
+            <div>总分 <strong>{scoreSummary.total ?? "—"}</strong> / {maxPaperScore(paper.area)} 分</div>
+            <small>
+              客观题 {scoreSummary.objective} 分
+              {paper.area !== "politics" && ` · 主观题 ${scoreSummary.subjective} 分`}
+              {scoreSummary.remaining > 0 ? ` · 还有 ${scoreSummary.remaining} 题未录入得分` : " · 已全部统计"}
+            </small>
+          </div>
           <button
             type="button"
             className="btn-create-wrong-journal"

@@ -165,18 +165,11 @@ export async function migrateLocalPaper(paper: ExamPaperItem): Promise<void> {
  * Download paper PDF
  */
 export async function downloadPaper(paper: ExamPaperItem): Promise<void> {
-  // Try remote download first if it's not a local-only key
   if (!paper.storageKey.startsWith("local://")) {
-    try {
-      const res = await fetch(`/api/papers/${paper.id}/download`);
-      if (res.ok) {
-        const blob = await res.blob();
-        triggerBrowserDownload(blob, paper.fileName);
-        return;
-      }
-    } catch {
-      // Fallback to local
-    }
+    const response = await fetch(`/api/papers/${paper.id}/download`);
+    if (!response.ok) throw await paperApiError(response);
+    triggerBrowserDownload(await response.blob(), paper.fileName);
+    return;
   }
 
   // Local fallback

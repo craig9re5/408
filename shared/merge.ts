@@ -222,7 +222,7 @@ export function normalizeJournalEntry(value: unknown): JournalEntry | null {
   if (
     !isRecord(value) ||
     typeof value.id !== "string" ||
-    !/^\d{8}\d{3}$/.test(value.id) ||
+    !/^\d{11}(?:-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/.test(value.id) ||
     typeof value.createdAt !== "string" ||
     typeof value.content !== "string"
   ) {

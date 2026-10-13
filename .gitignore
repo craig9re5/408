@@ -48,6 +48,7 @@ next-env.d.ts
 .workbuddy/
 .workbuddy-ai/
 .agents/
+.codex-remote-attachments/
 
 # local preview logs
 .local-preview*.log

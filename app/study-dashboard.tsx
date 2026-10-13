@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
+import { SHOW_DATA_ANALYSIS } from "./feature-flags";
 import {
   buildChapterReviewAnalyticsProgress,
   cancelChapterReview,
@@ -40,7 +41,7 @@ import {
   buildDefaultProgress,
   defaultProjectSettings,
   extractJournalSections,
-  generateJournalId,
+  generateUniqueJournalId,
   mergeJournals,
   isOverdueBaseTask,
   isTodayBasePlan,
@@ -59,6 +60,8 @@ import {
   normalizeSchedule,
   maxPaperScore,
   clampPaperScore,
+  answerSheetScore,
+  syncAnswerSheetScore,
   parseQuestionRanges,
   paperTotalQuestions,
   paperMaxChoiceNum,
@@ -108,7 +111,6 @@ const pageNavigation: { page: AppPage; icon: NavigationIcon; label: string }[] =
   { page: "sprint", icon: "sprint", label: "套卷冲刺" },
   { page: "today", icon: "today", label: "今日" },
   { page: "schedule", icon: "schedule", label: "复习课表" },
-  { page: "analytics", icon: "analytics", label: "数据分析" },
 ];
 
 const pageTitles: Record<AppPage, string> = {
@@ -1641,10 +1643,10 @@ export function StudyDashboard() {
       }
 
       // 空对象表示“已清空”，与“未触碰 undefined”区分，避免被 merge 复活
-      return {
+      return syncAnswerSheetScore({
         ...p,
         questions: nextMap,
-      };
+      });
     }));
   }
 
@@ -1673,11 +1675,11 @@ export function StudyDashboard() {
         }
       }
 
-      return {
+      return syncAnswerSheetScore({
         ...p,
         questions: nextMap,
         questionScores: nextScores,
-      };
+      });
     }));
   }
 
@@ -1708,11 +1710,11 @@ export function StudyDashboard() {
         }
       }
 
-      return {
+      return syncAnswerSheetScore({
         ...p,
         questions: nextMap,
         questionScores: nextScores,
-      };
+      });
     }));
   }
 
@@ -1726,10 +1728,10 @@ export function StudyDashboard() {
       for (let i = 1; i <= maxChoice; i++) {
         nextMap[i] = state;
       }
-      return {
+      return syncAnswerSheetScore({
         ...p,
         questions: nextMap,
-      };
+      });
     }));
     setFeedbackMessage(state === "correct" ? "已将选择题设为全部正确 🟢" : "已将选择题设为全部错误 🔴");
   }
@@ -1742,18 +1744,21 @@ export function StudyDashboard() {
       const tokens = parseQuestionRanges(rawInput, total);
       const wrongSet = new Set(tokens);
       const nextMap: Record<number, QuestionState> = { ...(p.questions ?? {}) };
+      const nextScores = { ...(p.questionScores ?? {}) };
       for (let i = 1; i <= maxChoice; i++) {
         nextMap[i] = wrongSet.has(i) ? "wrong" : "correct";
       }
       for (let i = maxChoice + 1; i <= total; i++) {
         if (wrongSet.has(i)) {
           nextMap[i] = "wrong";
+          nextScores[i] = 0;
         }
       }
-      return {
+      return syncAnswerSheetScore({
         ...p,
         questions: nextMap,
-      };
+        questionScores: nextScores,
+      });
     }));
     setFeedbackMessage("已更新错题与正确题标记");
   }
@@ -1864,6 +1869,7 @@ export function StudyDashboard() {
   }
 
   function navigateMobile(page: AppPage) {
+    if (page === "analytics" && !SHOW_DATA_ANALYSIS) return;
     setActivePage(page);
     setTopbarMoreOpen(false);
     setCatalogMoreOpen(false);
@@ -2516,8 +2522,13 @@ export function StudyDashboard() {
     context: JournalContext | null;
   }) => {
     const now = new Date().toISOString();
+    const currentData = workingDataRef.current;
+    if (!currentData || syncBlockedRef.current) return false;
+    const currentJournals = currentData.journals;
+    let nextJournals: JournalEntry[];
     if (payload.id) {
-      setJournals((prev) => prev.map((entry) => {
+      if (!currentJournals.some((entry) => entry.id === payload.id)) return false;
+      nextJournals = currentJournals.map((entry) => {
         if (entry.id !== payload.id) return entry;
         return {
           ...entry,
@@ -2527,10 +2538,9 @@ export function StudyDashboard() {
           important: payload.important,
           updatedAt: now,
         };
-      }));
-      setFeedbackMessage("日志已更新");
+      });
     } else {
-      const newId = generateJournalId(journals, dateToday());
+      const newId = generateUniqueJournalId(currentJournals, dateToday());
       const newEntry: JournalEntry = {
         id: newId,
         createdAt: now,
@@ -2546,9 +2556,14 @@ export function StudyDashboard() {
           blogPostId: null,
         },
       };
-      setJournals((prev) => [newEntry, ...prev]);
-      setFeedbackMessage("日志已保存");
+      nextJournals = [newEntry, ...currentJournals];
     }
+
+    const nextData = { ...currentData, journals: nextJournals };
+    if (!repository().save(nextData)) return false;
+    workingDataRef.current = nextData;
+    setJournals(nextJournals);
+    setFeedbackMessage(payload.id ? "日志已更新到本机，正在同步云端" : "日志已保存到本机，正在同步云端");
 
     setIsEditorOpen(false);
     setEditingJournalId(null);
@@ -2557,7 +2572,8 @@ export function StudyDashboard() {
     setEditorImportant(false);
     setEditorSections([]);
     setEditorPaper(null);
-  }, [journals]);
+    return true;
+  }, [repository]);
 
   const handleDeleteJournal = useCallback((journal: JournalEntry) => {
     setPendingDeleteJournal(journal);
@@ -2845,7 +2861,7 @@ export function StudyDashboard() {
             </span>
             <div className="topbar-more-wrap" ref={topbarMoreRef}>
               <button
-                className={`topbar-more${activePage === "schedule" || activePage === "analytics" || activePage === "settings" ? " active" : ""}`}
+                className={`topbar-more${activePage === "schedule" || activePage === "settings" ? " active" : ""}`}
                 type="button"
                 ref={topbarMoreButtonRef}
                 aria-label={`更多页面，同步状态：${syncMeta.label}`}
@@ -2857,7 +2873,7 @@ export function StudyDashboard() {
                 <i className={`topbar-more-dot topbar-more-dot--${syncMeta.cls}`} aria-hidden="true" />
               </button>
               <div className="topbar-more-panel" id="mobile-more-pages" role="group" aria-label="更多页面" hidden={!topbarMoreOpen}>
-                {(["schedule", "analytics", "settings"] as AppPage[]).map((page) => (
+                {(["settings"] as AppPage[]).map((page) => (
                   <button type="button" key={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
                     <MobileNavIcon page={page} />
                     <span>{pageTitles[page]}</span>
@@ -4164,7 +4180,7 @@ export function StudyDashboard() {
                 onBackToToday={() => setActivePage("today")}
               />
             </section>
-          ) : activePage === "analytics" ? (
+          ) : SHOW_DATA_ANALYSIS && activePage === "analytics" ? (
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
               <div className="analytics-toolbar">
                 <div className="analytics-scope-switch" role="tablist" aria-label="数据分析范围切换">
@@ -4862,7 +4878,18 @@ export function StudyDashboard() {
         <Suspense fallback={null}>
         <AnswerSheetModal
           paper={activeQuestionPaper}
-          onClose={() => setActivePaperQuestionModalId(null)}
+          onClose={() => {
+            const summary = answerSheetScore(activeQuestionPaper);
+            const synced = syncAnswerSheetScore(activeQuestionPaper);
+            if (summary.total !== null || synced.completed !== activeQuestionPaper.completed) {
+              updatePaper(activeQuestionPaper.id, {
+                score: synced.score,
+                completed: synced.completed,
+                completedAt: synced.completedAt,
+              });
+            }
+            setActivePaperQuestionModalId(null);
+          }}
           onToggleQuestion={(num, isSingleChoice) => togglePaperQuestion(activeQuestionPaper.id, num, isSingleChoice)}
           onMarkAllQuestions={(state) => markAllPaperQuestions(activeQuestionPaper.id, state)}
           onSubjectiveRating={(qNum, rating, maxScore) => handleSubjectiveRating(activeQuestionPaper.id, qNum, rating, maxScore)}

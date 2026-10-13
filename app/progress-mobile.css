@@ -275,6 +275,8 @@
 }
 
 @media (max-width: 600px) {
+  .mobile-week-disclosure,
+  .page-content--today .cockpit-action-btn { display: none; }
   .page-content--progress { padding-top: 10px; }
   .page-content--progress .hero-grid { display: none; }
 
@@ -343,15 +345,15 @@
   .catalog-filter-mobile { position: relative; display: block; grid-column: 2; grid-row: 1; }
   .catalog-filter-mobile::after { position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: #426f79; content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); }
   .catalog-filter-mobile select {
-    min-width: 88px;
+    min-width: 68px;
     min-height: 44px;
     appearance: none;
-    padding: 0 28px 0 12px;
-    border: 1px solid #dfe5df;
-    border-radius: 9px;
-    color: var(--ink);
-    background: #fffefa;
-    font: 600 12px var(--sans);
+    padding: 0 23px 0 4px;
+    border: 0;
+    border-radius: 6px;
+    color: #426f79;
+    background: transparent;
+    font: 500 14px var(--sans);
   }
   .catalog-filter-mobile select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
@@ -422,6 +424,52 @@
     font-weight: 500;
   }
   .page-content--progress .section-row.is-current .section-mobile-copy strong { color: #426f79; font-weight: 600; }
+}
+
+/* Phone details use the full card width and a single reading order. */
+@media (max-width: 600px) {
+  .catalog-filter-mobile::after { right: 5px; }
+  .page-content--progress .catalog-heading { gap: 6px; }
+  .page-content--progress .catalog-heading > div:first-child { flex-wrap: wrap; gap: 3px 8px; }
+  .page-content--progress .catalog-heading > div:first-child span { font-size: 11px; }
+  .page-content--progress .chapter-card.open .chapter-progress { padding: 0 13px; }
+  .page-content--progress .chapter-card.open .chapter-review-inline {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0 8px;
+    min-height: 40px;
+    padding: 2px 0;
+    margin-bottom: 0;
+  }
+  .chapter-review-plan { margin-right: auto; gap: 3px; }
+  .chapter-review-check { min-height: 36px; justify-content: center; border: 0; background: transparent; padding: 0 2px; }
+  .chapter-review-check:has(input:checked) { border: 0; background: transparent; }
+  .chapter-review-date { gap: 0; justify-content: center; }
+  .chapter-review-date > span:first-child { display: none; }
+  .chapter-review-inline .chapter-review-shift { grid-column: 1 / -1; }
+  .chapter-review-inline .date-text,
+  .chapter-review-inline .date-editor { min-height: 36px; }
+  .chapter-review-inline .date-text { border: 0; background: transparent; padding: 0 2px; }
+  .chapter-review-inline .date-editor { width: 126px; }
+  .page-content--progress .section-table { margin: 0 13px 8px; }
+  .page-content--progress .section-table .section-row.is-detail-open {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "summary summary" "base-plan name" "learned learned";
+    gap: 4px 8px;
+    padding: 0 10px 10px;
+    margin-bottom: 6px;
+    border-radius: 9px;
+    background: #f5f8f5;
+  }
+  .page-content--progress .section-row.is-detail-open .section-name { min-height: 44px; }
+  .page-content--progress .section-row.is-detail-open .section-name .section-actions > button { min-height: 44px; }
+  .page-content--progress .section-row.is-detail-open .section-plan { height: auto; justify-content: flex-start; }
+  .page-content--progress .section-row.is-detail-open .section-plan .date-text { width: auto; gap: 6px; }
+  .page-content--progress .section-row.is-detail-open .check-with-date { justify-content: space-between; min-height: 44px; }
+  .page-content--progress .section-row.is-detail-open .check-with-date > .date-text,
+  .page-content--progress .section-row.is-detail-open .check-with-date > .date-editor { flex: 0 1 auto; min-width: 88px; }
+  .page-content--progress .section-row.is-detail-open .check-with-date label { min-width: 88px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

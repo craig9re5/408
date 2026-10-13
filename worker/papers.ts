@@ -53,6 +53,9 @@ function sanitizeFileName(name: string): string {
 
 class UploadValidationError extends Error {}
 
+// Cloudflare's R2 binding only accepts streams with a known byte length.
+declare const FixedLengthStream: new (length: number) => TransformStream<Uint8Array, Uint8Array>;
+
 async function reserveQuota(env: Env, workspaceId: string, bytes: number): Promise<boolean> {
   await env.DB.prepare("INSERT OR IGNORE INTO paper_quota (workspace_id, used_bytes) VALUES (?, 0)").bind(workspaceId).run();
   const result = await env.DB.prepare(
@@ -198,9 +201,15 @@ export async function handlePapersApi(request: Request, env: Env, workspaceId: s
           }
           controller.enqueue(chunk);
         },
+        flush() {
+          if (receivedBytes !== fileSize || signature.length !== 5) {
+            throw new UploadValidationError("实际文件大小与声明不符");
+          }
+        },
       }));
 
-      await env.PAPERS_BUCKET.put(storageKey, boundedStream, {
+      const uploadStream = boundedStream.pipeThrough(new FixedLengthStream(fileSize));
+      await env.PAPERS_BUCKET.put(storageKey, uploadStream, {
         httpMetadata: {
           contentType: "application/pdf",
           contentDisposition: `attachment; filename="${encodeURIComponent(cleanName)}"`,
