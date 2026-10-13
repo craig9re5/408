@@ -3,6 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
 import { SHOW_DATA_ANALYSIS } from "./feature-flags";
+import { JournalActions } from "./components/journal/JournalActions";
 import {
   buildChapterReviewAnalyticsProgress,
   cancelChapterReview,
@@ -3372,7 +3373,7 @@ export function StudyDashboard() {
                     className="journal-action-btn journal-action-btn--primary"
                     onClick={() => openCreateJournal(null)}
                   >
-                    ✍ 写今日记录
+                    <span className="desktop-density-copy">✍ 写今日记录</span><span className="mobile-density-copy">写记录</span>
                   </button>
                   <button
                     type="button"
@@ -3382,7 +3383,7 @@ export function StudyDashboard() {
                       el?.scrollIntoView({ behavior: "smooth" });
                     }}
                   >
-                    ↓ 学习日志 ({journals.length})
+                    <span className="desktop-density-copy">↓ 学习日志 ({journals.length})</span><span className="mobile-density-copy">日志 {journals.length} ↓</span>
                   </button>
                 </div>
               </div>
@@ -3724,7 +3725,7 @@ export function StudyDashboard() {
                                     )}
                                   </div>
 
-                                  <div className="journal-card-actions">
+                                  <JournalActions label={`${formatTimeShort(entry.createdAt)} 日志操作`}>
                                     <button
                                       type="button"
                                       className={`journal-btn-tool journal-btn-tool--star ${entry.important ? "is-active" : ""}`}
@@ -3757,7 +3758,7 @@ export function StudyDashboard() {
                                     >
                                       删除
                                     </button>
-                                  </div>
+                                  </JournalActions>
                                 </div>
 
                                 {entry.title && (
@@ -4375,13 +4376,13 @@ export function StudyDashboard() {
                       <p>包含两个项目的全部学习记录、计划安排、设置与操作历史。</p>
                       <div className="settings-actions">
                         <button type="button" className="settings-btn settings-btn--primary" onClick={downloadExport}>
-                          导出全部数据
+                          <span className="desktop-density-copy">导出全部数据</span><span className="mobile-density-copy">导出数据</span>
                         </button>
                         <button type="button" className="settings-btn settings-btn--secondary" onClick={() => importInputRef.current?.click()}>
-                          导入 JSON
+                          <span className="desktop-density-copy">导入 JSON</span><span className="mobile-density-copy">导入</span>
                         </button>
                         <button type="button" className="settings-btn settings-btn--danger" onClick={() => setPendingClearAllPapers(true)} title="清空全部学科历年真题与模拟卷的做题与打分记录">
-                          清空套卷完成记录 ⚠️
+                          <span className="desktop-density-copy">清空套卷完成记录 ⚠️</span><span className="mobile-density-copy">清空套卷</span>
                         </button>
                       </div>
                       {storageLoadIssue && (
@@ -4399,10 +4400,10 @@ export function StudyDashboard() {
                           <span className="backup-count-badge">{backups.length} / 15</span>
                         </div>
                         <button className="backup-create" type="button" onClick={createManualBackup}>
-                          立即创建备份
+                          <span className="desktop-density-copy">立即创建备份</span><span className="mobile-density-copy">创建备份</span>
                         </button>
                       </div>
-                      <p>导入、恢复和旧数据迁移前会自动生成快照，最多保留 15 份。</p>
+                      <p><span className="desktop-density-copy">导入、恢复和旧数据迁移前会自动生成快照，最多保留 15 份。</span><span className="mobile-density-copy">导入、恢复前自动备份，保留 15 份。</span></p>
                       <div className="backup-list" role={backups.length ? "region" : undefined} aria-label={backups.length ? "本地备份快照列表" : undefined} tabIndex={backups.length ? 0 : undefined}>
                         {backups.length ? (
                           backups.map((backup) => (
@@ -4445,7 +4446,7 @@ export function StudyDashboard() {
                   <header className="settings-card__header">
                     <div>
                       <h2>账号与登录</h2>
-                      <p>当前登录空间：{workspaceUserLabel}。窄屏 / 平板竖屏下顶部退出按钮可能隐藏，可在此随时退出。</p>
+                      <p>当前空间：{workspaceUserLabel}<span className="desktop-density-copy">。可在此退出登录。</span></p>
                     </div>
                   </header>
                   <div className="settings-actions">

@@ -9,6 +9,7 @@ import "./schedule.css";
 import "./paper-netdisk.css";
 import "./sprint-mobile.css";
 import "./progress-mobile.css";
+import "./mobile-density.css";
 
 export const metadata: Metadata = {
   title: "学习进度",
