@@ -47,8 +47,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           secrets: |
-            INVITE_CODE
+            INVITE_CODES
             SESSION_SECRET
         env:
-          INVITE_CODE: ${{ secrets.INVITE_CODE }}
+          INVITE_CODES: ${{ secrets.INVITE_CODES || secrets.INVITE_CODE }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}

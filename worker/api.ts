@@ -191,7 +191,7 @@ function getSessionSecret(env: Env): string {
 
 function getWorkspaceMap(env: Env): Map<string, string> {
   const map = new Map<string, string>();
-  const raw = (env as unknown as Record<string, string | undefined>).INVITE_CODES?.trim();
+  const raw = env.INVITE_CODES?.trim();
   if (raw) {
     raw.split(",").forEach((entry) => {
       const trimmed = entry.trim();
@@ -206,12 +206,6 @@ function getWorkspaceMap(env: Env): Map<string, string> {
       const workspaceId = trimmed.slice(separator + 1).trim();
       if (code && isSafeWorkspaceId(workspaceId)) map.set(code, workspaceId);
     });
-  }
-  if (map.size === 0) {
-    const legacy = (env as unknown as Record<string, string | undefined>).INVITE_CODE?.trim();
-    if (legacy) {
-      map.set(legacy, DEFAULT_WORKSPACE_ID);
-    }
   }
   return map;
 }
