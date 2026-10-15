@@ -1,0 +1,22 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "手机端样式对照": {
+      "versions": [
+        {
+          "path": "review.html",
+          "createdAt": "2026-10-15T02:13:45.988Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1600,
+            "height": 1050
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-10-15T02:13:45.989Z",
+  "updatedAt": "2026-10-15T02:13:45.989Z"
+}
