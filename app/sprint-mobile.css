@@ -234,7 +234,3 @@
   .mini-group-dots { gap: 4px; }
   .mini-dot { width: 10px; height: 10px; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .bento-mobile-chevron::before { transition: none; }
-}

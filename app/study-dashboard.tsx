@@ -2874,8 +2874,8 @@ export function StudyDashboard() {
                 <i className={`topbar-more-dot topbar-more-dot--${syncMeta.cls}`} aria-hidden="true" />
               </button>
               <div className="topbar-more-panel" id="mobile-more-pages" role="group" aria-label="更多页面" hidden={!topbarMoreOpen}>
-                {(["settings"] as AppPage[]).map((page) => (
-                  <button type="button" key={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
+                {(["schedule", "settings"] as AppPage[]).map((page) => (
+                  <button type="button" key={page} data-page={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
                     <MobileNavIcon page={page} />
                     <span>{pageTitles[page]}</span>
                   </button>

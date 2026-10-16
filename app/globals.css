@@ -48,6 +48,12 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* 全站动效总开关。放在此处以保证无论各功能样式表导入顺序如何，
+   登录抖动、抽屉滑入、课表脉冲等动画都能被一并关闭。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
 .app-shell { display: flex; min-height: 100vh; width: 100%; overflow-x: clip; }
 .sidebar {
   position: fixed;
@@ -1268,6 +1274,9 @@ button.date-text.late,
     box-shadow: 0 12px 32px rgba(17, 27, 36, .15);
   }
   .topbar-more-panel[hidden], .catalog-more-list[hidden] { display: none; }
+  /* 601–900px 底部导航仍显示「课表」，更多面板不重复该入口；
+     ≤600px 底部导航隐藏课表，改由下面的 600px 断点重新放出。 */
+  .topbar-more-panel button[data-page="schedule"] { display: none; }
   .topbar-more-panel button {
     display: flex;
     min-height: 44px;
@@ -1320,6 +1329,8 @@ button.date-text.late,
   .topbar-actions { min-width: 44px; flex: 0 0 44px; margin-left: 0; }
   .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mobile-navigation button[data-page="schedule"] { display: none; }
+  /* 底部导航收起课表后，在「更多」面板恢复该入口，否则手机端无路可达课表页。 */
+  .topbar-more-panel button[data-page="schedule"] { display: flex; }
   .mobile-navigation button { min-height: 44px; }
   .mobile-navigation button strong { font-size: 13px; }
 

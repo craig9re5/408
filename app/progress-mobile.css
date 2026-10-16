@@ -472,8 +472,3 @@
   .page-content--progress .section-row.is-detail-open .check-with-date label { min-width: 88px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .section-mobile-chevron {
-    transition: none;
-  }
-}

@@ -166,15 +166,20 @@
   font-weight: 700;
 }
 
-.study-switchers.sprint-top-switchers {
-  display: flex;
-  justify-content: flex-end;
-  width: 420px;
-}
+/* 仅桌面基准。sprint.css 在 layout 中晚于 globals.css 导入，若在此处无条件写死宽度，
+   globals.css 里 980px / 768px 断点对 .sprint-top-switchers 的覆盖会被压掉（同特异性，后者胜）。
+   窄屏宽度交由 globals.css 的断点接管。 */
+@media (min-width: 981px) {
+  .study-switchers.sprint-top-switchers {
+    display: flex;
+    justify-content: flex-end;
+    width: 420px;
+  }
 
-.study-switchers.sprint-top-switchers .area-switcher {
-  width: 224px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  .study-switchers.sprint-top-switchers .area-switcher {
+    width: 224px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .journal-section-chip.area-english {
@@ -1778,11 +1783,6 @@
     gap: 6px;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
-}
-
 
 /* ==========================================================================
    iPhone 超小屏 (≤480px)：答题卡工具区与按钮防裁切
