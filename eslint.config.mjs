@@ -10,6 +10,11 @@ const config = [
     "worker-configuration.d.ts",
     "node_modules/**",
     "tsconfig.tsbuildinfo",
+    // Scratch areas. `work/` holds throwaway copies of the tree (including
+    // their own dist/), so linting them reports errors against built output
+    // instead of this project's source.
+    "work/**",
+    "outputs/**",
   ]),
 ];
 
