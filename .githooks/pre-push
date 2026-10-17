@@ -1,0 +1,45 @@
+#!/bin/sh
+# 推送前检查：把未提交的改动推到 main 会让 CI 重建部署时丢掉本地工作。
+#
+# 背景：.github/workflows/deploy.yml 在每次 push 到 main 时自动部署。
+# 任何只 deploy 未 commit 的改动，都会被下一次 push 触发的 CI 覆盖。
+# 这个钩子不能自动修复，但能在丢东西之前提醒一次。
+#
+# 启用：git config core.hooksPath .githooks
+
+remote="$1"
+url="$2"
+
+# 只关心推送 main 的情况
+case "$(git rev-parse --abbrev-ref HEAD)" in
+  main) ;;
+  *) exit 0 ;;
+esac
+
+dirty=$(git status --porcelain)
+if [ -n "$dirty" ]; then
+  cat >&2 <<'EOF'
+
+  ⚠️  工作区还有未提交的改动，而你正在推送 main。
+
+  CI 会从已提交的代码重建并部署，未提交的改动不会上线；
+  如果它们已经用 npm run deploy 部署过，这次推送会把线上回退。
+
+  未提交的文件：
+EOF
+  printf '%s\n' "$dirty" | sed 's/^/    /' >&2
+  cat >&2 <<'EOF'
+
+  确认这些改动不需要上线就继续；否则先提交。
+  跳过检查：git push --no-verify
+
+EOF
+  printf '  仍然推送？[y/N] '
+  read -r answer </dev/tty
+  case "$answer" in
+    y|Y|yes|YES) exit 0 ;;
+    *) echo "  已取消。" >&2; exit 1 ;;
+  esac
+fi
+
+exit 0

@@ -84,7 +84,7 @@
 - 执行看板：左侧当天课表时间线（约 69%），右侧「今日任务」与「逾期任务」。
 - 空任务面板在标题旁显示真实文本节点「暂无安排 / 无逾期」（`.task-panel-empty-note`），不再用 CSS `content` 写文案，便于读屏与翻译。
 - 学习日志：唯一的深色主按钮是「写今日记录」；时间流中的「写一条」和空状态的「记录第一条」都是文字按钮（`.journal-action-btn--text`）。
-- 日志筛选 7 项：全部 / 重点 / 无关联 / 有关联 / 408 / 数学 / 已发布。
+- 日志筛选 7 项：全部 / 重点 / 无关联 / 有关联 / 408 / 数学 / 已发布。手机端（≤600px）用四列网格排成两行，避免第 7 项被挤出屏幕且没有滚动提示。
 
 ### 复习课表
 - 横向时间轴 / 竖向周课表两种布局，可切换周次，支持重置默认课表。
@@ -106,7 +106,7 @@
 | 死 CSS | 部分类名已无 TSX 引用，例如 `globals.css` 的 `.placeholder-page` `.today-sections` `.university-logo`，`sprint.css` 的 `.mini-subj-chip` `.paper-q-pill`，`journal.css` 的 `.journal-editor-toolbar` `.blog-status-badge`，`schedule.css` 的 `.schedule-week-picker` `.idle-badge` `.schedule-icon-btn`，`analytics.css` 的 `.forecast-insight-banner` 等。删除前注意排除模板字符串拼接的类名（如 `.timetable-card--${theme}`、`.sync-note--${cls}`）和 KaTeX 输出的类名。 |
 | 阴影令牌 | `--shadow` 只在少数位置使用，其余 `box-shadow` 仍是字面量。 |
 | 触屏热力图 | 试卷卡片热力图的逐题信息只在 `title` 中，触屏无法查看，需通过「打开答题卡」进入。 |
-| 中性色字面量 | 手机样式中仍有少量暖灰字面量（如 `#e1e7e4`、`#65777a`），属于中性色，未纳入令牌。 |
+| 中性色字面量 | `sprint-mobile.css` 与 `progress-mobile.css` 仍有较多暖灰/青灰字面量（如 `#e1e7e4`、`#65777a`、`#426f79`），未纳入令牌；`mobile-density.css` 已使用 `--mobile-surface` / `--mobile-border`，可参照迁移。 |
 
 ## 8. 已裁定不改
 
