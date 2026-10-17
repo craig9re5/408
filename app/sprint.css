@@ -169,7 +169,7 @@
 /* 仅桌面基准。sprint.css 在 layout 中晚于 globals.css 导入，若在此处无条件写死宽度，
    globals.css 里 980px / 768px 断点对 .sprint-top-switchers 的覆盖会被压掉（同特异性，后者胜）。
    窄屏宽度交由 globals.css 的断点接管。 */
-@media (min-width: 981px) {
+@media (width > 1120px) {
   .study-switchers.sprint-top-switchers {
     display: flex;
     justify-content: flex-end;
@@ -815,19 +815,19 @@
 
 .mini-heatmap-tag.tag-wrong {
   background: var(--coral-soft);
-  color: #c44b34;
+  color: var(--state-wrong-ink);
   border: 1px solid rgba(239, 132, 109, 0.35);
 }
 
 .mini-heatmap-tag.tag-perfect {
   background: rgba(124, 172, 133, 0.14);
-  color: #3b6c45;
+  color: var(--state-correct-ink);
   border: 1px solid rgba(124, 172, 133, 0.35);
 }
 
 .mini-heatmap-tag.tag-subj {
   background: rgba(232, 178, 119, 0.14);
-  color: #8c5b1c;
+  color: var(--state-partial-ink);
   border: 1px solid rgba(232, 178, 119, 0.35);
 }
 
@@ -876,7 +876,7 @@
   flex-shrink: 0;
 }
 
-@media (min-width: 769px) {
+@media (width > 768px) {
   .mini-heatmap-row { min-height: 20px; }
   .mini-row-label { font-size: 11px; }
   .mini-group-dots { gap: 4px; }
@@ -884,15 +884,15 @@
 }
 
 .mini-dot.dot-correct {
-  background: var(--green);
+  background: var(--state-correct);
 }
 
 .mini-dot.dot-partial {
-  background: #e8b277;
+  background: var(--state-partial);
 }
 
 .mini-dot.dot-wrong {
-  background: var(--coral);
+  background: var(--state-wrong);
 }
 
 .mini-dot.dot-unset {
@@ -919,17 +919,17 @@
 }
 
 .mini-subj-chip.chip-correct {
-  background: var(--green);
+  background: var(--state-correct);
   color: #ffffff;
 }
 
 .mini-subj-chip.chip-partial {
-  background: #e8b277;
+  background: var(--state-partial);
   color: #ffffff;
 }
 
 .mini-subj-chip.chip-wrong {
-  background: var(--coral);
+  background: var(--state-wrong);
   color: #ffffff;
 }
 
@@ -1029,7 +1029,7 @@
 .paper-form-field .field-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-soft, #475569);
+  color: var(--ink-soft);
 }
 
 .paper-form-field .field-label strong {
@@ -1041,9 +1041,9 @@
   box-sizing: border-box;
   padding: 9px 12px;
   font-size: 13px;
-  color: var(--ink, #1e293b);
-  background: var(--canvas, #f8fafc);
-  border: 1px solid var(--line, #cbd5e1);
+  color: var(--ink);
+  background: var(--canvas);
+  border: 1px solid var(--line);
   border-radius: 8px;
   outline: none;
   transition: all 0.15s ease;
@@ -1051,7 +1051,7 @@
 
 .paper-form-field input:focus {
   background: #ffffff;
-  border-color: var(--sidebar, #1e293b);
+  border-color: var(--sidebar);
   box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.08);
 }
 
@@ -1169,15 +1169,15 @@
 }
 
 .q-pill-dot.dot-correct {
-  background: var(--green);
+  background: var(--state-correct);
 }
 
 .q-pill-dot.dot-partial {
-  background: #e8b277;
+  background: var(--state-partial);
 }
 
 .q-pill-dot.dot-wrong {
-  background: var(--coral);
+  background: var(--state-wrong);
 }
 
 .q-pill--correct {
@@ -1188,13 +1188,13 @@
 
 .q-pill--partial {
   background: rgba(232, 178, 119, 0.14);
-  color: #8c5b1c;
+  color: var(--state-partial-ink);
   border: 1px solid rgba(232, 178, 119, 0.35);
 }
 
 .q-pill--wrong {
   background: var(--coral-soft);
-  color: #9c3f2d;
+  color: var(--state-wrong-deep);
   border: 1px solid rgba(239, 132, 109, 0.35);
 }
 
@@ -1305,7 +1305,7 @@
 .btn-clear-questions:hover {
   background: var(--coral-soft);
   border-color: rgba(239, 132, 109, 0.4);
-  color: #9c3f2d;
+  color: var(--state-wrong-deep);
 }
 
 .q-clear-confirmation {
@@ -1323,7 +1323,7 @@
 .q-clear-confirmation p { flex: 1 1 220px; margin: 0; color: #7c3326; font-size: 12px; line-height: 1.5; }
 .q-clear-confirmation-actions { display: flex; gap: 6px; }
 .q-clear-confirmation-actions button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
-.q-clear-confirmation-actions .btn-confirm-clear { border-color: #9c3f2d; color: #fff; background: #9c3f2d; }
+.q-clear-confirmation-actions .btn-confirm-clear { border-color: var(--state-wrong-deep); color: #fff; background: var(--state-wrong-deep); }
 .q-clear-confirmation-actions button:focus-visible { outline: 2px solid #507d8a; outline-offset: 2px; }
 
 /* Heatmap Matrix */
@@ -1389,9 +1389,9 @@
 }
 
 .btn-choice-all-correct:hover {
-  background: var(--green);
+  background: var(--state-correct);
   color: #ffffff;
-  border-color: var(--green);
+  border-color: var(--state-correct);
 }
 
 .q-type-rows {
@@ -1467,21 +1467,21 @@
 }
 
 .q-chip-btn.state-correct {
-  background: var(--green);
+  background: var(--state-correct);
   color: #ffffff;
-  border-color: var(--green);
+  border-color: var(--state-correct);
 }
 
 .q-chip-btn.state-partial {
-  background: #e8b277;
+  background: var(--state-partial);
   color: #ffffff;
-  border-color: #e8b277;
+  border-color: var(--state-partial);
 }
 
 .q-chip-btn.state-wrong {
-  background: var(--coral);
+  background: var(--state-wrong);
   color: #ffffff;
-  border-color: var(--coral);
+  border-color: var(--state-wrong);
 }
 
 .q-subjective-container {
@@ -1605,9 +1605,9 @@
 .q-rating-btn.rating--wrong::before { background: rgba(239, 132, 109, 0.45); }
 
 .q-rating-btn:hover { color: var(--ink); }
-.q-rating-btn.rating--correct:hover::before { background: var(--green); }
-.q-rating-btn.rating--partial:hover::before { background: #e8b277; }
-.q-rating-btn.rating--wrong:hover::before { background: var(--coral); }
+.q-rating-btn.rating--correct:hover::before { background: var(--state-correct); }
+.q-rating-btn.rating--partial:hover::before { background: var(--state-partial); }
+.q-rating-btn.rating--wrong:hover::before { background: var(--state-wrong); }
 
 /* Active: white pill + state-tinted label & dot (colors match mini-heatmap-tag) */
 .q-rating-btn.active {
@@ -1615,14 +1615,14 @@
   box-shadow: 0 1px 3px rgba(35, 42, 44, 0.1);
 }
 
-.q-rating-btn.active.rating--correct { color: #3b6c45; }
-.q-rating-btn.active.rating--correct::before { background: var(--green); }
+.q-rating-btn.active.rating--correct { color: var(--state-correct-ink); }
+.q-rating-btn.active.rating--correct::before { background: var(--state-correct); }
 
-.q-rating-btn.active.rating--partial { color: #8c5b1c; }
-.q-rating-btn.active.rating--partial::before { background: #e8b277; }
+.q-rating-btn.active.rating--partial { color: var(--state-partial-ink); }
+.q-rating-btn.active.rating--partial::before { background: var(--state-partial); }
 
-.q-rating-btn.active.rating--wrong { color: #c44b34; }
-.q-rating-btn.active.rating--wrong::before { background: var(--coral); }
+.q-rating-btn.active.rating--wrong { color: var(--state-wrong-ink); }
+.q-rating-btn.active.rating--wrong::before { background: var(--state-wrong); }
 
 /* Score Input Box */
 .q-score-input-wrap {
@@ -1693,7 +1693,7 @@
   gap: 6px;
   padding: 7px 14px;
   background: var(--coral-soft);
-  color: #9c3f2d;
+  color: var(--state-wrong-deep);
   border: 1px solid rgba(239, 132, 109, 0.35);
   border-radius: 8px;
   font-size: 12px;
@@ -1704,10 +1704,10 @@
 
 .btn-create-wrong-journal:hover {
   background: #f5d4ca;
-  border-color: var(--coral);
+  border-color: var(--state-wrong);
 }
 
-@media (max-width: 640px) {
+@media (width <= 600px) {
   .q-heatmap-row {
     flex-direction: column;
     align-items: flex-start;
@@ -1727,13 +1727,13 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .sprint-macro-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 640px) {
+@media (width <= 600px) {
   .sprint-macro-grid {
     grid-template-columns: 1fr;
   }
@@ -1787,7 +1787,7 @@
 /* ==========================================================================
    iPhone 超小屏 (≤480px)：答题卡工具区与按钮防裁切
    ========================================================================== */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   /* 冲刺页顶栏切换器：覆盖上方 420px/224px 的桌面宽度，四科目全部可达 */
   .study-switchers.sprint-top-switchers {
     width: auto;
@@ -1818,7 +1818,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .q-clear-confirmation-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .q-clear-confirmation-actions button { min-height: 44px; }
   .q-rating-item {
@@ -1882,7 +1882,7 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .bento-mobile-status.is-complete { color: #3b6c45; }
+  .bento-mobile-status.is-complete { color: var(--state-correct-ink); }
   .bento-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .bento-mobile-actions button {
     position: relative;

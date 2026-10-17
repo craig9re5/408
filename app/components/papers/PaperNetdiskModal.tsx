@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { ExamPaperItem, ExamPaperSubject, PaperQuotaInfo } from "../../study-data";
 import { DEFAULT_USER_QUOTA_BYTES, EXAM_PAPER_SUBJECT_MAP } from "../../study-data";
@@ -314,7 +315,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
 
             {/* Close modal */}
             <button type="button" className="netdisk-close-btn" onClick={onClose} aria-label="关闭">
-              ✕
+              <Icon name="x" />
             </button>
           </div>
         </header>
@@ -361,7 +362,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
                   className="netdisk-search-clear"
                   onClick={() => setSearchKeyword("")}
                 >
-                  ✕
+                  <Icon name="x" />
                 </button>
               )}
             </div>

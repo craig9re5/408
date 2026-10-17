@@ -1,7 +1,7 @@
 .mobile-density-copy { display: none; }
 .journal-actions-disclosure > summary { display: none; }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .today-page, .settings-page {
     --mobile-accent: color-mix(in srgb, var(--blue) 64%, var(--ink));
     --mobile-surface: #fffefa;
@@ -18,6 +18,7 @@
   .today-page .journal-action-btn { min-height: 36px; padding: 0 10px; font-size: 12px; border-radius: 9px; box-shadow: none; }
   .today-page .journal-action-btn--primary { color: var(--mobile-accent); border: 1px solid color-mix(in srgb, var(--blue) 45%, var(--line)); background: color-mix(in srgb, var(--blue) 9%, var(--mobile-surface)); }
   .today-header-actions .journal-action-btn--ghost { border: 0; background: transparent; }
+  .today-page .journal-action-btn--text { border: 0; background: transparent; color: var(--ink-soft); }
   .today-cockpit-workbench { gap: 8px; margin-bottom: 18px; }
   .cockpit-left-schedule { padding: 10px 12px; gap: 4px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
   .cockpit-schedule-topbar { gap: 4px; padding: 0; border: 0; }
@@ -52,8 +53,8 @@
   .cockpit-right-tasks:not(:has(.task-list)) header { min-height: 58px; align-items: flex-start; justify-content: center; flex-direction: column; gap: 2px; }
   .task-panel--cockpit:has(> .task-empty) .task-panel-subtitle,
   .task-panel--cockpit > .task-empty { display: none; }
-  .task-panel--today:has(> .task-empty) > header::after { content: "暂无安排"; color: var(--muted); font-size: 12px; }
-  .task-panel--overdue:has(> .task-empty) > header::after { content: "无逾期"; color: var(--muted); font-size: 12px; }
+  /* 空状态短文案由 TSX 中的 .task-panel-empty-note 真实节点渲染，可被读屏读取 */
+  .task-panel-empty-note { color: var(--muted); font-size: 12px; }
   .task-panel--cockpit .task-row { min-height: 52px; padding: 6px 0; }
   .task-panel--today .task-row { grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "main check"; gap: 4px 8px; }
   .task-panel--today .task-date { display: none; }
@@ -133,6 +134,9 @@
   .backup-empty { padding: 8px 0; border: 0; background: transparent; text-align: left; }
   .backup-empty p { font-size: 11px; }
   .settings-card--account .settings-card__header p { font-size: 11px; }
+  .danger-zone-row { padding: 10px 12px; gap: 10px; }
+  .danger-zone-copy span { font-size: 11px; }
+  .danger-zone-row .settings-btn--danger { border: 1px solid var(--coral-line); padding-inline: 10px; }
   .settings-card--blog .blog-settings-content { gap: 8px; margin-top: 8px; }
   .blog-info-item { padding: 6px 8px; font-size: 12px; }
 }

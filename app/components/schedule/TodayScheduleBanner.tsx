@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import type { ActiveScheduleInfo, ScheduleAppData, ScheduleEvent } from "../../study-data";
 
 interface TodayScheduleBannerProps {
@@ -35,7 +36,7 @@ export function TodayScheduleBanner({
             {status === "rest_break" && restBreak && (
               <>
                 <span className="rest-badge">
-                  <span className="rest-icon">☕</span>
+                  <span className="rest-icon"><Icon name="coffee" /></span>
                   {restBreak.label}中
                 </span>
                 <span className="time-countdown">距结束 {remainingMinutes} 分钟</span>
@@ -45,7 +46,7 @@ export function TodayScheduleBanner({
             {status === "intermission" && intermissionNextEvent && (
               <>
                 <span className="intermission-badge">
-                  <span className="intermission-icon">⏳</span>
+                  <span className="intermission-icon"><Icon name="hourglass" /></span>
                   课间休整
                 </span>
                 <span className="time-countdown">{startsInMinutes} 分钟后开始</span>
@@ -55,7 +56,7 @@ export function TodayScheduleBanner({
             {status === "idle" && (
               <>
                 <span className="rest-badge rest-badge--idle">
-                  <span className="rest-icon">☕</span>
+                  <span className="rest-icon"><Icon name="coffee" /></span>
                   休息中
                 </span>
                 <span className="time-countdown">
@@ -71,7 +72,7 @@ export function TodayScheduleBanner({
             onClick={onOpenSchedule}
           >
             <span>全周课表</span>
-            <span className="arrow">→</span>
+            <span className="arrow"><Icon name="arrow-right" /></span>
           </button>
         </div>
 

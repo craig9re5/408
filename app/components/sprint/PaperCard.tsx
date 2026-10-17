@@ -1,3 +1,4 @@
+import { Icon } from "../common/Icon";
 import { useId, useState } from "react";
 import type { JournalEntry, PaperRecord, StudyArea } from "../../../shared/types.ts";
 import { bentoChoiceGroups } from "../../study-data.ts";
@@ -231,7 +232,7 @@ export function PaperCard({
               onOpenAnswerSheet(paper.id);
             }}
           >
-            答题卡 ↗
+            答题卡 <Icon name="arrow-up-right" />
           </button>
           <div className="mini-heatmap-tags">
             {qSummary && (
@@ -312,7 +313,7 @@ export function PaperCard({
               title={`查看此试卷的 ${paperJournals.length} 条复盘日志`}
               onClick={() => onViewJournals(paper)}
             >
-              📝 <span>{paperJournals.length}</span>
+              <Icon name="note" /> <span>{paperJournals.length}</span>
             </button>
           )}
           <button
@@ -333,7 +334,7 @@ export function PaperCard({
             <button type="button" className="bento-mobile-note-count" aria-label={`查看${paper.title}的${paperJournals.length}条笔记`} onClick={() => onViewJournals(paper)}>{paperJournals.length} 条</button>
           )}
         </div>
-        <button type="button" className="bento-mobile-answer" onClick={() => onOpenAnswerSheet(paper.id)}>打开答题卡 <span aria-hidden="true">↗</span></button>
+        <button type="button" className="bento-mobile-answer" onClick={() => onOpenAnswerSheet(paper.id)}>打开答题卡 <Icon name="arrow-up-right" /></button>
       </div>
       </div>
     </div>

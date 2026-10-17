@@ -1,3 +1,4 @@
+import { Icon } from "../common/Icon";
 import { useEffect, useRef, useState } from "react";
 import type { PaperRecord, QuestionState } from "../../../shared/types.ts";
 import { answerSheetScore, bentoChoiceGroups, maxPaperScore, modalChoiceGroups } from "../../study-data.ts";
@@ -83,7 +84,7 @@ export function AnswerSheetModal({
               onClick={onClose}
               title="关闭"
             >
-              ✕
+              <Icon name="x" />
             </button>
           </div>
         </div>

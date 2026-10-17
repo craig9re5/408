@@ -482,7 +482,7 @@
 .netdisk-badge-local {
   font-size: 10px;
   font-weight: 500;
-  color: #0284c7;
+  color: var(--blue-ink);
   background: #e0f2fe;
   padding: 1px 5px;
   border-radius: 4px;
@@ -519,13 +519,13 @@
   gap: 4px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: var(--blue-ink);
+  background: var(--blue-soft);
+  border: 1px solid rgb(var(--blue-ink-rgb) / 0.2);
 }
 
 .netdisk-btn-download:hover {
-  background: #2563eb;
+  background: var(--blue-ink);
   color: #fff;
 }
 
@@ -664,7 +664,7 @@
 
 .netdisk-batch-btn-link {
   background: transparent;
-  color: #2563eb;
+  color: var(--blue-ink);
   font-size: 12px;
   cursor: pointer;
   text-decoration: underline;
@@ -939,7 +939,7 @@
 }
 
 /* 移动端响应式优化 */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .netdisk-tab, .netdisk-sort-select, .netdisk-btn-batch { min-height: 44px; }
   .netdisk-search-input { height: 44px; font-size: 16px; }
   .netdisk-search-clear { min-width: 36px; min-height: 40px; right: 2px; }
@@ -979,7 +979,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .netdisk-list-wrap { min-width: 0; width: 100%; }
   .netdisk-list-header, .netdisk-file-col--size { display: none; }
   .netdisk-file-row { min-width: 0; gap: 8px; padding: 8px 12px; }
@@ -993,7 +993,7 @@
   .netdisk-btn-download { width: auto; min-width: 64px; padding: 0 4px; }
 }
 
-@media (max-width: 360px) {
+@media (width <= 375px) {
   .netdisk-header { gap: 5px; }
   .netdisk-header-left, .netdisk-header-right { gap: 5px; }
   .netdisk-title { font-size: 16px; white-space: nowrap; }

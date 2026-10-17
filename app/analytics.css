@@ -663,7 +663,7 @@
   position: absolute;
   left: 0;
   top: -7px;
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, monospace;
@@ -837,7 +837,7 @@
 }
 
 /* Responsive Overrides */
-@media (max-width: 1024px) {
+@media (width <= 1120px) {
   .analytics-overview-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -849,7 +849,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (width <= 600px) {
   .analytics-page {
     gap: 18px;
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import { useState, useMemo, useEffect } from "react";
 import {
   calculateWeekNumber,
@@ -12,6 +13,7 @@ import { ScheduleHeader } from "./ScheduleHeader";
 import { TimetableGrid } from "./TimetableGrid";
 import { TransposedTimetableGrid } from "./TransposedTimetableGrid";
 import { ScheduleActionModal } from "./ScheduleActionModal";
+import { maxWidthQuery } from "../../lib/breakpoints";
 
 interface ScheduleViewProps {
   schedule: ScheduleAppData;
@@ -43,7 +45,7 @@ export function ScheduleView({
 
   // 平板竖屏 / 窄窗口（≤900px，此时侧栏已收起）默认使用竖版课表，避免横向课表列被压扁重叠
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 900px)");
+    const mq = window.matchMedia(maxWidthQuery("xl"));
     const update = () => setIsNarrowLayout(mq.matches);
     update();
     mq.addEventListener("change", update);
@@ -80,7 +82,7 @@ export function ScheduleView({
       />
 
       <main className="schedule-main-board">
-        <p className="schedule-scroll-hint">左右滑动课表，查看完整一周 →</p>
+        <p className="schedule-scroll-hint">左右滑动课表，查看完整一周 <Icon name="arrow-right" /></p>
         {viewMode === "transposed" ? (
           <TransposedTimetableGrid
             schedule={schedule}

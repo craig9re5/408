@@ -152,6 +152,17 @@
   background: var(--paper);
   border-color: var(--ink-soft);
 }
+/* 文字型次级入口：同一页面只保留一个深色主按钮（“写今日记录”），其余写日志入口用此样式 */
+.journal-action-btn--text {
+  padding-inline: 8px;
+  color: var(--blue-ink);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.journal-action-btn--text:hover {
+  color: var(--blue-deep);
+  background: var(--blue-soft);
+}
 
 /* Journal Stream Section (Screen 2) */
 .journal-stream-container {
@@ -767,9 +778,9 @@
   transition: all 0.15s ease;
 }
 .journal-section-chip.area-408 {
-  color: #1e40af;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--blue-deep);
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-line);
 }
 .journal-section-chip.area-math {
   color: #9a3412;
@@ -1430,7 +1441,7 @@
 }
 
 /* Responsive Styles for Mobile & Journal */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .journal-empty-card { padding: 20px 16px; }
   .journal-empty-card p { margin-bottom: 10px; }
   .journal-action-btn { min-height: 44px; }

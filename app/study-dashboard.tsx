@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "./components/common/Icon";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
 import { SHOW_DATA_ANALYSIS } from "./feature-flags";
@@ -15,7 +16,6 @@ import {
 } from "./chapter-review";
 import { MarkdownRenderer, getMarkdownSummary } from "./components/markdown-renderer";
 import { PaperCard } from "./components/sprint/PaperCard";
-import { AnalyticsActivity } from "./components/AnalyticsActivity";
 import { EditableDate } from "./components/common/EditableDate";
 import { ScheduleView } from "./components/schedule/ScheduleView";
 import { TodayScheduleBanner } from "./components/schedule/TodayScheduleBanner";
@@ -25,6 +25,8 @@ import { TodayDaySchedule } from "./components/schedule/TodayDaySchedule";
 const AnswerSheetModal = lazy(() => import("./components/sprint/AnswerSheetModal").then((module) => ({ default: module.AnswerSheetModal })));
 const JournalEditorModal = lazy(() => import("./components/journal/JournalEditorModal").then((module) => ({ default: module.JournalEditorModal })));
 const PaperNetdiskModal = lazy(() => import("./components/papers/PaperNetdiskModal").then((module) => ({ default: module.PaperNetdiskModal })));
+// 数据分析页受 SHOW_DATA_ANALYSIS 控制；组件与 analytics.css 仅在入口开启并进入该页时按需加载。
+const AnalyticsActivity = lazy(() => import("./components/AnalyticsActivity").then((module) => ({ default: module.AnalyticsActivity })));
 import {
   APP_VERSION,
   StorageRepository,
@@ -97,6 +99,7 @@ import {
   type ScheduleEvent,
   type VelocityForecast,
 } from "./study-data";
+
 
 type AuthState = "locked" | "authenticated";
 type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
@@ -1734,7 +1737,7 @@ export function StudyDashboard() {
         questions: nextMap,
       });
     }));
-    setFeedbackMessage(state === "correct" ? "已将选择题设为全部正确 🟢" : "已将选择题设为全部错误 🔴");
+    setFeedbackMessage(state === "correct" ? "已将选择题设为全部正确" : "已将选择题设为全部错误");
   }
 
   function batchSetWrongQuestions(paperId: string, rawInput: string) {
@@ -2307,7 +2310,7 @@ export function StudyDashboard() {
             <article className={`task-row${checked ? " completed" : ""}${isCurrentSlot ? " task-row--current-slot" : ""}`} key={`${kind}-${phase ?? "task"}-${isReviewAction ? chapter.id : section.id}`}>
               <div className="task-main">
                 <div className="task-title">
-                  {isCurrentSlot && <span className="task-slot-tag" aria-label="当前时段课程">🎯 正在进行</span>}
+                  {isCurrentSlot && <span className="task-slot-tag" aria-label="当前时段课程"><Icon name="target" /> 正在进行</span>}
                   <span>{isReviewAction ? `第${chapter.number}章` : section.number}</span><strong>{isReviewAction ? chapter.title : section.title}</strong>
                 </div>
                 <div className="task-context"><strong>{book.shortTitle}</strong><span>{isReviewAction ? `${review.learnedCount}/${review.sectionCount} 小节已新学` : chapterTitle}</span></div>
@@ -2503,7 +2506,7 @@ export function StudyDashboard() {
     setJournals((prev) => {
       const target = prev.find((entry) => entry.id === id);
       const nextImportant = !target?.important;
-      setFeedbackMessage(nextImportant ? "⭐ 已标为重点日志" : "已取消重点标记");
+      setFeedbackMessage(nextImportant ? "已标为重点日志" : "已取消重点标记");
       return prev.map((entry) => {
         if (entry.id !== id) return entry;
         return {
@@ -2883,7 +2886,6 @@ export function StudyDashboard() {
                 <span className={`topbar-more-status topbar-more-status--${syncMeta.cls}`} role="status"><i aria-hidden="true" />{syncMeta.label}</span>
               </div>
             </div>
-            <button className="logout-button" type="button" onClick={logout}>退出</button>
           </div>
           <nav className="mobile-navigation" aria-label="移动端页面导航">
             {mobileNavigation.map(({ page, label }) => (
@@ -2971,7 +2973,7 @@ export function StudyDashboard() {
                     aria-label={`回到最近学习科目：${globalRecentBook.shortTitle} ${globalRecentSection.number} ${globalRecentSection.title}`}
                     onClick={jumpToGlobalRecent}
                   >
-                    📍 最近学习：<strong>{globalRecentBook.shortTitle} · {globalRecentSection.number} {globalRecentSection.title}</strong>
+                    <Icon name="map-pin" /> 最近学习：<strong>{globalRecentBook.shortTitle} · {globalRecentSection.number} {globalRecentSection.title}</strong>
                   </button>
                 )}
               </div>
@@ -2982,7 +2984,7 @@ export function StudyDashboard() {
                 <div>
                   <h2>本周节奏</h2>
                 </div>
-                <span className="streak-flame">✹</span>
+                <span className="streak-flame"><Icon name="sparkle" filled /></span>
               </div>
 
               <div className="rhythm-metrics" aria-label={`本周学习 ${weeklyDaysCount} 天，完成 ${weeklySectionCount} 项新学或复习动作`}>
@@ -3292,7 +3294,7 @@ export function StudyDashboard() {
                                       aria-label={`查看此小节的 ${sectionJournals.length} 条学习日志`}
                                       onClick={() => setActiveDrawerSectionId(section.id)}
                                     >
-                                      📝 <span>{sectionJournals.length}</span>
+                                      <Icon name="note" /> <span>{sectionJournals.length}</span>
                                     </button>
                                   )}
                                   <button
@@ -3373,7 +3375,7 @@ export function StudyDashboard() {
                     className="journal-action-btn journal-action-btn--primary"
                     onClick={() => openCreateJournal(null)}
                   >
-                    <span className="desktop-density-copy">✍ 写今日记录</span><span className="mobile-density-copy">写记录</span>
+                    <span className="desktop-density-copy"><Icon name="pen" /> 写今日记录</span><span className="mobile-density-copy">写记录</span>
                   </button>
                   <button
                     type="button"
@@ -3383,7 +3385,7 @@ export function StudyDashboard() {
                       el?.scrollIntoView({ behavior: "smooth" });
                     }}
                   >
-                    <span className="desktop-density-copy">↓ 学习日志 ({journals.length})</span><span className="mobile-density-copy">日志 {journals.length} ↓</span>
+                    <span className="desktop-density-copy"><Icon name="arrow-down" /> 学习日志 ({journals.length})</span><span className="mobile-density-copy">日志 {journals.length} <Icon name="arrow-down" /></span>
                   </button>
                 </div>
               </div>
@@ -3408,7 +3410,7 @@ export function StudyDashboard() {
                         <div className="cockpit-rest-indicator" title="当前为空隙休息时段">
                           <span className="cockpit-rest-dot" />
                           <span>
-                            ☕ 休息中
+                            <Icon name="coffee" /> 休息中
                             {activeScheduleInfo.status === "rest_break" && activeScheduleInfo.restBreak
                               ? ` (${activeScheduleInfo.restBreak.label} · 剩 ${activeScheduleInfo.remainingMinutes}m)`
                               : activeScheduleInfo.intermissionNextEvent && activeScheduleInfo.startsInMinutes <= 60
@@ -3424,7 +3426,7 @@ export function StudyDashboard() {
                         onClick={() => navigateMobile("schedule")}
                         title="查看/编辑全屏课表"
                       >
-                        ⤢ 全屏/设置
+                        <Icon name="maximize" /> 全屏/设置
                       </button>
                     </div>
                   </div>
@@ -3437,7 +3439,7 @@ export function StudyDashboard() {
                     onClick={() => setTodayScheduleExpanded((current) => !current)}
                   >
                     {todayScheduleExpanded ? "收起今日课程" : "查看今日全部课程"}
-                    <span aria-hidden="true">{todayScheduleExpanded ? "⌃" : "⌄"}</span>
+                    <Icon name={todayScheduleExpanded ? "chevron-up" : "chevron-down"} />
                   </button>
                   <div id="today-schedule-detail" className={`today-schedule-detail${todayScheduleExpanded ? " is-open" : ""}`}>
                   <TimetableGrid
@@ -3466,7 +3468,7 @@ export function StudyDashboard() {
                   {cockpitFocusedEvent && (
                     <div className="cockpit-focus-bar">
                       <div className="cockpit-focus-info">
-                        <span className="focus-icon">🎯</span>
+                        <span className="focus-icon"><Icon name="target" /></span>
                         <span className="focus-label">
                           已聚焦: <strong>{cockpitFocusedEvent.title}</strong>
                           {cockpitFocusedEvent.linkedArea ? ` (${cockpitFocusedEvent.linkedArea})` : ""}
@@ -3498,6 +3500,7 @@ export function StudyDashboard() {
                         <strong className="stat-num">{displayedTodayPlan.length}</strong>
                         <span className="stat-unit">项</span>
                       </div>
+                      {!displayedTodayPlan.length && <span className="task-panel-empty-note mobile-density-copy">暂无安排</span>}
                     </header>
                     {renderTaskList(
                       displayedTodayPlan,
@@ -3526,6 +3529,7 @@ export function StudyDashboard() {
                         <strong className="stat-num">{displayedOverdueTasks.length}</strong>
                         <span className="stat-unit">项</span>
                       </div>
+                      {!displayedOverdueTasks.length && <span className="task-panel-empty-note mobile-density-copy">无逾期</span>}
                     </header>
                     {renderTaskList(
                       displayedOverdueTasks,
@@ -3552,10 +3556,10 @@ export function StudyDashboard() {
                   <div className="journal-stream-actions">
                     <button
                       type="button"
-                      className="journal-action-btn journal-action-btn--primary"
+                      className="journal-action-btn journal-action-btn--text"
                       onClick={() => openCreateJournal(null)}
                     >
-                      + 写一条
+                      <Icon name="pen" /> 写一条
                     </button>
                   </div>
                 </header>
@@ -3584,7 +3588,7 @@ export function StudyDashboard() {
                   <div className="journal-filter-pills" role="group" aria-label="日志筛选">
                     {([
                       ["all", "全部"],
-                      ["important", "⭐ 重点"],
+                      ["important", "重点"],
                       ["unlinked", "无关联"],
                       ["linked", "有关联"],
                       ["408", "408"],
@@ -3598,7 +3602,7 @@ export function StudyDashboard() {
                         aria-pressed={journalFilter === key}
                         onClick={() => setJournalFilter(key)}
                       >
-                        {label}
+                        {key === "important" && <Icon name="star" />}{label}
                       </button>
                     ))}
                   </div>
@@ -3623,10 +3627,10 @@ export function StudyDashboard() {
                       ) : (
                         <button
                           type="button"
-                          className="journal-action-btn journal-action-btn--secondary"
+                          className="journal-action-btn journal-action-btn--text"
                           onClick={() => openCreateJournal(null)}
                         >
-                          ✍ 立即记录第一条
+                          记录第一条
                         </button>
                       )}
                     </div>
@@ -3653,7 +3657,7 @@ export function StudyDashboard() {
                                   <div className="journal-card-badges">
                                     {entry.important && (
                                       <span className="journal-important-badge" title="重点日志，需经常复盘">
-                                        ⭐ 重点
+                                        <Icon name="star" filled /> 重点
                                       </span>
                                     )}
                                     <span className="journal-time-tag">{formatTimeShort(entry.createdAt)}</span>
@@ -3668,7 +3672,7 @@ export function StudyDashboard() {
                                             title={`${sec.bookTitle ?? ""} ${sec.sectionNumber ?? ""} ${sec.sectionTitle ?? ""}`.trim()}
                                             onClick={() => setActiveDrawerSectionId(sec.sectionId)}
                                           >
-                                            📖 {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
+                                            <Icon name="book-open" /> {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
                                           </button>
                                         ));
                                       }
@@ -3679,7 +3683,7 @@ export function StudyDashboard() {
                                             className={`journal-context-badge area-${entry.context.area}`}
                                             title={entry.context.bookTitle ?? entry.context.bookId}
                                           >
-                                            📚 {entry.context.bookTitle ?? entry.context.bookId}
+                                            <Icon name="library" /> {entry.context.bookTitle ?? entry.context.bookId}
                                           </button>
                                         );
                                       }
@@ -3690,7 +3694,7 @@ export function StudyDashboard() {
                                             className={`journal-context-badge area-${entry.context.area}`}
                                             title={entry.context.area === "408" ? "408" : "数学"}
                                           >
-                                            🎯 {entry.context.area === "408" ? "408" : "数学"}
+                                            <Icon name="target" /> {entry.context.area === "408" ? "408" : "数学"}
                                           </button>
                                         );
                                       }
@@ -3706,7 +3710,7 @@ export function StudyDashboard() {
                                               setActivePage("sprint");
                                             }}
                                           >
-                                            🎯 {paperCtx.paperTitle}
+                                            <Icon name="target" /> {paperCtx.paperTitle}
                                           </button>
                                         );
                                       }
@@ -3720,7 +3724,7 @@ export function StudyDashboard() {
                                         className="journal-publish-badge"
                                         title="在 GitHub Blog 查看文章"
                                       >
-                                        🌐 已发布 ↗
+                                        <Icon name="globe" /> 已发布 <Icon name="arrow-up-right" />
                                       </a>
                                     )}
                                   </div>
@@ -3732,7 +3736,7 @@ export function StudyDashboard() {
                                       onClick={() => toggleJournalImportant(entry.id)}
                                       title={entry.important ? "取消重点标记" : "标记为重点日志"}
                                     >
-                                      {entry.important ? "★ 重点" : "☆ 设为重点"}
+                                      {entry.important ? <><Icon name="star" filled /> 重点</> : <><Icon name="star" /> 设为重点</>}
                                     </button>
                                     <button
                                       type="button"
@@ -3776,7 +3780,7 @@ export function StudyDashboard() {
                                       className="journal-expand-toggle"
                                       onClick={() => toggleExpandJournal(entry.id)}
                                     >
-                                      {isExpanded ? "收起全文 ↑" : "展开阅读全文 ↓"}
+                                      {isExpanded ? <>收起全文 <Icon name="arrow-up" /></> : <>展开阅读全文 <Icon name="arrow-down" /></>}
                                     </button>
                                   </div>
                                 )}
@@ -4049,17 +4053,17 @@ export function StudyDashboard() {
                           type="button"
                           className={`sprint-sort-btn ${pastPaperSortOrder === "desc" ? "active" : ""}`}
                           onClick={() => setPastPaperSortOrder("desc")}
-                          title="按年份倒序排列 (2026 ➔ 2010)"
+                          title="按年份倒序排列（2026 至 2010）"
                         >
-                          倒序 ↓
+                          倒序 <Icon name="arrow-down" />
                         </button>
                         <button
                           type="button"
                           className={`sprint-sort-btn ${pastPaperSortOrder === "asc" ? "active" : ""}`}
                           onClick={() => setPastPaperSortOrder("asc")}
-                          title="按年份正序排列 (2010 ➔ 2026)"
+                          title="按年份正序排列（2010 至 2026）"
                         >
-                          正序 ↑
+                          正序 <Icon name="arrow-up" />
                         </button>
                       </div>
                     </div>
@@ -4182,6 +4186,7 @@ export function StudyDashboard() {
               />
             </section>
           ) : SHOW_DATA_ANALYSIS && activePage === "analytics" ? (
+            <Suspense fallback={null}>
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
               <div className="analytics-toolbar">
                 <div className="analytics-scope-switch" role="tablist" aria-label="数据分析范围切换">
@@ -4287,6 +4292,7 @@ export function StudyDashboard() {
               <AnalyticsActivity heatmapDays={heatmapDays} weeklyTrends={weeklyTrends} currentWeekTrend={currentWeekTrend} weeklyAverage={weeklyAverage} peakWeekActions={peakWeekActions} maxWeeklyAction={maxWeeklyAction} formatDateChinese={formatDateChinese} />
 
             </section>
+            </Suspense>
           ) : (
             <section className="page-view settings-page" aria-labelledby="settings-title">
               <div className="settings-stack">
@@ -4318,7 +4324,7 @@ export function StudyDashboard() {
                     onClick={() => setSettingsScheduleExpanded((current) => !current)}
                   >
                     {settingsScheduleExpanded ? "收起考试科目安排" : "查看考试科目安排"}
-                    <span aria-hidden="true">{settingsScheduleExpanded ? "⌃" : "⌄"}</span>
+                    <Icon name={settingsScheduleExpanded ? "chevron-up" : "chevron-down"} />
                   </button>
                   <div id="settings-exam-schedule" className={`schedule-board-grid${settingsScheduleExpanded ? " is-open" : ""}`}>
                     <div className="schedule-day-card">
@@ -4381,9 +4387,6 @@ export function StudyDashboard() {
                         <button type="button" className="settings-btn settings-btn--secondary" onClick={() => importInputRef.current?.click()}>
                           <span className="desktop-density-copy">导入 JSON</span><span className="mobile-density-copy">导入</span>
                         </button>
-                        <button type="button" className="settings-btn settings-btn--danger" onClick={() => setPendingClearAllPapers(true)} title="清空全部学科历年真题与模拟卷的做题与打分记录">
-                          <span className="desktop-density-copy">清空套卷完成记录 ⚠️</span><span className="mobile-density-copy">清空套卷</span>
-                        </button>
                       </div>
                       {storageLoadIssue && (
                         <button className="recovery-export" type="button" onClick={downloadRecoveryData}>
@@ -4442,6 +4445,24 @@ export function StudyDashboard() {
                   </div>
                 </section>
 
+                <section className="settings-card settings-card--danger" aria-labelledby="settings-danger-title">
+                  <header className="settings-card__header">
+                    <div>
+                      <h2 id="settings-danger-title">危险操作</h2>
+                      <p>以下操作会清除数据且无法撤销，执行前会再次确认。</p>
+                    </div>
+                  </header>
+                  <div className="danger-zone-row">
+                    <div className="danger-zone-copy">
+                      <strong>清空套卷完成记录</strong>
+                      <span>清除全部学科历年真题与模拟卷的完成状态、得分、答题卡与二刷记录。</span>
+                    </div>
+                    <button type="button" className="settings-btn settings-btn--danger" onClick={() => setPendingClearAllPapers(true)}>
+                      清空记录
+                    </button>
+                  </div>
+                </section>
+
                 <section className="settings-card settings-card--account">
                   <header className="settings-card__header">
                     <div>
@@ -4470,7 +4491,7 @@ export function StudyDashboard() {
                     <div className="blog-info-item">
                       <span>个人博客站点</span>
                       <a href="https://craig9re5.github.io/" target="_blank" rel="noreferrer">
-                        https://craig9re5.github.io/ ↗
+                        https://craig9re5.github.io/ <Icon name="arrow-up-right" />
                       </a>
                     </div>
                   </div>
@@ -4498,7 +4519,7 @@ export function StudyDashboard() {
                     ? `${task.book.shortTitle} · 第${task.chapter.number}章 ${task.chapter.title}`
                     : `${task.book.shortTitle} · ${task.section.number} ${task.section.title}`
                   : sectionId;
-                return <article key={sectionId}><div><strong>{title}</strong><span>{isReviewPlan ? "整章复习计划" : task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i>→</i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
+                return <article key={sectionId}><div><strong>{title}</strong><span>{isReviewPlan ? "整章复习计划" : task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i><Icon name="arrow-right" /></i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
               })}
             </div>
             <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source, planPreview.field); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
@@ -4603,7 +4624,7 @@ export function StudyDashboard() {
 
             {publishError && (
               <div className="publish-error-banner" role="alert">
-                <span>⚠ {publishError}</span>
+                <span><Icon name="alert" /> {publishError}</span>
               </div>
             )}
 
@@ -4742,7 +4763,7 @@ export function StudyDashboard() {
                         <div className="drawer-meta-left">
                           {entry.important && (
                             <span className="journal-important-badge" title="重点日志">
-                              ⭐ 重点
+                              <Icon name="star" filled /> 重点
                             </span>
                           )}
                           <span className="drawer-date-tag">{formatDateChinese(entry.createdAt.slice(0, 10))} {formatTimeShort(entry.createdAt)}</span>
@@ -4754,7 +4775,7 @@ export function StudyDashboard() {
                             onClick={() => toggleJournalImportant(entry.id)}
                             title={entry.important ? "取消重点标记" : "标为重点"}
                           >
-                            {entry.important ? "★ 重点" : "☆ 设为重点"}
+                            {entry.important ? <><Icon name="star" filled /> 重点</> : <><Icon name="star" /> 设为重点</>}
                           </button>
                           <button type="button" onClick={() => openEditJournal(entry)}>编辑</button>
                           <button type="button" onClick={() => openBlogPublishModal(entry)}>发布</button>

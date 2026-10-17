@@ -1,3 +1,4 @@
+import { Icon } from "../common/Icon";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book } from "../../data/books";
 import type {
@@ -544,7 +545,7 @@ export function JournalEditorModal({
                           const isSelected = editorSections.some((es) => es.sectionId === s.id);
                           return (
                             <option key={s.id} value={s.id} disabled={isSelected}>
-                              {s.number} {s.title} {isSelected ? "✓ 已选" : ""}
+                              {s.number} {s.title} {isSelected ? <><Icon name="check" /> 已选</> : ""}
                             </option>
                           );
                         })}
@@ -569,7 +570,7 @@ export function JournalEditorModal({
               <div className="journal-selected-sections-list">
                 <span className={`journal-section-chip area-${editorPaper.area}`}>
                   <span className="chip-text">
-                    🎯 模考复盘 · {editorPaper.paperTitle}
+                    <Icon name="target" /> 模考复盘 · {editorPaper.paperTitle}
                   </span>
                   <button
                     type="button"
@@ -646,13 +647,13 @@ export function JournalEditorModal({
               checked={editorImportant}
               onChange={(e) => setEditorImportant(e.target.checked)}
             />
-            <span>⭐ 标为重点复盘</span>
+            <span><Icon name="star" /> 标为重点复盘</span>
           </label>
         </div>
 
         {validationError && (
           <div className="journal-editor-error-banner" role="alert" style={{ margin: "0 24px", color: "var(--coral, #f43f5e)" }}>
-            <span>⚠ {validationError}</span>
+            <span><Icon name="alert" /> {validationError}</span>
           </div>
         )}
 
@@ -758,9 +759,10 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn journal-tb-btn--mobile-primary"
                 title="超链接 (Ctrl+K)"
+                aria-label="插入超链接"
                 onClick={() => applyEditorFormat((t, s, e) => applyLink(t, s, e))}
               >
-                🔗
+                <Icon name="link" />
               </button>
               <span className="journal-tb-divider" />
               <button
@@ -785,7 +787,7 @@ export function JournalEditorModal({
                 title="待办清单 (Ctrl+Shift+T)"
                 onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "task"))}
               >
-                ☑ 待办
+                <Icon name="square-check" /> 待办
               </button>
               <button
                 type="button"
@@ -793,7 +795,7 @@ export function JournalEditorModal({
                 title="引用块 (Ctrl+Shift+Q)"
                 onClick={() => applyEditorFormat((t, s, e) => toggleLinePrefix(t, s, e, "quote"))}
               >
-                ❝ 引用
+                <Icon name="quote" /> 引用
               </button>
               <button
                 type="button"
@@ -801,7 +803,7 @@ export function JournalEditorModal({
                 title="插入表格模板"
                 onClick={() => applyEditorFormat((t, s, e) => applyTableTemplate(t, s, e))}
               >
-                ⊞ 表格
+                <Icon name="table" /> 表格
               </button>
               <button type="button" className="journal-toolbar-more" aria-expanded={showMoreTools} onClick={() => setShowMoreTools((value) => !value)}>{showMoreTools ? "收起" : "更多格式"}</button>
             </div>

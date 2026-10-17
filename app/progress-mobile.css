@@ -18,7 +18,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .chapter-review-check,
   .chapter-review-inline .date-text,
   .chapter-review-inline .date-editor,
@@ -262,7 +262,7 @@
   }
 }
 
-@media (min-width: 601px) and (max-width: 768px) {
+@media (600px < width <= 768px) {
   .section-table .section-row.is-detail-open {
     grid-template-columns: minmax(120px, .8fr) minmax(140px, 1fr) minmax(200px, 1.2fr);
     grid-template-areas: "summary summary summary" "name base-plan learned";
@@ -274,7 +274,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .mobile-week-disclosure,
   .page-content--today .cockpit-action-btn { display: none; }
   .page-content--progress { padding-top: 10px; }
@@ -427,7 +427,7 @@
 }
 
 /* Phone details use the full card width and a single reading order. */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .catalog-filter-mobile::after { right: 5px; }
   .page-content--progress .catalog-heading { gap: 6px; }
   .page-content--progress .catalog-heading > div:first-child { flex-wrap: wrap; gap: 3px 8px; }

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "katex/dist/katex.min.css";
+import "@fontsource-variable/noto-serif-sc";
 import "./globals.css";
-import "./analytics.css";
 import "./journal.css";
 import "./sprint.css";
 import "./touch.css";
@@ -10,6 +10,7 @@ import "./paper-netdisk.css";
 import "./sprint-mobile.css";
 import "./progress-mobile.css";
 import "./mobile-density.css";
+import "./tablet.css";
 
 export const metadata: Metadata = {
   title: "学习进度",

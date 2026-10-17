@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "./common/Icon";
+import "../analytics.css";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HeatmapDay, WeeklyTrend } from "../study-data";
 
@@ -169,7 +171,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                       </div>
                     ) : (
                       <div className="hover-detail placeholder">
-                        <span>💡 悬停、点击或 Tab 聚焦方块（方向键移动），查看当日学完与复习详情</span>
+                        <span><Icon name="lightbulb" /> 悬停、点击或 Tab 聚焦方块（方向键移动），查看当日学完与复习详情</span>
                       </div>
                     )}
                   </div>
@@ -296,7 +298,7 @@ export const AnalyticsActivity = memo(function AnalyticsActivity({ heatmapDays, 
                       </div>
                     ) : (
                       <div className="hover-detail placeholder">
-                        <span>💡 悬停、点击或 Tab 聚焦柱状图，查看各周新学与复习打卡构成</span>
+                        <span><Icon name="lightbulb" /> 悬停、点击或 Tab 聚焦柱状图，查看各周新学与复习打卡构成</span>
                       </div>
                     )}
                   </div>

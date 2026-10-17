@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import type { ActiveScheduleInfo } from "../../study-data";
 
 interface ScheduleHeaderProps {
@@ -54,7 +55,7 @@ export function ScheduleHeader({
           </select>
           <div className="schedule-week-display-badge">
             <span>第 {activeWeek} 周</span>
-            <span className="caret">▾</span>
+            <Icon name="chevron-down" className="caret" />
           </div>
         </div>
 
@@ -93,7 +94,7 @@ export function ScheduleHeader({
             <div className="header-status-pill resting" title="当前为空隙休息时段">
               <span className="rest-dot" />
               <span>
-                ☕ 休息中
+                <Icon name="coffee" /> 休息中
                 {activeInfo.status === "rest_break" && activeInfo.restBreak
                   ? ` · ${activeInfo.restBreak.label} (剩 ${activeInfo.remainingMinutes}m)`
                   : activeInfo.intermissionNextEvent && activeInfo.startsInMinutes <= 60
@@ -116,7 +117,7 @@ export function ScheduleHeader({
             onClick={() => onChangeLayoutMode("transposed")}
             title="电脑宽屏推荐：横向时间轴甘特视图"
           >
-            <span className="layout-switch-full">💻 横向时间轴</span><span className="layout-switch-short">时间轴</span>
+            <span className="layout-switch-full"><Icon name="monitor" /> 横向时间轴</span><span className="layout-switch-short">时间轴</span>
           </button>
           <button
             type="button"
@@ -126,7 +127,7 @@ export function ScheduleHeader({
             onClick={() => onChangeLayoutMode("portrait")}
             title="传统 7 列竖向课表视图"
           >
-            <span className="layout-switch-full">📱 竖向周课表</span><span className="layout-switch-short">周课表</span>
+            <span className="layout-switch-full"><Icon name="smartphone" /> 竖向周课表</span><span className="layout-switch-short">周课表</span>
           </button>
         </div>
       )}

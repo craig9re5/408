@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import { useState, useEffect, useRef } from "react";
 
 export interface UploadTask {
@@ -118,8 +119,8 @@ export function PaperUploadZone({
                   <span className="netdisk-task-status">
                     {task.status === "uploading" && `${task.progress}%`}
                     {task.status === "pending" && "等待上传"}
-                    {task.status === "success" && "✓ 完成"}
-                    {task.status === "error" && "✕ 失败"}
+                    {task.status === "success" && <><Icon name="check" /> 完成</>}
+                    {task.status === "error" && <><Icon name="x" /> 失败</>}
                   </span>
                 </div>
                 {task.status === "uploading" && (

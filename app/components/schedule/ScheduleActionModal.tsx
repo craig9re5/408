@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "../common/Icon";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ScheduleEvent, CustomPeriodConfig, ActiveScheduleInfo } from "../../study-data";
@@ -144,7 +145,7 @@ export function ScheduleActionModal({
             onClick={onClose}
             aria-label="关闭详情弹窗"
           >
-            ✕
+            <Icon name="x" />
           </button>
         </header>
 
@@ -179,7 +180,7 @@ export function ScheduleActionModal({
                   onClose();
                 }}
               >
-                ✍ 记录本节复盘心得
+                <Icon name="pen" /> 记录本节复盘心得
               </button>
             )}
 
@@ -192,7 +193,7 @@ export function ScheduleActionModal({
                   onClose();
                 }}
               >
-                🎯 查看对应知识点打卡
+                <Icon name="target" /> 查看对应知识点打卡
               </button>
             )}
           </div>

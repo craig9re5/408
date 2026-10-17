@@ -1,0 +1,54 @@
+/*
+ * 平板宽度（600px < width ≤ 900px）专用排版。
+ * 该区间隐藏侧边栏、使用顶部标签导航，但屏幕仍比手机宽得多：
+ * 此文件在 layout.tsx 中最后导入，用来覆盖从手机样式继承过来的过度压缩。
+ */
+@media (600px < width <= 900px) {
+  /* 顶栏：标签导航已标明当前页面，页面标题仅保留给读屏 */
+  .topbar {
+    column-gap: 16px;
+    padding-right: max(24px, env(safe-area-inset-right));
+    padding-left: max(24px, env(safe-area-inset-left));
+  }
+  .topbar-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .mobile-navigation { flex: 1 1 0; min-width: 0; max-width: 380px; }
+  .mobile-navigation button strong { font-size: 13px; }
+
+  /* 内容区：与顶栏对齐的统一左右留白（此前 769–900px 内容贴边） */
+  .page-content {
+    width: 100%;
+    max-width: 100%;
+    padding-right: max(24px, env(safe-area-inset-right));
+    padding-left: max(24px, env(safe-area-inset-left));
+  }
+
+  /* 学习概览：进度卡与本周节奏并排，节奏卡恢复纵向构图，不再压成一条 */
+  .hero-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; margin-bottom: 20px; }
+  .streak-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0;
+    padding: 18px 20px 16px;
+    text-align: left;
+  }
+  .streak-card::after { display: none; }
+  .streak-card .card-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; }
+  .streak-card .card-heading h2 { font-size: 17px; }
+  .streak-flame { font-size: 18px; }
+  .rhythm-metrics { justify-content: flex-start; gap: 16px; margin-top: 14px; }
+  .rhythm-metrics > i { min-height: 32px; }
+  .rhythm-metric strong { font-size: 34px; line-height: 1; }
+  .rhythm-metric span { font-size: 11px; }
+  .week-dots { width: 100%; justify-content: space-between; gap: 0; margin-top: 16px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.18); }
+  .week-dots div { flex: 1; gap: 5px; }
+  .week-dots small { font-size: 11px; }
+}
