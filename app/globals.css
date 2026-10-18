@@ -280,7 +280,75 @@ input[type="number"] {
 .book-select__caption { color: #6c7b7d; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .book-select__surface strong { min-width: 0; margin-right: auto; overflow: hidden; font-size: 14px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .book-select__surface svg { width: 14px; height: 14px; flex: 0 0 14px; color: #617177; }
-.book-select select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+/* 自绘下拉（app/components/common/SelectMenu.tsx）。
+   原生 <select> 的展开列表由系统绘制，样式不可控；这里统一成纸色面板。 */
+.select-menu { position: relative; }
+.select-menu__trigger {
+  display: flex;
+  /* 不要写 height:100%：父级高度由内容撑开时这会塌成 0。
+     改为继承父级高度（book-select 固定 44px），并给出 44px 兜底。 */
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.select-menu__trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+.select-menu__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 45;
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(320px, calc(100vw - 24px));
+  gap: 1px;
+  padding: 6px;
+  border: 1px solid var(--mobile-border);
+  border-radius: 13px;
+  background: var(--mobile-surface);
+  box-shadow: 0 14px 36px rgba(17, 27, 36, .16), 0 2px 8px rgba(17, 27, 36, .05);
+  animation: select-menu-in .14s ease-out both;
+}
+@keyframes select-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.select-menu__group { display: grid; gap: 1px; }
+.select-menu__group + .select-menu__group { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--mobile-divider); }
+.select-menu__group-label {
+  padding: 5px 10px 3px;
+  color: var(--mobile-text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: .06em;
+}
+.select-menu__option {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.select-menu__option.is-active { background: color-mix(in srgb, var(--green) 12%, transparent); }
+.select-menu__option.is-selected { color: var(--mobile-text-accent); font-weight: 650; }
+.select-menu__option svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--green-ink); }
+.select-menu__option:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .select-menu__panel { animation: none; } }
 .book-select.book-select--hero, .sprint-mobile-intro, .sprint-mobile-controls, .mobile-secondary-heading, .schedule-mobile-back { display: none; }
 .topbar-more-wrap, .catalog-more { display: none; }
 .area-switcher { display: grid; width: 116px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; padding: 3px; border: 1px solid #d7d4cc; border-radius: 9px; background: rgba(251, 250, 246, 0.78); box-shadow: 0 4px 14px rgba(35, 42, 44, 0.035); }
@@ -671,10 +739,13 @@ input[type="number"] {
 .settings-card--danger { border-color: var(--coral-line); }
 .settings-card--danger .settings-card__header h2 { color: var(--coral-ink); }
 .danger-zone-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--coral-line); border-radius: 12px; background: color-mix(in srgb, var(--coral-soft) 35%, transparent); }
-.danger-zone-copy { display: grid; gap: 4px; min-width: 0; }
-.danger-zone-copy strong { color: var(--ink); font-size: 14px; font-weight: 600; }
-.danger-zone-copy span { color: var(--meta); font-size: 12px; line-height: 1.6; }
+.danger-zone-row > strong { color: var(--ink); font-size: 14px; font-weight: 600; }
 .danger-zone-row .settings-btn--danger { flex-shrink: 0; }
+
+/* 账号卡片：空间名与退出按钮同一行。 */
+.settings-account-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-account-name { min-width: 0; overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.settings-account-row .settings-btn--danger { flex-shrink: 0; }
 .backup-create { padding: 6px 12px; border: 1px solid #cfd4d0; border-radius: 7px; color: #43514c; background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .16s ease; }
 .backup-create:hover { border-color: #a4aea7; background: #fdfdfc; transform: translateY(-1px); }
 .recovery-export { margin-top: 10px; padding: 6px 0; color: #ae5f52; background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

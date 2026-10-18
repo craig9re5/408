@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "./components/common/Icon";
+import { SelectMenu } from "./components/common/SelectMenu";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
 import { SHOW_DATA_ANALYSIS } from "./feature-flags";
@@ -155,21 +156,23 @@ function MobileNavIcon({ page }: { page: AppPage }) {
 
 function SubjectPicker({ selectedBook, onChange, className = "" }: { selectedBook: Book; onChange: (bookId: string) => void; className?: string }) {
   return (
-    <label className={`book-select${className ? ` ${className}` : ""}`}>
-      <span className="visually-hidden">切换学科</span>
-      <span className="book-select__surface" aria-hidden="true">
-        <strong>{selectedBook.title}</strong>
-        <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </span>
-      <select value={selectedBook.id} onChange={(event) => onChange(event.target.value)}>
-        <optgroup label="408">
-          {books.filter((book) => book.area === "408").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
-        </optgroup>
-        <optgroup label="数学">
-          {books.filter((book) => book.area === "math").map((book) => <option value={book.id} key={book.id}>{book.title}</option>)}
-        </optgroup>
-      </select>
-    </label>
+    <SelectMenu
+      className={`book-select${className ? ` ${className}` : ""}`}
+      value={selectedBook.id}
+      onChange={onChange}
+      ariaLabel="切换学科"
+      groups={[
+        { label: "408", options: books.filter((book) => book.area === "408").map((book) => ({ value: book.id, label: book.title })) },
+        { label: "数学", options: books.filter((book) => book.area === "math").map((book) => ({ value: book.id, label: book.title })) },
+      ]}
+      renderTrigger={() => (
+        // 触发区沿用 book-select__surface 的排版，去掉原生 select 的下拉箭头。
+        <span className="book-select__surface">
+          <strong>{selectedBook.title}</strong>
+          <Icon name="chevron-down" />
+        </span>
+      )}
+    />
   );
 }
 
@@ -588,7 +591,7 @@ export function StudyDashboard() {
   const [schedule, setSchedule] = useState<ScheduleAppData>(buildDefaultSchedule);
   const { activeInfo: activeScheduleInfo } = useScheduleTicker(schedule);
   const [cockpitFocusedEvent, setCockpitFocusedEvent] = useState<ScheduleEvent | null>(null);
-  const [todayScheduleExpanded, setTodayScheduleExpanded] = useState(false);
+  const [todayScheduleExpanded, setTodayScheduleExpanded] = useState(true);
   const [settingsScheduleExpanded, setSettingsScheduleExpanded] = useState(false);
   const [sprintTab, setSprintTab] = useState<"all" | "past" | "mock">("all");
   const effectiveSprintTab = (activeArea === "english" || activeArea === "politics") && sprintTab === "mock" ? "all" : sprintTab;
@@ -3015,15 +3018,25 @@ export function StudyDashboard() {
             <div className="catalog-heading">
               <div><h2>目录</h2><span>{catalogFilter === "unreviewed" ? `${filteredChapters.length} 章待复习` : `${filteredChapters.length} 章 · ${filteredSectionCount} 小节`}{planEditMode ? " · 编辑中" : ""}</span></div>
               <div className="catalog-tools">
-                <label className="catalog-filter-mobile">
-                  <span className="visually-hidden">筛选目录</span>
-                  <select value={catalogFilter} onChange={(event) => { setCatalogFilter(event.target.value as CatalogFilter); setFilterChaptersCollapsed(true); setFilteredChapterOverrides({}); }}>
-                    <option value="all">全部</option>
-                    <option value="unlearned">未新学</option>
-                    <option value="unreviewed">未复习</option>
-                    <option value="overdue">逾期</option>
-                  </select>
-                </label>
+                <SelectMenu
+                  className="catalog-filter-mobile"
+                  value={catalogFilter}
+                  onChange={(next) => {
+                    setCatalogFilter(next as CatalogFilter);
+                    setFilterChaptersCollapsed(true);
+                    setFilteredChapterOverrides({});
+                  }}
+                  ariaLabel="筛选目录"
+                  groups={[{
+                    options: [
+                      { value: "all", label: "全部" },
+                      { value: "unlearned", label: "未新学" },
+                      { value: "unreviewed", label: "未复习" },
+                      { value: "overdue", label: "逾期" },
+                    ],
+                  }]}
+                  triggerClassName="catalog-filter-mobile__trigger"
+                />
                 <div className="catalog-filters" aria-label="目录筛选">
                   {([
                     ["all", "全部"],
@@ -3799,13 +3812,21 @@ export function StudyDashboard() {
               <div className="sprint-mobile-intro">
                 <div className="sprint-mobile-heading">
                   <h2>套卷冲刺</h2>
-                  <label className="sprint-mobile-subject">
-                    <span className="visually-hidden">选择冲刺科目</span>
-                    <span aria-hidden="true">{sprintAreaLabels[activeArea]} <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6 3.5 3.5L11.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
-                    <select value={activeArea} onChange={(event) => selectSprintArea(event.target.value as StudyArea)}>
-                      {(["408", "math", "english", "politics"] as StudyArea[]).map((area) => <option key={area} value={area}>{sprintAreaLabels[area]}</option>)}
-                    </select>
-                  </label>
+                  <SelectMenu
+                    className="sprint-mobile-subject"
+                    value={activeArea}
+                    onChange={(next) => selectSprintArea(next as StudyArea)}
+                    ariaLabel="选择冲刺科目"
+                    groups={[{
+                      options: (["408", "math", "english", "politics"] as StudyArea[]).map((area) => ({ value: area, label: sprintAreaLabels[area] })),
+                    }]}
+                    renderTrigger={() => (
+                      <span className="sprint-mobile-subject__value">
+                        {sprintAreaLabels[activeArea]}
+                        <Icon name="chevron-down" />
+                      </span>
+                    )}
+                  />
                 </div>
               </div>
               <div className="sprint-macro-grid">
@@ -4447,16 +4468,10 @@ export function StudyDashboard() {
 
                 <section className="settings-card settings-card--danger" aria-labelledby="settings-danger-title">
                   <header className="settings-card__header">
-                    <div>
-                      <h2 id="settings-danger-title">危险操作</h2>
-                      <p>以下操作会清除数据且无法撤销，执行前会再次确认。</p>
-                    </div>
+                    <h2 id="settings-danger-title">危险操作</h2>
                   </header>
                   <div className="danger-zone-row">
-                    <div className="danger-zone-copy">
-                      <strong>清空套卷完成记录</strong>
-                      <span>清除全部学科历年真题与模拟卷的完成状态、得分、答题卡与二刷记录。</span>
-                    </div>
+                    <strong>清空套卷完成记录</strong>
                     <button type="button" className="settings-btn settings-btn--danger" onClick={() => setPendingClearAllPapers(true)}>
                       清空记录
                     </button>
@@ -4465,12 +4480,10 @@ export function StudyDashboard() {
 
                 <section className="settings-card settings-card--account">
                   <header className="settings-card__header">
-                    <div>
-                      <h2>账号与登录</h2>
-                      <p>当前空间：{workspaceUserLabel}<span className="desktop-density-copy">。可在此退出登录。</span></p>
-                    </div>
+                    <h2>账号与登录</h2>
                   </header>
-                  <div className="settings-actions">
+                  <div className="settings-account-row">
+                    <span className="settings-account-name">{workspaceUserLabel}</span>
                     <button type="button" className="settings-btn settings-btn--danger" onClick={logout}>
                       退出登录
                     </button>

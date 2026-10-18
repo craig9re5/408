@@ -9,11 +9,14 @@
   .sprint-mobile-intro { display: block; padding: 0 2px; }
   .sprint-mobile-heading { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; }
   .sprint-mobile-heading h2 { margin: 0; color: var(--ink); font: 700 20px/1.25 var(--sans); }
-  .sprint-mobile-subject { position: relative; display: block; width: 86px; height: 42px; flex: 0 0 86px; cursor: pointer; }
-  .sprint-mobile-subject > span[aria-hidden="true"] { display: flex; height: 40px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--mobile-border); border-radius: 10px; color: var(--ink); background: var(--mobile-surface); font-size: 14px; font-weight: 700; }
+  .sprint-mobile-subject { position: relative; display: block; width: 86px; height: 42px; flex: 0 0 86px; }
+  /* 触发区保留原来的药丸外观（原来是透明 select 盖在 span 上）。 */
+  .sprint-mobile-subject__value { display: flex; width: 100%; height: 40px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--mobile-border); border-radius: 10px; color: var(--ink); background: var(--mobile-surface); font-size: 14px; font-weight: 700; }
   .sprint-mobile-subject svg { width: 14px; height: 14px; color: var(--mobile-text-accent); }
-  .sprint-mobile-subject select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .sprint-mobile-subject .select-menu__trigger { min-height: 40px; justify-content: center; }
   .sprint-mobile-subject:focus-within { outline: 2px solid var(--blue-ink); outline-offset: 2px; border-radius: 10px; }
+  /* 科目药丸在卡片右上，面板靠右展开避免溢出。 */
+  .sprint-mobile-subject .select-menu__panel { right: 0; left: auto; }
 
   .sprint-page > .sprint-macro-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; overflow: hidden; margin-top: 9px; border: 1px solid var(--mobile-border); border-radius: 16px; background: var(--mobile-surface); }
   .sprint-stat-card,

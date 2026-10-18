@@ -306,7 +306,12 @@
   .book-select--mobile-overview::before { display: none; }
   .book-select--mobile-overview .book-select__surface { gap: 7px; padding: 0; }
   .book-select--mobile-overview .book-select__surface strong { font-size: 17px; font-weight: 600; }
+  .book-select--mobile-overview .book-select__surface svg { width: 16px; height: 16px; flex: 0 0 16px; }
   .book-select--mobile-overview:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* 触发区现在是 button（原来是被透明 select 覆盖的 label），移除按钮默认外观。 */
+  .book-select .select-menu__trigger { padding: 0; }
+  /* 科目下拉在页面左上方，面板靠左展开即可，限制高度避免超出首屏。 */
+  .book-select .select-menu__panel { max-height: min(60vh, 420px); overflow-y: auto; }
   .mobile-progress-percent { flex: 0 0 auto; color: var(--mobile-text-accent); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .mobile-progress-percent.complete { color: var(--green-ink); }
 
@@ -342,20 +347,20 @@
   .page-content--progress .catalog-heading > div:first-child span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: nowrap; }
   .page-content--progress .catalog-heading h2 { font: 600 18px/1.2 var(--sans); }
   .page-content--progress .catalog-filters { display: none; }
-  .catalog-filter-mobile { position: relative; display: block; grid-column: 2; grid-row: 1; }
-  .catalog-filter-mobile::after { position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--mobile-text-accent); content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); }
-  .catalog-filter-mobile select {
+  .catalog-filter-mobile { display: block; grid-column: 2; grid-row: 1; }
+  .catalog-filter-mobile__trigger {
     min-width: 68px;
     min-height: 44px;
-    appearance: none;
-    padding: 0 23px 0 4px;
-    border: 0;
+    justify-content: flex-end;
+    gap: 5px;
+    padding: 0 4px;
     border-radius: 6px;
     color: var(--mobile-text-accent);
-    background: transparent;
     font: 500 14px var(--sans);
   }
-  .catalog-filter-mobile select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .catalog-filter-mobile__trigger svg { width: 14px; height: 14px; flex: 0 0 14px; }
+  /* 目录筛选在页头右侧，面板左对齐会超出屏幕，改为右对齐。 */
+  .catalog-filter-mobile .select-menu__panel { right: 0; left: auto; }
 
   .page-content--progress .chapter-header { grid-template-columns: minmax(0, 1fr) 36px; }
   .page-content--progress .chapter-button,

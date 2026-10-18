@@ -17,8 +17,9 @@
   .today-cockpit-workbench { gap: 8px; margin-bottom: 18px; }
   .cockpit-left-schedule { padding: 10px 12px; gap: 4px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
   .cockpit-schedule-topbar { gap: 4px; padding: 0; border: 0; }
-  .cockpit-schedule-title-group { gap: 6px; }
-  .cockpit-schedule-title-group h3 { font-size: 15px; font-weight: 600; }
+  /* 手机端不再显示「作息 / 复习课表 / 第 N 周」标题组：当天课程本身就是
+     上下文，标题只是重复。状态指示（进行中 / 休息中）保留在右侧。 */
+  .cockpit-schedule-title-group { display: none; }
   .cockpit-badge { display: none; }
   .cockpit-week-indicator { padding: 0; background: transparent; font-size: 11px; }
   .cockpit-schedule-controls { width: auto; min-width: 0; margin-left: auto; }
@@ -134,8 +135,8 @@
   .backup-empty p { font-size: 11px; }
   .settings-card--account .settings-card__header p { font-size: 11px; }
   .danger-zone-row { padding: 10px 12px; gap: 10px; }
-  .danger-zone-copy span { font-size: 11px; }
   .danger-zone-row .settings-btn--danger { border: 1px solid var(--coral-line); padding-inline: 10px; }
+  .settings-account-row { padding: 2px 0 0; }
   .settings-card--blog .blog-settings-content { gap: 8px; margin-top: 8px; }
   .blog-info-item { padding: 6px 8px; font-size: 12px; }
 }
