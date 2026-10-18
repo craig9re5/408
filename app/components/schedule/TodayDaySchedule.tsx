@@ -18,9 +18,14 @@ export function TodayDaySchedule({ schedule, todayStr, activeInfo, focusedEventI
 
   return (
     <section className="today-day-schedule" aria-label="今天的课程安排">
-      {/* 日期和星期已在上方页头显示，这里只保留课程数与当前状态。 */}
+      {/* 手机端页头已移除，日期与星期在这里承担页面上下文。 */}
       <div className="today-day-schedule__heading">
-        <div><span>当天安排</span></div>
+        <div>
+          <strong className="today-day-schedule__date">
+            {Number(todayStr.slice(5, 7))}月{Number(todayStr.slice(8, 10))}日
+          </strong>
+          <span>周{["日", "一", "二", "三", "四", "五", "六"][day.getDay()]}</span>
+        </div>
         <small>
           {activeInfo.status === "rest_break" && activeInfo.restBreak
             ? `${activeInfo.restBreak.label} · 剩 ${activeInfo.remainingMinutes} 分钟`

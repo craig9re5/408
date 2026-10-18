@@ -1865,9 +1865,10 @@
   .today-schedule-detail.is-open { display: block; }
   .today-day-schedule { display: block; }
   .today-day-schedule__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 4px 12px; }
-  .today-day-schedule__heading > div { display: flex; align-items: baseline; gap: 8px; }
+  .today-day-schedule__heading > div { display: flex; align-items: baseline; gap: 6px; }
   .today-day-schedule__heading span { color: var(--muted); font-size: 12px; }
   .today-day-schedule__heading strong { font-size: 16px; }
+  .today-day-schedule__date { color: var(--ink); font-size: 16px; font-weight: 600; }
   .today-day-schedule__heading small { color: var(--muted); font-size: 11px; }
   .today-day-schedule__list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
   .today-day-schedule__list li { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: stretch; gap: 8px; }

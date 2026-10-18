@@ -27,7 +27,7 @@
   }
 
   .chapter-review-check {
-    padding: 0 9px;
+    padding: 0 8px;
   }
 
   .chapter-review-date {
@@ -48,7 +48,7 @@
     align-items: center;
     gap: 4px;
     min-height: 64px;
-    padding: 5px 0;
+    padding: 4px 0;
   }
 
   .section-mobile-disclosure {
@@ -58,9 +58,9 @@
     gap: 8px;
     min-width: 0;
     min-height: 52px;
-    padding: 4px 3px 4px 0;
+    padding: 4px 4px 4px 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     color: var(--ink);
     background: transparent;
     text-align: left;
@@ -80,34 +80,34 @@
 
   .section-mobile-number {
     color: var(--mobile-text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
   }
 
   .section-mobile-copy {
     display: grid;
     min-width: 0;
-    gap: 3px;
+    gap: 4px;
   }
 
   .section-mobile-copy strong {
     color: var(--ink);
-    font: 600 13px/1.35 var(--serif);
+    font-weight: 600; font-size: var(--text-base); line-height: 1.35; font-family: var(--serif);
     overflow-wrap: anywhere;
   }
 
   .section-mobile-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px 5px;
+    gap: 2px 4px;
     color: var(--mobile-text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.35;
   }
 
   .section-mobile-meta em {
     padding: 0 4px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     color: var(--mobile-text-accent);
     background: rgba(116, 164, 181, .14);
     font-style: normal;
@@ -139,14 +139,14 @@
     gap: 4px;
     padding: 0 8px;
     border: 1px solid var(--mobile-border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     color: var(--green-ink);
     background: var(--green-soft);
     cursor: pointer;
   }
 
   .section-mobile-primary b {
-    font-size: 11.5px;
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -166,8 +166,8 @@
     grid-template-columns: minmax(96px, .8fr) minmax(0, 1.2fr);
     grid-template-areas: "summary summary" "name name" "base-plan learned";
     column-gap: 8px;
-    row-gap: 5px;
-    padding-bottom: 10px;
+    row-gap: 4px;
+    padding-bottom: 12px;
   }
 
   .section-row.is-detail-open .section-mobile-primary {
@@ -189,15 +189,15 @@
   .section-row.is-detail-open .section-actions {
     margin-left: 0;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
   }
 
   .section-row.is-detail-open .section-name .section-actions > button {
     display: inline-flex;
     min-height: 40px;
     align-items: center;
-    padding: 0 10px;
-    font-size: 11px;
+    padding: 0 12px;
+    font-size: var(--text-xs);
     opacity: 1;
   }
 
@@ -207,7 +207,7 @@
 
   .section-row.is-detail-open .record-label-mobile {
     display: inline;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 
   .section-row.is-detail-open .section-plan,
@@ -258,7 +258,7 @@
   .section-table.editing .section-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: "name name" "base-plan base-plan";
-    padding: 10px 0;
+    padding: 12px 0;
   }
 }
 
@@ -277,14 +277,14 @@
 @media (width <= 600px) {
   .mobile-week-disclosure,
   .page-content--today .cockpit-action-btn { display: none; }
-  .page-content--progress { padding-top: 10px; }
+  .page-content--progress { padding-top: 12px; }
   .page-content--progress .hero-grid { display: none; }
 
   .mobile-progress-overview {
     display: block;
     margin-bottom: 8px;
     border: 1px solid var(--mobile-border);
-    border-radius: 13px;
+    border-radius: var(--radius-lg);
     background: var(--mobile-surface);
   }
   .mobile-progress-overview-head {
@@ -293,7 +293,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 6px 14px;
+    padding: 8px 16px;
   }
   .book-select.book-select--mobile-overview {
     display: block;
@@ -304,18 +304,18 @@
     box-shadow: none;
   }
   .book-select--mobile-overview::before { display: none; }
-  .book-select--mobile-overview .book-select__surface { gap: 7px; padding: 0; }
-  .book-select--mobile-overview .book-select__surface strong { font-size: 17px; font-weight: 600; }
+  .book-select--mobile-overview .book-select__surface { gap: 8px; padding: 0; }
+  .book-select--mobile-overview .book-select__surface strong { font-size: var(--text-xl); font-weight: 600; }
   .book-select--mobile-overview .book-select__surface svg { width: 16px; height: 16px; flex: 0 0 16px; }
   .book-select--mobile-overview:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
   /* 触发区现在是 button（原来是被透明 select 覆盖的 label），移除按钮默认外观。 */
   .book-select .select-menu__trigger { padding: 0; }
   /* 科目下拉在页面左上方，面板靠左展开即可，限制高度避免超出首屏。 */
   .book-select .select-menu__panel { max-height: min(60vh, 420px); overflow-y: auto; }
-  .mobile-progress-percent { flex: 0 0 auto; color: var(--mobile-text-accent); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mobile-progress-percent { flex: 0 0 auto; color: var(--mobile-text-accent); font-size: var(--text-2xl); font-weight: 600; font-variant-numeric: tabular-nums; }
   .mobile-progress-percent.complete { color: var(--green-ink); }
 
-  .mobile-week-disclosure { margin: 0 14px; border-top: 1px solid var(--mobile-divider); }
+  .mobile-week-disclosure { margin: 0 16px; border-top: 1px solid var(--mobile-divider); }
   .mobile-week-disclosure > summary {
     display: flex;
     min-height: 44px;
@@ -323,17 +323,17 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--mobile-text-muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
     list-style: none;
     cursor: pointer;
   }
   .mobile-week-disclosure > summary::-webkit-details-marker { display: none; }
   .mobile-week-disclosure > summary span { color: var(--mobile-text-accent); white-space: nowrap; }
-  .mobile-week-disclosure > summary span::after { display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg) translateY(-2px); }
+  .mobile-week-disclosure > summary span::after { display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg) translateY(-2px); }
   .mobile-week-disclosure[open] > summary span::after { transform: rotate(225deg) translateY(-2px); }
   .mobile-week-disclosure > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
   .mobile-week-content { padding: 0 0 12px; }
-  .mobile-week-content p { margin: 0 0 9px; color: var(--mobile-text-muted); font-size: 12px; }
+  .mobile-week-content p { margin: 0 0 8px; color: var(--mobile-text-muted); font-size: var(--text-sm); }
   .mobile-week-content .week-dots { margin: 0; padding: 0; border: 0; }
   .mobile-week-content .week-dots div { flex: 1; }
 
@@ -352,7 +352,7 @@
     grid-row: 1;
     display: flex;
     align-items: center;
-    font: 600 18px/1.2 var(--sans);
+    font-weight: 600; font-size: var(--text-xl); line-height: 1.2; font-family: var(--sans);
   }
   .page-content--progress .catalog-heading > div:first-child span {
     grid-column: 2;
@@ -363,7 +363,7 @@
     overflow: hidden;
     color: var(--mobile-text-muted);
     clip-path: none;
-    font-size: 11px;
+    font-size: var(--text-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -373,11 +373,11 @@
     min-width: 0;
     min-height: 44px;
     justify-content: flex-end;
-    gap: 3px;
+    gap: 4px;
     padding: 0 2px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     color: var(--mobile-text-accent);
-    font: 500 14px var(--sans);
+    font-weight: 500; font-size: var(--text-base); font-family: var(--sans);
     white-space: nowrap;
   }
   .catalog-filter-mobile__trigger svg { width: 14px; height: 14px; flex: 0 0 14px; }
@@ -392,13 +392,17 @@
     min-height: 63px;
     grid-template-columns: 26px minmax(0, 1fr);
     gap: 8px;
-    padding: 7px 0 7px 13px;
+    padding: 8px 0 8px 12px;
   }
-  .page-content--progress .chapter-expand-button { min-height: 63px; }
+  .page-content--progress .chapter-expand-button { width: 44px; min-height: 63px; }
+  /* 触控目标补齐到 44px：日期按钮与「标记复习」此前只有 36px。 */
+  .page-content--progress .chapter-review-inline .date-text,
+  .page-content--progress .check-with-date > .date-text { min-height: 44px; min-width: 44px; }
+  .page-content--progress .chapter-review-check { min-height: 44px; }
   .page-content--progress .chapter-name { gap: 4px; }
-  .page-content--progress .chapter-name strong { font: 600 15px/1.3 var(--sans); }
+  .page-content--progress .chapter-name strong { font-weight: 600; font-size: var(--text-lg); line-height: 1.3; font-family: var(--sans); }
   .page-content--progress .chapter-card .chapter-meta { display: none; }
-  .chapter-mobile-meta { display: block; overflow: hidden; color: var(--mobile-text-muted); font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+  .chapter-mobile-meta { display: block; overflow: hidden; color: var(--mobile-text-muted); font-size: var(--text-xs); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
   .page-content--progress .chapter-progress { display: none; }
   .page-content--progress .chapter-card.open .chapter-progress {
     display: grid;
@@ -406,7 +410,7 @@
     grid-row: 2;
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    padding: 0 13px 0 47px;
+    padding: 0 12px 0 47px;
   }
   .page-content--progress .chapter-progress > .chapter-count-group { display: none; }
   .page-content--progress .chapter-card.open .chapter-review-inline {
@@ -416,9 +420,9 @@
     min-height: 47px;
     flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 5px;
-    margin: 0 0 5px;
-    padding: 5px 0;
+    gap: 4px;
+    margin: 0 0 4px;
+    padding: 4px 0;
     border-top: 1px solid var(--mobile-divider);
     border-left: 0;
   }
@@ -427,18 +431,18 @@
   .chapter-review-date > span:first-child { display: none; }
   .chapter-review-plan-mobile-label { display: inline; color: var(--mobile-text-muted); }
   .chapter-review-plan,
-  .chapter-review-date { gap: 3px; }
-  .chapter-review-check { min-height: 34px; gap: 4px; padding: 0 6px; border-radius: 7px; }
+  .chapter-review-date { gap: 4px; }
+  .chapter-review-check { min-height: 34px; gap: 4px; padding: 0 8px; border-radius: var(--radius-sm); }
   .chapter-review-check > span { width: 15px; height: 15px; }
   .chapter-review-check input:checked + span::after { top: 1px; left: 4px; }
-  .chapter-review-inline .date-text { min-height: 34px; padding: 4px 5px; font-size: 11px; }
+  .chapter-review-inline .date-text { min-height: 34px; padding: 4px 4px; font-size: var(--text-xs); }
   .chapter-review-inline .date-editor { width: 62px; min-height: 34px; padding: 0 4px; }
   .page-content--progress .chapter-card.open .chapter-review-inline:has(.chapter-review-shift) { flex-wrap: wrap; }
   .page-content--progress .section-table { margin: 0 12px 4px 47px; }
   .page-content--progress .section-head { display: none; }
   .page-content--progress .section-mobile-summary { min-height: 53px; padding: 0; }
   .page-content--progress .section-mobile-disclosure { min-height: 53px; }
-  .page-content--progress .section-mobile-copy strong { overflow: hidden; font: 500 13px/1.35 var(--sans); text-overflow: ellipsis; white-space: nowrap; }
+  .page-content--progress .section-mobile-copy strong { overflow: hidden; font-weight: 500; font-size: var(--text-base); line-height: 1.35; font-family: var(--sans); text-overflow: ellipsis; white-space: nowrap; }
   .page-content--progress .section-mobile-meta { display: none; }
   .page-content--progress .section-mobile-complete {
     min-width: 44px;
@@ -447,7 +451,7 @@
     border: 0;
     color: var(--green-ink);
     background: transparent;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 500;
   }
   .page-content--progress .section-row.is-current .section-mobile-copy strong { color: var(--mobile-text-accent); font-weight: 600; }
@@ -456,10 +460,10 @@
 /* Phone details use the full card width and a single reading order. */
 @media (width <= 600px) {
   .catalog-filter-mobile::after { right: 5px; }
-  .page-content--progress .catalog-heading { gap: 6px; }
-  .page-content--progress .catalog-heading > div:first-child { flex-wrap: wrap; gap: 3px 8px; }
-  .page-content--progress .catalog-heading > div:first-child span { font-size: 11px; }
-  .page-content--progress .chapter-card.open .chapter-progress { padding: 0 13px; }
+  .page-content--progress .catalog-heading { gap: 8px; }
+  .page-content--progress .catalog-heading > div:first-child { flex-wrap: wrap; gap: 4px 8px; }
+  .page-content--progress .catalog-heading > div:first-child span { font-size: var(--text-xs); }
+  .page-content--progress .chapter-card.open .chapter-progress { padding: 0 12px; }
   .page-content--progress .chapter-card.open .chapter-review-inline {
     display: flex;
     flex-wrap: wrap;
@@ -469,7 +473,7 @@
     padding: 2px 0;
     margin-bottom: 0;
   }
-  .chapter-review-plan { margin-right: auto; gap: 3px; }
+  .chapter-review-plan { margin-right: auto; gap: 4px; }
   .chapter-review-check { min-height: 36px; justify-content: center; border: 0; background: transparent; padding: 0 2px; }
   .chapter-review-check:has(input:checked) { border: 0; background: transparent; }
   .chapter-review-date { gap: 0; justify-content: center; }
@@ -479,20 +483,20 @@
   .chapter-review-inline .date-editor { min-height: 36px; }
   .chapter-review-inline .date-text { border: 0; background: transparent; padding: 0 2px; }
   .chapter-review-inline .date-editor { width: 126px; }
-  .page-content--progress .section-table { margin: 0 13px 8px; }
+  .page-content--progress .section-table { margin: 0 12px 8px; }
   .page-content--progress .section-table .section-row.is-detail-open {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "summary summary" "base-plan name" "learned learned";
     gap: 4px 8px;
-    padding: 0 10px 10px;
-    margin-bottom: 6px;
-    border-radius: 9px;
+    padding: 0 12px 12px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-md);
     background: var(--green-soft);
   }
   .page-content--progress .section-row.is-detail-open .section-name { min-height: 44px; }
   .page-content--progress .section-row.is-detail-open .section-name .section-actions > button { min-height: 44px; }
   .page-content--progress .section-row.is-detail-open .section-plan { height: auto; justify-content: flex-start; }
-  .page-content--progress .section-row.is-detail-open .section-plan .date-text { width: auto; gap: 6px; }
+  .page-content--progress .section-row.is-detail-open .section-plan .date-text { width: auto; gap: 8px; }
   .page-content--progress .section-row.is-detail-open .check-with-date { justify-content: space-between; min-height: 44px; }
   .page-content--progress .section-row.is-detail-open .check-with-date > .date-text,
   .page-content--progress .section-row.is-detail-open .check-with-date > .date-editor { flex: 0 1 auto; min-width: 88px; }

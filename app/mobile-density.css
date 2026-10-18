@@ -5,17 +5,15 @@
   .desktop-density-copy { display: none; }
   .mobile-density-copy { display: inline; }
 
-  .today-page .today-header-banner { display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
-  .today-header-intro { min-width: 0; }
-  .today-header-intro h2 { display: none; }
-  .today-date-badge { color: var(--ink-soft); font-size: 12px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
-  .today-header-actions { gap: 6px; flex-shrink: 0; }
-  .today-page .journal-action-btn { min-height: 36px; padding: 0 10px; font-size: 12px; border-radius: 9px; box-shadow: none; }
+  /* 手机端不再有顶部横幅：日期移到当天课程卡左侧，写记录与日志入口
+     由日志区的「写一条」承担。桌面端保留原横幅。 */
+  .today-page .today-header-banner { display: none; }
+  .today-page .journal-action-btn { min-height: 36px; padding: 0 12px; font-size: var(--text-sm); border-radius: var(--radius-md); box-shadow: none; }
   .today-page .journal-action-btn--primary { color: var(--mobile-accent); border: 1px solid color-mix(in srgb, var(--blue) 45%, var(--line)); background: color-mix(in srgb, var(--blue) 9%, var(--mobile-surface)); }
   .today-header-actions .journal-action-btn--ghost { border: 0; background: transparent; }
   .today-page .journal-action-btn--text { border: 0; background: transparent; color: var(--ink-soft); }
-  .today-cockpit-workbench { gap: 8px; margin-bottom: 18px; }
-  .cockpit-left-schedule { padding: 10px 12px; gap: 4px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
+  .today-cockpit-workbench { gap: 8px; margin-bottom: 16px; }
+  .cockpit-left-schedule { padding: 12px 12px; gap: 4px; border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); box-shadow: none; }
   /* 顶栏只剩折叠箭头：吸到卡片右上角，与「当天安排」行同一水平线。 */
   .cockpit-left-schedule { position: relative; }
   .cockpit-schedule-topbar { position: absolute; top: 6px; right: 8px; z-index: 2; min-height: 0; gap: 0; padding: 0; border: 0; }
@@ -24,55 +22,55 @@
      上下文，标题只是重复。状态指示（进行中 / 休息中）保留在右侧。 */
   .cockpit-schedule-title-group { display: none; }
   .cockpit-badge { display: none; }
-  .cockpit-week-indicator { padding: 0; background: transparent; font-size: 11px; }
+  .cockpit-week-indicator { padding: 0; background: transparent; font-size: var(--text-xs); }
   .cockpit-schedule-controls { width: auto; min-width: 0; margin-left: auto; gap: 2px; }
-  .cockpit-rest-indicator, .cockpit-live-indicator { padding: 2px 0; border: 0; background: transparent; color: var(--meta); box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+  .cockpit-rest-indicator, .cockpit-live-indicator { padding: 2px 0; border: 0; background: transparent; color: var(--meta); box-shadow: none; font-size: var(--text-xs); font-weight: 500; line-height: 1.4; white-space: nowrap; }
   .cockpit-rest-indicator > span:last-child, .cockpit-live-indicator > span:last-child { white-space: nowrap; }
   .cockpit-live-dot { background: var(--blue); box-shadow: none; }
   .cockpit-rest-dot { background: var(--green); }
   /* 折叠开关已并入标题行，手机端只显示箭头。 */
-  .today-schedule-toggle { min-width: 32px; min-height: 32px; justify-content: center; padding: 0; border: 0; border-radius: 0; color: var(--mobile-text-accent); background: transparent; font-size: 12px; font-weight: 500; }
+  .today-schedule-toggle { min-width: 32px; min-height: 32px; justify-content: center; padding: 0; border: 0; border-radius: 0; color: var(--mobile-text-accent); background: transparent; font-size: var(--text-sm); font-weight: 500; }
   .today-schedule-toggle__label { display: none; }
-  .today-day-schedule__event { min-height: 44px; padding: 5px 9px; }
+  .today-day-schedule__event { min-height: 44px; padding: 4px 8px; }
   .today-day-schedule__event { border-color: var(--mobile-border); border-left-color: var(--blue); background: var(--mobile-surface); }
   .today-day-schedule__event--english_pol { border-left-color: var(--coral); }
   .today-day-schedule__event.is-focused { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--paper)); }
   .today-day-schedule__event.is-active { box-shadow: none; }
   .today-day-schedule__event em { color: var(--mobile-accent); }
-  .today-day-schedule__heading { padding-bottom: 6px; }
-  .cockpit-right-tasks { gap: 6px; }
-  .task-panel--cockpit { border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
+  .today-day-schedule__heading { padding-bottom: 8px; }
+  .cockpit-right-tasks { gap: 8px; }
+  .task-panel--cockpit { border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); box-shadow: none; }
   .task-panel--cockpit > header { min-height: 42px; padding: 0 12px; background: transparent; }
   .task-panel-badge, .task-panel-stat { display: none; }
   .task-panel-title-group { flex-direction: row; align-items: baseline; gap: 8px; }
-  .task-panel-title-group h2 { font: 600 15px/1.4 var(--sans); }
-  .task-panel-subtitle { font-size: 11px; }
+  .task-panel-title-group h2 { font-weight: 600; font-size: var(--text-lg); line-height: 1.4; font-family: var(--sans); }
+  .task-panel-subtitle { font-size: var(--text-xs); }
   .task-panel--cockpit:has(> .task-empty) { min-height: 40px; border: 0; background: transparent; }
   .task-panel--cockpit:has(> .task-empty) > header { border: 0; padding: 0 12px; }
-  .cockpit-right-tasks:not(:has(.task-list)) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); overflow: hidden; }
+  .cockpit-right-tasks:not(:has(.task-list)) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); overflow: hidden; }
   .cockpit-right-tasks:not(:has(.task-list)) .task-panel--cockpit { min-height: 58px; }
   .cockpit-right-tasks:not(:has(.task-list)) .task-panel--cockpit + .task-panel--cockpit { border-left: 1px solid var(--line-soft); border-radius: 0; }
   .cockpit-right-tasks:not(:has(.task-list)) header { min-height: 58px; align-items: flex-start; justify-content: center; flex-direction: column; gap: 2px; }
   .task-panel--cockpit:has(> .task-empty) .task-panel-subtitle,
   .task-panel--cockpit > .task-empty { display: none; }
   /* 空状态短文案由 TSX 中的 .task-panel-empty-note 真实节点渲染，可被读屏读取 */
-  .task-panel-empty-note { color: var(--muted); font-size: 12px; }
-  .task-panel--cockpit .task-row { min-height: 52px; padding: 6px 0; }
+  .task-panel-empty-note { color: var(--muted); font-size: var(--text-sm); }
+  .task-panel--cockpit .task-row { min-height: 52px; padding: 8px 0; }
   .task-panel--today .task-row { grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "main check"; gap: 4px 8px; }
   .task-panel--today .task-date { display: none; }
-  .task-panel--overdue .task-row { grid-template-columns: minmax(0,1fr) auto auto; grid-template-areas: "main main check" "date reschedule check"; gap: 2px 6px; }
+  .task-panel--overdue .task-row { grid-template-columns: minmax(0,1fr) auto auto; grid-template-areas: "main main check" "date reschedule check"; gap: 2px 8px; }
   .task-panel--cockpit .task-check { grid-area: check; min-height: 36px; }
-  .task-panel--cockpit .task-reschedule-btn { min-height: 30px; padding: 0 4px; border: 0; color: var(--mobile-accent); background: transparent; font-size: 11px; }
+  .task-panel--cockpit .task-reschedule-btn { min-height: 30px; padding: 0 4px; border: 0; color: var(--mobile-accent); background: transparent; font-size: var(--text-xs); }
 
-  .journal-stream-container { padding-top: 14px; margin-top: 2px; border-top: 1px solid var(--line); }
+  .journal-stream-container { padding-top: 16px; margin-top: 2px; border-top: 1px solid var(--line); }
   .journal-stream-header { flex-wrap: nowrap; align-items: center; margin-bottom: 8px; gap: 8px; }
   .journal-stream-title p { display: none; }
-  .journal-stream-title h2 { font: 600 17px/1.3 var(--sans); }
+  .journal-stream-title h2 { font-weight: 600; font-size: var(--text-xl); line-height: 1.3; font-family: var(--sans); }
   .journal-title-row { flex-wrap: wrap; gap: 4px; }
-  .journal-count-pill { color: var(--meta); background: transparent; font-size: 11px; font-weight: 500; padding: 0 2px; }
-  .journal-controls-bar { padding: 0; gap: 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; margin-bottom: 14px; }
+  .journal-count-pill { color: var(--meta); background: transparent; font-size: var(--text-xs); font-weight: 500; padding: 0 2px; }
+  .journal-controls-bar { padding: 0; gap: 8px; border: 0; border-radius: 0; background: transparent; box-shadow: none; margin-bottom: 16px; }
   .journal-search-wrap { width: 100%; }
-  .journal-search-input { height: 38px; box-sizing: border-box; padding: 0 11px; border: 1px solid var(--mobile-border); border-radius: 10px; background: var(--mobile-surface); }
+  .journal-search-input { height: 38px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--mobile-border); border-radius: var(--radius-md); background: var(--mobile-surface); }
   /* 7 个筛选胶囊在 375px 下一行放不下（差约 40px）。改为四列网格：
      前四个与后三个各占一行，两行都撑满宽度，不会出现「已发布」单独吊在左侧。 */
   /* 5 个筛选项一行排布，外层一道轻边框把它们收成一个控件。 */
@@ -81,78 +79,78 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     width: 100%;
     gap: 0;
-    padding: 3px;
+    padding: 4px;
     border: 1px solid var(--mobile-border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--mobile-surface) 70%, transparent);
   }
-  .filter-pill { min-width: 0; min-height: 30px; padding: 0 2px; border: 0; border-radius: 7px; color: var(--meta); background: transparent; font-size: 12px; font-weight: 500; }
+  .filter-pill { min-width: 0; min-height: 30px; padding: 0 2px; border: 0; border-radius: var(--radius-sm); color: var(--meta); background: transparent; font-size: var(--text-sm); font-weight: 500; }
   .filter-pill.active { color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 12%, var(--mobile-surface)); font-weight: 650; }
   .journal-timeline-content { gap: 16px; }
   .journal-date-group { padding-left: 12px; }
   .journal-date-dot { left: -19px; width: 10px; height: 10px; background: var(--mobile-accent); box-shadow: none; }
-  .journal-date-text { color: var(--ink-soft); font: 500 12px var(--sans); }
+  .journal-date-text { color: var(--ink-soft); font-weight: 500; font-size: var(--text-sm); font-family: var(--sans); }
   .journal-cards-stack { gap: 8px; }
-  .journal-card { padding: 10px 12px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
-  .journal-card-meta { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 5px; margin-bottom: 6px; padding-bottom: 5px; }
+  .journal-card { padding: 12px 12px; border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); box-shadow: none; }
+  .journal-card-meta { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 4px; margin-bottom: 8px; padding-bottom: 4px; }
   .journal-card-badges { flex: 1; min-width: 0; gap: 4px; }
-  .journal-time-tag { font-size: 11px; }
-  .journal-context-badge { min-width: 0; max-width: 100%; padding: 2px 5px; border: 0; color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 9%, var(--paper)); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .journal-card-content { font-size: 14px; line-height: 1.75; }
+  .journal-time-tag { font-size: var(--text-xs); }
+  .journal-context-badge { min-width: 0; max-width: 100%; padding: 2px 4px; border: 0; color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 9%, var(--paper)); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .journal-card-content { font-size: var(--text-base); line-height: 1.75; }
   .journal-card-content p { margin: 0 0 8px; }
-  .journal-empty-card { padding: 14px 12px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); text-align: left; }
-  .journal-empty-card p { margin: 0; color: var(--meta); font: 400 13px/1.6 var(--sans); }
+  .journal-empty-card { padding: 16px 12px; border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); text-align: left; }
+  .journal-empty-card p { margin: 0; color: var(--meta); font-weight: 400; font-size: var(--text-base); line-height: 1.6; font-family: var(--sans); }
   .journal-stream-container:has(.filter-pill:first-child[aria-pressed="true"]):not(:has(.journal-search-clear)) .journal-empty-card .journal-action-btn { display: none; }
   .journal-actions-disclosure { position: relative; flex: 0 0 32px; align-self: flex-start; }
-  .journal-actions-disclosure > summary { display: grid; width: 32px; height: 32px; place-items: center; list-style: none; border-radius: 8px; color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 6%, var(--paper)); font-size: 20px; cursor: pointer; }
+  .journal-actions-disclosure > summary { display: grid; width: 32px; height: 32px; place-items: center; list-style: none; border-radius: var(--radius-md); color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 6%, var(--paper)); font-size: var(--text-2xl); cursor: pointer; }
   .journal-actions-disclosure > summary::-webkit-details-marker { display: none; }
   .journal-actions-disclosure[open] { z-index: 10; }
-  .journal-actions-disclosure .journal-card-actions { position: absolute; top: 34px; right: 0; display: flex; width: 160px; flex-direction: column; align-items: stretch; gap: 2px; padding: 5px; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); box-shadow: 0 6px 20px rgba(17,27,36,.12); }
-  .journal-actions-disclosure .journal-card-actions .journal-btn-tool { width: 100%; min-height: 36px; padding: 0 9px; text-align: left; border: 0; border-radius: 5px; background: transparent; font-size: 12px; }
-  .journal-actions-disclosure summary:focus-visible { outline: 2px solid var(--blue); border-radius: 6px; }
+  .journal-actions-disclosure .journal-card-actions { position: absolute; top: 34px; right: 0; display: flex; width: 160px; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px; margin: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); box-shadow: 0 6px 20px rgba(17,27,36,.12); }
+  .journal-actions-disclosure .journal-card-actions .journal-btn-tool { width: 100%; min-height: 36px; padding: 0 8px; text-align: left; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: var(--text-sm); }
+  .journal-actions-disclosure summary:focus-visible { outline: 2px solid var(--blue); border-radius: var(--radius-sm); }
 
-  .page-content--settings { padding-top: 10px; }
+  .page-content--settings { padding-top: 12px; }
   /* 与平板断点的 .mobile-secondary-heading 保持一致：标题用衬线体。
      此前这里改成无衬线 18px，同一元素在两种宽度下是两种字体。 */
-  .page-content--settings .mobile-secondary-heading { margin: 0 0 10px; font: 600 18px/1.3 var(--serif); }
-  .settings-stack { gap: 10px; }
-  .settings-card { padding: 12px 14px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
-  .settings-card__header { gap: 6px; margin-bottom: 10px; }
-  .settings-card__header h2 { font: 600 16px/1.4 var(--sans); }
+  .page-content--settings .mobile-secondary-heading { margin: 0 0 12px; font-weight: 600; font-size: var(--text-xl); line-height: 1.3; font-family: var(--serif); }
+  .settings-stack { gap: 12px; }
+  .settings-card { padding: 12px 16px; border: 1px solid var(--mobile-border); border-radius: var(--radius-lg); background: var(--mobile-surface); box-shadow: none; }
+  .settings-card__header { gap: 8px; margin-bottom: 12px; }
+  .settings-card__header h2 { font-weight: 600; font-size: var(--text-lg); line-height: 1.4; font-family: var(--sans); }
   .settings-card--schedule .settings-card__header { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; margin-bottom: 4px; }
   .settings-card--schedule .settings-card__header p,
   .settings-card--data .settings-card__header p,
   .data-management-panel:not(.data-management-panel--backups) > p { display: none; }
   .settings-exam-picker { gap: 0; }
   .settings-exam-picker .settings-date-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .settings-date-input { width: 145px; max-width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 6px; border-color: var(--mobile-border); border-radius: 9px; color: var(--ink); background: var(--mobile-surface); }
-  .settings-schedule-toggle { margin-top: 4px; min-height: 32px; padding: 0; border: 0; border-radius: 0; color: var(--mobile-accent); background: transparent; font-size: 12px; font-weight: 500; }
+  .settings-date-input { width: 145px; max-width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 8px; border-color: var(--mobile-border); border-radius: var(--radius-md); color: var(--ink); background: var(--mobile-surface); }
+  .settings-schedule-toggle { margin-top: 4px; min-height: 32px; padding: 0; border: 0; border-radius: 0; color: var(--mobile-accent); background: transparent; font-size: var(--text-sm); font-weight: 500; }
   .data-management-grid { gap: 12px; }
   .data-management-heading { gap: 8px; }
-  .data-management-heading h3 { color: var(--ink-soft); font: 600 13px var(--sans); }
-  .data-management-panel + .data-management-panel { padding-top: 10px; }
-  .settings-actions { gap: 8px; flex-wrap: nowrap; margin-top: 6px; }
-  .settings-btn { min-height: 36px; padding: 0 10px; border-radius: 9px; font-size: 12px; white-space: nowrap; box-shadow: none; }
+  .data-management-heading h3 { color: var(--ink-soft); font-weight: 600; font-size: var(--text-base); font-family: var(--sans); }
+  .data-management-panel + .data-management-panel { padding-top: 12px; }
+  .settings-actions { gap: 8px; flex-wrap: nowrap; margin-top: 8px; }
+  .settings-btn { min-height: 36px; padding: 0 12px; border-radius: var(--radius-md); font-size: var(--text-sm); white-space: nowrap; box-shadow: none; }
   .settings-btn--primary { color: var(--mobile-accent); border: 1px solid color-mix(in srgb, var(--blue) 45%, var(--line)); background: color-mix(in srgb, var(--blue) 9%, var(--mobile-surface)); }
   .settings-btn--secondary { color: var(--ink-soft); border-color: var(--mobile-border); background: transparent; }
-  .settings-btn--danger { border: 0; color: #a45543; background: transparent; padding-inline: 3px; }
-  .backup-create { min-height: 32px; padding: 0 4px; border: 0; color: var(--mobile-accent); background: transparent; font-size: 12px; }
-  .data-management-panel--backups > p { margin: 2px 0 8px; font-size: 11px; line-height: 1.45; }
+  .settings-btn--danger { border: 0; color: #a45543; background: transparent; padding-inline: 4px; }
+  .backup-create { min-height: 32px; padding: 0 4px; border: 0; color: var(--mobile-accent); background: transparent; font-size: var(--text-sm); }
+  .data-management-panel--backups > p { margin: 2px 0 8px; font-size: var(--text-xs); line-height: 1.45; }
   .backup-list { max-height: min(360px,50dvh); gap: 0; padding: 0; }
-  .backup-item { flex-direction: row; align-items: center; gap: 6px; padding: 7px 0; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; background: transparent; }
+  .backup-item { flex-direction: row; align-items: center; gap: 8px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; background: transparent; }
   .backup-item__info { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px; flex: 1; }
-  .backup-tag { padding: 3px 5px; border-radius: 5px; font-size: 10px; font-weight: 500; }
-  .backup-item__time { color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .backup-item__meta { grid-column: 1 / -1; padding: 0; color: var(--meta); background: transparent; font-size: 11px; font-weight: 400; }
+  .backup-tag { padding: 4px 4px; border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 500; }
+  .backup-item__time { color: var(--ink-soft); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .backup-item__meta { grid-column: 1 / -1; padding: 0; color: var(--meta); background: transparent; font-size: var(--text-xs); font-weight: 400; }
   .backup-item__actions { gap: 4px; flex-shrink: 0; }
-  .backup-item__restore, .backup-item__delete { min-height: 34px; padding: 0 7px; border: 0; background: transparent; font-size: 12px; }
-  .backup-item__restore { color: var(--mobile-accent); border: 1px solid var(--mobile-border); border-radius: 8px; }
+  .backup-item__restore, .backup-item__delete { min-height: 34px; padding: 0 8px; border: 0; background: transparent; font-size: var(--text-sm); }
+  .backup-item__restore { color: var(--mobile-accent); border: 1px solid var(--mobile-border); border-radius: var(--radius-md); }
   .backup-empty { padding: 8px 0; border: 0; background: transparent; text-align: left; }
-  .backup-empty p { font-size: 11px; }
-  .settings-card--account .settings-card__header p { font-size: 11px; }
-  .danger-zone-row { padding: 10px 12px; gap: 10px; }
-  .danger-zone-row .settings-btn--danger { border: 1px solid var(--coral-line); padding-inline: 10px; }
+  .backup-empty p { font-size: var(--text-xs); }
+  .settings-card--account .settings-card__header p { font-size: var(--text-xs); }
+  .danger-zone-row { padding: 12px 12px; gap: 12px; }
+  .danger-zone-row .settings-btn--danger { border: 1px solid var(--coral-line); padding-inline: 12px; }
   .settings-account-row { padding: 2px 0 0; }
   .settings-card--blog .blog-settings-content { gap: 8px; margin-top: 8px; }
-  .blog-info-item { padding: 6px 8px; font-size: 12px; }
+  .blog-info-item { padding: 8px 8px; font-size: var(--text-sm); }
 }

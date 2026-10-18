@@ -90,6 +90,44 @@
   --mobile-text-accent: #426f79;
   /* 分隔线：比卡片边框更淡，用于卡片内部行分隔 */
   --mobile-divider: color-mix(in srgb, var(--line) 45%, var(--paper));
+
+  /* ── 数值阶梯 ──────────────────────────────────────────────
+     字号、圆角、间距、动效各只允许取下列值。新增样式先查这里，
+     不要再临时决定 13px 还是 14px。 */
+
+  /* 字号：6 档。正文 14，元信息 12，最小 11。 */
+  --text-xs: 11px;    /* 计数、角标、辅助说明 */
+  --text-sm: 12px;    /* 次要文字、元信息 */
+  --text-base: 14px;  /* 正文、按钮、列表项 */
+  --text-lg: 16px;    /* 卡片标题 */
+  --text-xl: 18px;    /* 区块标题 */
+  --text-2xl: 22px;   /* 页面主标题、关键数字 */
+
+  /* 圆角：4 档 + 胶囊。 */
+  --radius-sm: 6px;    /* 标签、小按钮 */
+  --radius-md: 10px;   /* 输入框、列表项 */
+  --radius-lg: 14px;   /* 卡片 */
+  --radius-xl: 20px;   /* 弹层、大卡 */
+  --radius-pill: 999px;
+
+  /* 间距：4 的倍数，6 档。 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* 动效：2 档时长 + 2 条曲线。 */
+  --duration-fast: 120ms;   /* 按下、hover 等即时反馈 */
+  --duration-base: 220ms;   /* 展开、切换、入场 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);    /* 进入 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);  /* 位移 */
+
+  /* 阴影：3 级 elevation。 */
+  --elevation-1: 0 1px 2px rgba(17, 27, 36, 0.04), 0 2px 8px rgba(17, 27, 36, 0.03);
+  --elevation-2: 0 4px 16px rgba(17, 27, 36, 0.06), 0 1px 3px rgba(17, 27, 36, 0.04);
+  --elevation-3: 0 14px 36px rgba(17, 27, 36, 0.14), 0 2px 8px rgba(17, 27, 36, 0.05);
 }
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -106,6 +144,19 @@ body::after {
 }
 
 button, input, select { font: inherit; }
+
+/* 全站按压反馈：手指按下立即有回弹，不等网络。 */
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+summary:active,
+.task-row:active,
+.chapter-button:active {
+  transform: scale(0.97);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:active, [role="button"]:active, summary:active, .task-row:active, .chapter-button:active { transform: none; }
+}
 
 /* 统一线性图标（app/components/common/Icon.tsx），尺寸随文字字号缩放 */
 .ui-icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.14em; }
@@ -1193,7 +1244,6 @@ button.date-text.late,
   .shift-anchor { position: relative; top: auto; right: auto; grid-column: 1 / -1; justify-self: end; transform: none; }
   .shift-anchor > button { min-height: 30px; opacity: 1; }
   .shift-popover { top: 34px; max-width: calc(100vw - 36px); flex-wrap: wrap; }
-  button:active, .chapter-button:active, .mobile-navigation button:active, .task-row:active { transform: scale(0.985); transition: transform 0.08s ease; }
 }
 
 /* ==========================================================================

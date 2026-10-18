@@ -19,7 +19,7 @@
     white-space: nowrap;
   }
   .mobile-navigation { flex: 1 1 0; min-width: 0; max-width: 380px; }
-  .mobile-navigation button strong { font-size: 13px; }
+  .mobile-navigation button strong { font-size: var(--text-base); }
 
   /* 内容区：与顶栏对齐的统一左右留白（此前 769–900px 内容贴边） */
   .page-content {
@@ -37,18 +37,18 @@
     align-items: stretch;
     justify-content: space-between;
     gap: 0;
-    padding: 18px 20px 16px;
+    padding: 16px 20px 16px;
     text-align: left;
   }
   .streak-card::after { display: none; }
   .streak-card .card-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; }
-  .streak-card .card-heading h2 { font-size: 17px; }
-  .streak-flame { font-size: 18px; }
-  .rhythm-metrics { justify-content: flex-start; gap: 16px; margin-top: 14px; }
+  .streak-card .card-heading h2 { font-size: var(--text-xl); }
+  .streak-flame { font-size: var(--text-xl); }
+  .rhythm-metrics { justify-content: flex-start; gap: 16px; margin-top: 16px; }
   .rhythm-metrics > i { min-height: 32px; }
   .rhythm-metric strong { font-size: 34px; line-height: 1; }
-  .rhythm-metric span { font-size: 11px; }
-  .week-dots { width: 100%; justify-content: space-between; gap: 0; margin-top: 16px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.18); }
-  .week-dots div { flex: 1; gap: 5px; }
-  .week-dots small { font-size: 11px; }
+  .rhythm-metric span { font-size: var(--text-xs); }
+  .week-dots { width: 100%; justify-content: space-between; gap: 0; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.18); }
+  .week-dots div { flex: 1; gap: 4px; }
+  .week-dots small { font-size: var(--text-xs); }
 }
