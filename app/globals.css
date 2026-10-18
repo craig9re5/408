@@ -78,6 +78,18 @@
   --theme-custom-fg: var(--ochre-ink);
   --theme-custom-line: var(--ochre-line);
   --theme-custom-bar: var(--ochre);
+
+  /* 手机布局通用层：sprint-mobile / progress-mobile / mobile-density 共用。
+     此前只在 mobile-density.css 的 @media 块内定义，另两个文件因此各写一套字面量。 */
+  --mobile-surface: #fffefa;
+  --mobile-border: color-mix(in srgb, var(--line) 65%, var(--paper));
+  --mobile-accent: color-mix(in srgb, var(--blue) 64%, var(--ink));
+  /* 次要文字：卡片元信息、计数、辅助说明 */
+  --mobile-text-muted: #5c6c68;
+  /* 强调文字：可点击的次要操作、筛选标签、日期 */
+  --mobile-text-accent: #426f79;
+  /* 分隔线：比卡片边框更淡，用于卡片内部行分隔 */
+  --mobile-divider: color-mix(in srgb, var(--line) 45%, var(--paper));
 }
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -1336,9 +1348,9 @@ button.date-text.late,
     display: grid;
     width: min(200px, calc(100vw - 24px));
     padding: 5px;
-    border: 1px solid #dfe4dd;
+    border: 1px solid var(--mobile-border);
     border-radius: 12px;
-    background: #fffefa;
+    background: var(--mobile-surface);
     box-shadow: 0 12px 32px rgba(17, 27, 36, .15);
   }
   .topbar-more-panel[hidden], .catalog-more-list[hidden] { display: none; }
@@ -1544,9 +1556,9 @@ button.date-text.late,
     display: grid;
     width: 156px;
     padding: 5px;
-    border: 1px solid #dfe4dd;
+    border: 1px solid var(--mobile-border);
     border-radius: 11px;
-    background: #fffefa;
+    background: var(--mobile-surface);
     box-shadow: 0 12px 28px rgba(17, 27, 36, .14);
   }
   .catalog-more-list button {

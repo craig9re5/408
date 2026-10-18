@@ -79,7 +79,7 @@
   }
 
   .section-mobile-number {
-    color: #7b969b;
+    color: var(--mobile-text-muted);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
@@ -91,7 +91,7 @@
   }
 
   .section-mobile-copy strong {
-    color: #253139;
+    color: var(--ink);
     font: 600 13px/1.35 var(--serif);
     overflow-wrap: anywhere;
   }
@@ -100,7 +100,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 2px 5px;
-    color: #5c6c68;
+    color: var(--mobile-text-muted);
     font-size: 11px;
     line-height: 1.35;
   }
@@ -108,7 +108,7 @@
   .section-mobile-meta em {
     padding: 0 4px;
     border-radius: 3px;
-    color: #43758a;
+    color: var(--mobile-text-accent);
     background: rgba(116, 164, 181, .14);
     font-style: normal;
     font-weight: 700;
@@ -117,8 +117,8 @@
   .section-mobile-chevron {
     width: 7px;
     height: 7px;
-    border-right: 1.5px solid #7c8b88;
-    border-bottom: 1.5px solid #7c8b88;
+    border-right: 1.5px solid var(--mobile-text-accent);
+    border-bottom: 1.5px solid var(--mobile-text-accent);
     transform: rotate(45deg);
     transition: transform .16s ease;
   }
@@ -138,10 +138,10 @@
     justify-content: center;
     gap: 4px;
     padding: 0 8px;
-    border: 1px solid #cfddd5;
+    border: 1px solid var(--mobile-border);
     border-radius: 8px;
-    color: #3d6853;
-    background: #f5f8f3;
+    color: var(--green-ink);
+    background: var(--green-soft);
     cursor: pointer;
   }
 
@@ -153,7 +153,7 @@
 
   .section-mobile-complete {
     min-width: 44px;
-    color: #628d72;
+    color: var(--green-ink);
     background: transparent;
     cursor: default;
   }
@@ -283,9 +283,9 @@
   .mobile-progress-overview {
     display: block;
     margin-bottom: 8px;
-    border: 1px solid #dfe5df;
+    border: 1px solid var(--mobile-border);
     border-radius: 13px;
-    background: #fffefa;
+    background: var(--mobile-surface);
   }
   .mobile-progress-overview-head {
     display: flex;
@@ -307,28 +307,28 @@
   .book-select--mobile-overview .book-select__surface { gap: 7px; padding: 0; }
   .book-select--mobile-overview .book-select__surface strong { font-size: 17px; font-weight: 600; }
   .book-select--mobile-overview:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .mobile-progress-percent { flex: 0 0 auto; color: #426f79; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .mobile-progress-percent.complete { color: #397a52; }
+  .mobile-progress-percent { flex: 0 0 auto; color: var(--mobile-text-accent); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mobile-progress-percent.complete { color: var(--green-ink); }
 
-  .mobile-week-disclosure { margin: 0 14px; border-top: 1px solid #e6eae4; }
+  .mobile-week-disclosure { margin: 0 14px; border-top: 1px solid var(--mobile-divider); }
   .mobile-week-disclosure > summary {
     display: flex;
     min-height: 44px;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    color: #65716f;
+    color: var(--mobile-text-muted);
     font-size: 12px;
     list-style: none;
     cursor: pointer;
   }
   .mobile-week-disclosure > summary::-webkit-details-marker { display: none; }
-  .mobile-week-disclosure > summary span { color: #426f79; white-space: nowrap; }
+  .mobile-week-disclosure > summary span { color: var(--mobile-text-accent); white-space: nowrap; }
   .mobile-week-disclosure > summary span::after { display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg) translateY(-2px); }
   .mobile-week-disclosure[open] > summary span::after { transform: rotate(225deg) translateY(-2px); }
   .mobile-week-disclosure > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
   .mobile-week-content { padding: 0 0 12px; }
-  .mobile-week-content p { margin: 0 0 9px; color: #65716f; font-size: 12px; }
+  .mobile-week-content p { margin: 0 0 9px; color: var(--mobile-text-muted); font-size: 12px; }
   .mobile-week-content .week-dots { margin: 0; padding: 0; border: 0; }
   .mobile-week-content .week-dots div { flex: 1; }
 
@@ -343,7 +343,7 @@
   .page-content--progress .catalog-heading h2 { font: 600 18px/1.2 var(--sans); }
   .page-content--progress .catalog-filters { display: none; }
   .catalog-filter-mobile { position: relative; display: block; grid-column: 2; grid-row: 1; }
-  .catalog-filter-mobile::after { position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: #426f79; content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); }
+  .catalog-filter-mobile::after { position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--mobile-text-accent); content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); }
   .catalog-filter-mobile select {
     min-width: 68px;
     min-height: 44px;
@@ -351,7 +351,7 @@
     padding: 0 23px 0 4px;
     border: 0;
     border-radius: 6px;
-    color: #426f79;
+    color: var(--mobile-text-accent);
     background: transparent;
     font: 500 14px var(--sans);
   }
@@ -371,7 +371,7 @@
   .page-content--progress .chapter-name { gap: 4px; }
   .page-content--progress .chapter-name strong { font: 600 15px/1.3 var(--sans); }
   .page-content--progress .chapter-card .chapter-meta { display: none; }
-  .chapter-mobile-meta { display: block; overflow: hidden; color: #65716f; font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+  .chapter-mobile-meta { display: block; overflow: hidden; color: var(--mobile-text-muted); font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
   .page-content--progress .chapter-progress { display: none; }
   .page-content--progress .chapter-card.open .chapter-progress {
     display: grid;
@@ -392,13 +392,13 @@
     gap: 5px;
     margin: 0 0 5px;
     padding: 5px 0;
-    border-top: 1px solid #e8ece6;
+    border-top: 1px solid var(--mobile-divider);
     border-left: 0;
   }
   .chapter-review-plan-desktop-label,
   .chapter-review-arrow,
   .chapter-review-date > span:first-child { display: none; }
-  .chapter-review-plan-mobile-label { display: inline; color: #687875; }
+  .chapter-review-plan-mobile-label { display: inline; color: var(--mobile-text-muted); }
   .chapter-review-plan,
   .chapter-review-date { gap: 3px; }
   .chapter-review-check { min-height: 34px; gap: 4px; padding: 0 6px; border-radius: 7px; }
@@ -418,12 +418,12 @@
     min-height: 44px;
     padding: 0;
     border: 0;
-    color: #397a52;
+    color: var(--green-ink);
     background: transparent;
     font-size: 11px;
     font-weight: 500;
   }
-  .page-content--progress .section-row.is-current .section-mobile-copy strong { color: #426f79; font-weight: 600; }
+  .page-content--progress .section-row.is-current .section-mobile-copy strong { color: var(--mobile-text-accent); font-weight: 600; }
 }
 
 /* Phone details use the full card width and a single reading order. */
@@ -460,7 +460,7 @@
     padding: 0 10px 10px;
     margin-bottom: 6px;
     border-radius: 9px;
-    background: #f5f8f5;
+    background: var(--green-soft);
   }
   .page-content--progress .section-row.is-detail-open .section-name { min-height: 44px; }
   .page-content--progress .section-row.is-detail-open .section-name .section-actions > button { min-height: 44px; }

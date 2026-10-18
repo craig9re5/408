@@ -2,11 +2,6 @@
 .journal-actions-disclosure > summary { display: none; }
 
 @media (width <= 600px) {
-  .today-page, .settings-page {
-    --mobile-accent: color-mix(in srgb, var(--blue) 64%, var(--ink));
-    --mobile-surface: #fffefa;
-    --mobile-border: color-mix(in srgb, var(--line) 65%, var(--paper));
-  }
   .desktop-density-copy { display: none; }
   .mobile-density-copy { display: inline; }
 

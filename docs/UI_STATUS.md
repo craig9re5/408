@@ -106,7 +106,7 @@
 | 死 CSS | 部分类名已无 TSX 引用，例如 `globals.css` 的 `.placeholder-page` `.today-sections` `.university-logo`，`sprint.css` 的 `.mini-subj-chip` `.paper-q-pill`，`journal.css` 的 `.journal-editor-toolbar` `.blog-status-badge`，`schedule.css` 的 `.schedule-week-picker` `.idle-badge` `.schedule-icon-btn`，`analytics.css` 的 `.forecast-insight-banner` 等。删除前注意排除模板字符串拼接的类名（如 `.timetable-card--${theme}`、`.sync-note--${cls}`）和 KaTeX 输出的类名。 |
 | 阴影令牌 | `--shadow` 只在少数位置使用，其余 `box-shadow` 仍是字面量。 |
 | 触屏热力图 | 试卷卡片热力图的逐题信息只在 `title` 中，触屏无法查看，需通过「打开答题卡」进入。 |
-| 中性色字面量 | `sprint-mobile.css` 与 `progress-mobile.css` 仍有较多暖灰/青灰字面量（如 `#e1e7e4`、`#65777a`、`#426f79`），未纳入令牌；`mobile-density.css` 已使用 `--mobile-surface` / `--mobile-border`，可参照迁移。 |
+| 中性色字面量 | 已收敛（2026-10-18）：`sprint-mobile.css`、`progress-mobile.css` 与 `globals.css` 手机断点内的卡片底、描边、分隔线、次要文字、强调文字全部改用 `--mobile-*` 令牌，三个手机样式文件不再有颜色字面量。 |
 
 ## 8. 已裁定不改
 
