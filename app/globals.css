@@ -1601,7 +1601,8 @@ button.date-text.late,
   .catalog-filters button:hover:not(.active)::before { background: rgba(255, 255, 255, .48); }
   .catalog-filters button:focus-visible { outline-offset: -2px; }
 
-  .catalog-more { position: relative; display: block; grid-column: 3; grid-row: 1; }
+  /* 手机目录标题行是 4 列：标题 / 统计 / 筛选 / 更多。 */
+  .catalog-more { position: relative; display: block; grid-column: 4; grid-row: 1; }
   .catalog-more-trigger {
     position: relative;
     display: grid;

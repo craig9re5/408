@@ -16,17 +16,23 @@
   .today-page .journal-action-btn--text { border: 0; background: transparent; color: var(--ink-soft); }
   .today-cockpit-workbench { gap: 8px; margin-bottom: 18px; }
   .cockpit-left-schedule { padding: 10px 12px; gap: 4px; border: 1px solid var(--mobile-border); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
-  .cockpit-schedule-topbar { gap: 4px; padding: 0; border: 0; }
+  /* 顶栏只剩折叠箭头：吸到卡片右上角，与「当天安排」行同一水平线。 */
+  .cockpit-left-schedule { position: relative; }
+  .cockpit-schedule-topbar { position: absolute; top: 6px; right: 8px; z-index: 2; min-height: 0; gap: 0; padding: 0; border: 0; }
+  .today-day-schedule__heading { padding-right: 40px; }
   /* 手机端不再显示「作息 / 复习课表 / 第 N 周」标题组：当天课程本身就是
      上下文，标题只是重复。状态指示（进行中 / 休息中）保留在右侧。 */
   .cockpit-schedule-title-group { display: none; }
   .cockpit-badge { display: none; }
   .cockpit-week-indicator { padding: 0; background: transparent; font-size: 11px; }
-  .cockpit-schedule-controls { width: auto; min-width: 0; margin-left: auto; }
-  .cockpit-rest-indicator, .cockpit-live-indicator { padding: 2px 0; border: 0; background: transparent; color: var(--meta); box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1.4; }
+  .cockpit-schedule-controls { width: auto; min-width: 0; margin-left: auto; gap: 2px; }
+  .cockpit-rest-indicator, .cockpit-live-indicator { padding: 2px 0; border: 0; background: transparent; color: var(--meta); box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+  .cockpit-rest-indicator > span:last-child, .cockpit-live-indicator > span:last-child { white-space: nowrap; }
   .cockpit-live-dot { background: var(--blue); box-shadow: none; }
   .cockpit-rest-dot { background: var(--green); }
-  .today-schedule-toggle { min-height: 32px; padding: 0; border: 0; border-radius: 0; color: var(--mobile-accent); background: transparent; font-size: 12px; font-weight: 500; }
+  /* 折叠开关已并入标题行，手机端只显示箭头。 */
+  .today-schedule-toggle { min-width: 32px; min-height: 32px; justify-content: center; padding: 0; border: 0; border-radius: 0; color: var(--mobile-text-accent); background: transparent; font-size: 12px; font-weight: 500; }
+  .today-schedule-toggle__label { display: none; }
   .today-day-schedule__event { min-height: 44px; padding: 5px 9px; }
   .today-day-schedule__event { border-color: var(--mobile-border); border-left-color: var(--blue); background: var(--mobile-surface); }
   .today-day-schedule__event--english_pol { border-left-color: var(--coral); }
@@ -69,9 +75,19 @@
   .journal-search-input { height: 38px; box-sizing: border-box; padding: 0 11px; border: 1px solid var(--mobile-border); border-radius: 10px; background: var(--mobile-surface); }
   /* 7 个筛选胶囊在 375px 下一行放不下（差约 40px）。改为四列网格：
      前四个与后三个各占一行，两行都撑满宽度，不会出现「已发布」单独吊在左侧。 */
-  .journal-filter-pills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; gap: 5px; padding: 0 0 2px; overflow: visible; }
-  .filter-pill { min-width: 0; min-height: 32px; padding: 0 4px; border-color: transparent; color: var(--meta); font-size: 12px; font-weight: 500; }
-  .filter-pill.active { color: var(--mobile-accent); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); background: color-mix(in srgb, var(--blue) 10%, var(--paper)); font-weight: 600; }
+  /* 5 个筛选项一行排布，外层一道轻边框把它们收成一个控件。 */
+  .journal-filter-pills {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
+    gap: 0;
+    padding: 3px;
+    border: 1px solid var(--mobile-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--mobile-surface) 70%, transparent);
+  }
+  .filter-pill { min-width: 0; min-height: 30px; padding: 0 2px; border: 0; border-radius: 7px; color: var(--meta); background: transparent; font-size: 12px; font-weight: 500; }
+  .filter-pill.active { color: var(--mobile-accent); background: color-mix(in srgb, var(--blue) 12%, var(--mobile-surface)); font-weight: 650; }
   .journal-timeline-content { gap: 16px; }
   .journal-date-group { padding-left: 12px; }
   .journal-date-dot { left: -19px; width: 10px; height: 10px; background: var(--mobile-accent); box-shadow: none; }

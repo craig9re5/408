@@ -2818,7 +2818,8 @@ export function StudyDashboard() {
 
       <main className="workspace">
         <header className="topbar" aria-label="全局操作">
-          <h1 className="topbar-title" id={`${activePage}-title`} tabIndex={-1}>{pageTitles[activePage]}</h1>
+          {/* 手机端不使用「复习课表」这一叫法，统一为「课表」。 */}
+          <h1 className="topbar-title" id={`${activePage}-title`} tabIndex={-1}>{activePage === "schedule" ? "课表" : pageTitles[activePage]}</h1>
           <div className="topbar-actions">
             {activePage === "progress" && <div className="study-switchers">
               <nav className="book-switcher" aria-label={`切换${activeArea === "408" ? "408" : "数学"}科目`}>
@@ -2883,7 +2884,8 @@ export function StudyDashboard() {
                 {(["schedule", "settings"] as AppPage[]).map((page) => (
                   <button type="button" key={page} data-page={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
                     <MobileNavIcon page={page} />
-                    <span>{pageTitles[page]}</span>
+                    {/* 手机端不出现「复习课表」这一叫法，与底部导航的「课表」统一。 */}
+                    <span>{page === "schedule" ? "课表" : pageTitles[page]}</span>
                   </button>
                 ))}
                 <span className={`topbar-more-status topbar-more-status--${syncMeta.cls}`} role="status"><i aria-hidden="true" />{syncMeta.label}</span>
@@ -3414,25 +3416,7 @@ export function StudyDashboard() {
                     </div>
 
                     <div className="cockpit-schedule-controls">
-                      {activeScheduleInfo.status === "in_progress" && activeScheduleInfo.activeEvent ? (
-                        <div className="cockpit-live-indicator" title="当前时段正在进行">
-                          <span className="cockpit-live-dot" />
-                          <span>进行中: {activeScheduleInfo.activeEvent.title}</span>
-                        </div>
-                      ) : (
-                        <div className="cockpit-rest-indicator" title="当前为空隙休息时段">
-                          <span className="cockpit-rest-dot" />
-                          <span>
-                            <Icon name="coffee" /> 休息中
-                            {activeScheduleInfo.status === "rest_break" && activeScheduleInfo.restBreak
-                              ? ` (${activeScheduleInfo.restBreak.label} · 剩 ${activeScheduleInfo.remainingMinutes}m)`
-                              : activeScheduleInfo.intermissionNextEvent && activeScheduleInfo.startsInMinutes <= 60
-                              ? ` · 距下节 ${activeScheduleInfo.intermissionNextEvent.title} 剩 ${activeScheduleInfo.startsInMinutes}m`
-                              : ""}
-                          </span>
-                        </div>
-                      )}
-
+                      {/* 休息/进行中状态已并入「当天安排」标题行，这里只留操作。 */}
                       <button
                         type="button"
                         className="cockpit-action-btn"
@@ -3441,19 +3425,21 @@ export function StudyDashboard() {
                       >
                         <Icon name="maximize" /> 全屏/设置
                       </button>
+
+                      {/* 折叠开关并入标题行，不再单独占一行。手机端只留箭头。 */}
+                      <button
+                        type="button"
+                        className="today-schedule-toggle"
+                        aria-controls="today-schedule-detail"
+                        aria-expanded={todayScheduleExpanded}
+                        aria-label={todayScheduleExpanded ? "收起今日课程" : "展开今日课程"}
+                        onClick={() => setTodayScheduleExpanded((current) => !current)}
+                      >
+                        <span className="today-schedule-toggle__label">{todayScheduleExpanded ? "收起今日课程" : "查看今日全部课程"}</span>
+                        <Icon name={todayScheduleExpanded ? "chevron-up" : "chevron-down"} />
+                      </button>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className="today-schedule-toggle"
-                    aria-controls="today-schedule-detail"
-                    aria-expanded={todayScheduleExpanded}
-                    onClick={() => setTodayScheduleExpanded((current) => !current)}
-                  >
-                    {todayScheduleExpanded ? "收起今日课程" : "查看今日全部课程"}
-                    <Icon name={todayScheduleExpanded ? "chevron-up" : "chevron-down"} />
-                  </button>
                   <div id="today-schedule-detail" className={`today-schedule-detail${todayScheduleExpanded ? " is-open" : ""}`}>
                   <TimetableGrid
                     schedule={schedule}
@@ -3602,8 +3588,6 @@ export function StudyDashboard() {
                     {([
                       ["all", "全部"],
                       ["important", "重点"],
-                      ["unlinked", "无关联"],
-                      ["linked", "有关联"],
                       ["408", "408"],
                       ["math", "数学"],
                       ["published", "已发布"],

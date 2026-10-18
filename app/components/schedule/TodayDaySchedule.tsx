@@ -10,8 +10,6 @@ interface TodayDayScheduleProps {
   onSelectEvent: (event: ScheduleEvent) => void;
 }
 
-const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
-
 export function TodayDaySchedule({ schedule, todayStr, activeInfo, focusedEventId, onSelectEvent }: TodayDayScheduleProps) {
   const day = new Date(`${todayStr}T00:00:00`);
   const weekday = day.getDay() || 7;
@@ -20,9 +18,14 @@ export function TodayDaySchedule({ schedule, todayStr, activeInfo, focusedEventI
 
   return (
     <section className="today-day-schedule" aria-label="今天的课程安排">
+      {/* 日期和星期已在上方页头显示，这里只保留课程数与当前状态。 */}
       <div className="today-day-schedule__heading">
-        <div><span>当天安排</span><strong>周{weekdayLabels[day.getDay()]}</strong></div>
-        <small>{Number(todayStr.slice(5, 7))}月{Number(todayStr.slice(8, 10))}日 · {events.length} 段课程</small>
+        <div><span>当天安排</span></div>
+        <small>
+          {activeInfo.status === "rest_break" && activeInfo.restBreak
+            ? `${activeInfo.restBreak.label} · 剩 ${activeInfo.remainingMinutes} 分钟`
+            : `${events.length} 段课程`}
+        </small>
       </div>
       {events.length === 0 ? (
         <p className="today-day-schedule__empty">今天没有课程安排，可在课表页查看或调整计划。</p>

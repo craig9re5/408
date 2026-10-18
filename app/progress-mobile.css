@@ -337,26 +337,48 @@
   .mobile-week-content .week-dots { margin: 0; padding: 0; border: 0; }
   .mobile-week-content .week-dots div { flex: 1; }
 
+  /* 目录标题行：标题、统计、筛选、更多四者垂直居中对齐在同一基线上。
+     此前用 align-items: baseline，18px 标题与 11px 统计的视觉重心差 3px。 */
   .page-content--progress .catalog-heading {
-    grid-template-columns: minmax(0, 1fr) auto 44px;
+    grid-template-columns: auto minmax(0, 1fr) auto 44px;
     min-height: 52px;
-    gap: 8px;
+    align-items: center;
+    gap: 2px 8px;
     margin: 0;
   }
-  .page-content--progress .catalog-heading > div:first-child { display: flex; width: auto; min-width: 0; align-items: baseline; gap: 5px; }
-  .page-content--progress .catalog-heading > div:first-child span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: nowrap; }
-  .page-content--progress .catalog-heading h2 { font: 600 18px/1.2 var(--sans); }
+  .page-content--progress .catalog-heading > div:first-child { display: contents; }
+  .page-content--progress .catalog-heading h2 {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    font: 600 18px/1.2 var(--sans);
+  }
+  .page-content--progress .catalog-heading > div:first-child span {
+    grid-column: 2;
+    grid-row: 1;
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: hidden;
+    color: var(--mobile-text-muted);
+    clip-path: none;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .page-content--progress .catalog-filters { display: none; }
-  .catalog-filter-mobile { display: block; grid-column: 2; grid-row: 1; }
+  .catalog-filter-mobile { display: block; grid-column: 3; grid-row: 1; }
   .catalog-filter-mobile__trigger {
-    min-width: 68px;
+    min-width: 0;
     min-height: 44px;
     justify-content: flex-end;
-    gap: 5px;
-    padding: 0 4px;
+    gap: 3px;
+    padding: 0 2px;
     border-radius: 6px;
     color: var(--mobile-text-accent);
     font: 500 14px var(--sans);
+    white-space: nowrap;
   }
   .catalog-filter-mobile__trigger svg { width: 14px; height: 14px; flex: 0 0 14px; }
   /* 目录筛选在页头右侧，面板左对齐会超出屏幕，改为右对齐。 */
