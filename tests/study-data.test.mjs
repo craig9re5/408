@@ -424,26 +424,24 @@ test("最近学习目标推导: 模拟数学已完成高数线代，概率论强
   assert.equal(target.sectionId, "probability-2-1", "应当定位到首个未复习小节 2.1");
   assert.equal(target.chapterId, "probability-chapter-2");
   assert.equal(target.isReview, true);
-});
 
-test("最近学习目标推导: 旧数据中部分小节复习过的章视为整章完成", () => {
-  const progress = {};
-  const probability = books.find((book) => book.id === "probability");
-  probability.chapters.forEach((chapter) => chapter.sections.forEach((section) => {
-    progress[section.id] = createSection({ learned: true, learnedAt: "2026-07-01" });
+  // 旧数据兼容：章内只要有一节复习过，整章即视为已复习
+  const legacy = {};
+  const probabilityBook = books.find((x) => x.id === "probability");
+  probabilityBook.chapters.forEach((chapter) => chapter.sections.forEach((section) => {
+    legacy[section.id] = createSection({ learned: true, learnedAt: "2026-07-01" });
   }));
-  progress[probability.chapters[0].sections[0].id] = createSection({
+  legacy[probabilityBook.chapters[0].sections[0].id] = createSection({
     learned: true,
     learnedAt: "2026-07-01",
     reviewed: true,
     reviewedAt: "2026-09-18",
   });
-
-  const target = resolveGlobalRecentTarget(books, progress);
-  assert.equal(target?.bookId, "probability");
-  assert.equal(target?.chapterId, probability.chapters[1].id);
-  assert.equal(target?.sectionId, probability.chapters[1].sections[0].id);
-  assert.equal(target?.isReview, true);
+  const legacyTarget = resolveGlobalRecentTarget(books, legacy);
+  assert.equal(legacyTarget?.bookId, "probability");
+  assert.equal(legacyTarget?.chapterId, probabilityBook.chapters[1].id);
+  assert.equal(legacyTarget?.sectionId, probabilityBook.chapters[1].sections[0].id);
+  assert.equal(legacyTarget?.isReview, true);
 });
 
 test("最近学习目标推导: isCurrent 手动标记具有最高优先级", () => {

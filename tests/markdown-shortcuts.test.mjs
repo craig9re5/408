@@ -42,10 +42,10 @@ test("Markdown Shortcuts: wrapSelection 加粗与斜体包裹及 Toggle 反包�
   assert.equal(emptyRes.newText, "Hello **加粗**");
   assert.equal(emptyRes.selectionStart, 8);
   assert.equal(emptyRes.selectionEnd, 10);
-});
 
-test("Markdown Shortcuts: applyLink 链接处理与 URL 自动识别及光标精准聚焦", () => {
-  // 1. 选中文本 -> 插入链接模板，光标高亮 URL 部分便于立即输入网址
+  // 2. 链接：选中文本 / 选中 URL / 无选区三种分支
+
+  // 选中文本 -> 插入链接模板，光标高亮 URL 部分便于立即输入网址
   const res1 = applyLink("访问王道论坛获取资料", 2, 6);
   assert.equal(res1.newText, "访问[王道论坛](https://)获取资料");
   assert.equal(res1.selectionStart, 9); // "访问[王道论坛](".length = 2 + 1 + 4 + 2 = 9
@@ -62,10 +62,8 @@ test("Markdown Shortcuts: applyLink 链接处理与 URL 自动识别及光标精
   assert.equal(res3.newText, "[链接文本](https://)");
   assert.equal(res3.selectionStart, 1);
   assert.equal(res3.selectionEnd, 5);
-});
 
-test("Markdown Shortcuts: applyMath 与 applyCode 单行与多行格式及光标区间", () => {
-  // 1. 单行数学公式
+  // 3. 公式与代码：行内 / 块级
   const mathInline = applyMath("定理 O(n log n) 复杂度", 3, 13);
   assert.equal(mathInline.newText, "定理 $O(n log n)$ 复杂度");
   assert.equal(mathInline.selectionStart, 4);
@@ -87,12 +85,10 @@ test("Markdown Shortcuts: applyMath 与 applyCode 单行与多行格式及光标
   const codeText = "int main() {\n  return 0;\n}";
   const codeBlock = applyCode(codeText, 0, codeText.length);
   assert.equal(codeBlock.newText, "```cpp\nint main() {\n  return 0;\n}\n```");
-});
 
-test("Markdown Shortcuts: applyHeading 标题级别切换、清除及光标位置调整", () => {
-  const text = "段落标题内容";
-  // 1. 设置为 1 级标题
-  const h1 = applyHeading(text, 2, 4, 1);
+  // 4. 标题：设置 / 降级 / 清除
+  const headingText = "段落标题内容";
+  const h1 = applyHeading(headingText, 2, 4, 1);
   assert.equal(h1.newText, "# 段落标题内容");
   assert.equal(h1.selectionStart, 4); // 原光标 2 向后顺延 2 个字符 ("# ")
   assert.equal(h1.selectionEnd, 6);
@@ -108,29 +104,15 @@ test("Markdown Shortcuts: applyHeading 标题级别切换、清除及光标位�
   assert.equal(h0.newText, "段落标题内容");
   assert.equal(h0.selectionStart, 2);
   assert.equal(h0.selectionEnd, 4);
-});
 
-test("Markdown Shortcuts: toggleLinePrefix 列表、待办与引用批量处理及反切换", () => {
-  const text = "第一点\n第二点\n第三点";
-  // 1. 无序列表
-  const bullet = toggleLinePrefix(text, 0, text.length, "bullet");
-  assert.equal(bullet.newText, "- 第一点\n- 第二点\n- 第三点");
-
-  // 2. 再次按无序列表 -> 取消列表
-  const unbullet = toggleLinePrefix(bullet.newText, 0, bullet.newText.length, "bullet");
-  assert.equal(unbullet.newText, "第一点\n第二点\n第三点");
-
-  // 3. 有序列表（自动编号）
-  const numbered = toggleLinePrefix(text, 0, text.length, "number");
-  assert.equal(numbered.newText, "1. 第一点\n2. 第二点\n3. 第三点");
-
-  // 4. 任务列表
-  const task = toggleLinePrefix(text, 0, text.length, "task");
-  assert.equal(task.newText, "- [ ] 第一点\n- [ ] 第二点\n- [ ] 第三点");
-
-  // 5. 引用块
-  const quote = toggleLinePrefix(text, 0, text.length, "quote");
-  assert.equal(quote.newText, "> 第一点\n> 第二点\n> 第三点");
+  // 5. 行首前缀：四种类型 + 反切换
+  const lines = "第一点\n第二点\n第三点";
+  assert.equal(toggleLinePrefix(lines, 0, lines.length, "bullet").newText, "- 第一点\n- 第二点\n- 第三点");
+  const bulleted = toggleLinePrefix(lines, 0, lines.length, "bullet").newText;
+  assert.equal(toggleLinePrefix(bulleted, 0, bulleted.length, "bullet").newText, lines);
+  assert.equal(toggleLinePrefix(lines, 0, lines.length, "number").newText, "1. 第一点\n2. 第二点\n3. 第三点");
+  assert.equal(toggleLinePrefix(lines, 0, lines.length, "task").newText, "- [ ] 第一点\n- [ ] 第二点\n- [ ] 第三点");
+  assert.equal(toggleLinePrefix(lines, 0, lines.length, "quote").newText, "> 第一点\n> 第二点\n> 第三点");
 });
 
 test("Markdown Shortcuts: handleTabKey 缩进与 Shift+Tab 反缩进", () => {
@@ -147,71 +129,25 @@ test("Markdown Shortcuts: handleTabKey 缩进与 Shift+Tab 反缩进", () => {
   // 3. 多行选区按 Shift+Tab -> 反缩进 2 空格
   const unTabMulti = handleTabKey(tabMulti.newText, 0, tabMulti.newText.length, true);
   assert.equal(unTabMulti.newText, "line1\nline2");
-});
 
-test("Markdown Shortcuts: handleSmartEnter 智能回车续行与空行退出", () => {
-  // 1. 无序列表续行
-  const bText = "- 第一项心得";
-  const bEnter = handleSmartEnter(bText, bText.length, bText.length);
-  assert.ok(bEnter);
-  assert.equal(bEnter.newText, "- 第一项心得\n- ");
+  // 4. 智能回车：各类前缀续行，空列表项退出
+  const enter = (text) => handleSmartEnter(text, text.length, text.length);
+  assert.equal(enter("- 第一项心得")?.newText, "- 第一项心得\n- ");
+  assert.equal(enter("- ")?.newText, "");
+  assert.equal(enter("1. 第一条思路")?.newText, "1. 第一条思路\n2. ");
+  assert.equal(enter("- [ ] 复习操作系统第2章")?.newText, "- [ ] 复习操作系统第2章\n- [ ] ");
+  assert.equal(enter("> 摘录重要定理")?.newText, "> 摘录重要定理\n> ");
 
-  // 2. 空无序列表按回车 -> 清除符号退出列表
-  const emptyBText = "- ";
-  const emptyBEnter = handleSmartEnter(emptyBText, emptyBText.length, emptyBText.length);
-  assert.ok(emptyBEnter);
-  assert.equal(emptyBEnter.newText, "");
+  // 5. 自动配对：括号 / 引号 / 反引号 / 公式
+  const selected = "selected";
+  for (const [open, expected] of [["(", "(selected)"], ["[", "[selected]"], ['"', '"selected"'], ["`", "`selected`"], ["$", "$selected$"]]) {
+    assert.equal(handleAutoPair(selected, 0, selected.length, open)?.newText, expected);
+  }
 
-  // 3. 有序列表续行（自动递增）
-  const numText = "1. 第一条思路";
-  const numEnter = handleSmartEnter(numText, numText.length, numText.length);
-  assert.ok(numEnter);
-  assert.equal(numEnter.newText, "1. 第一条思路\n2. ");
-
-  // 4. 任务列表续行
-  const taskText = "- [ ] 复习操作系统第2章";
-  const taskEnter = handleSmartEnter(taskText, taskText.length, taskText.length);
-  assert.ok(taskEnter);
-  assert.equal(taskEnter.newText, "- [ ] 复习操作系统第2章\n- [ ] ");
-
-  // 5. 引用块续行
-  const quoteText = "> 摘录重要定理";
-  const quoteEnter = handleSmartEnter(quoteText, quoteText.length, quoteText.length);
-  assert.ok(quoteEnter);
-  assert.equal(quoteEnter.newText, "> 摘录重要定理\n> ");
-});
-
-test("Markdown Shortcuts: handleAutoPair 选中文本自动配对符号及光标落点", () => {
-  const text = "selected";
-  // 1. 括号配对
-  const paren = handleAutoPair(text, 0, text.length, "(");
-  assert.equal(paren?.newText, "(selected)");
-  assert.equal(paren?.selectionStart, 1);
-  assert.equal(paren?.selectionEnd, 9);
-
-  // 2. 中括号配对
-  const bracket = handleAutoPair(text, 0, text.length, "[");
-  assert.equal(bracket?.newText, "[selected]");
-  assert.equal(bracket?.selectionStart, 1);
-  assert.equal(bracket?.selectionEnd, 9);
-
-  // 3. 双引号配对
-  const quote = handleAutoPair(text, 0, text.length, '"');
-  assert.equal(quote?.newText, '"selected"');
-
-  // 4. 反引号配对
-  const backtick = handleAutoPair(text, 0, text.length, "`");
-  assert.equal(backtick?.newText, "`selected`");
-
-  // 5. 美元符号公式配对
-  const dollar = handleAutoPair(text, 0, text.length, "$");
-  assert.equal(dollar?.newText, "$selected$");
-});
-
-test("Markdown Shortcuts: applyTableTemplate 表格模板插入及光标落点精准断言", () => {
-  const res = applyTableTemplate("前置文本\n", 5, 5);
+  // 6. 表格模板插入
+  const table = applyTableTemplate("前置文本\n", 5, 5);
   const expectedTable = "\n| 序号 | 知识点 / 定理 | 掌握度 / 备注 |\n| :--- | :--- | :--- |\n| 1 | 核心概念 | 熟练掌握 |\n| 2 | 算法推导 | 待强化 |\n";
-  assert.equal(res.newText, "前置文本\n" + expectedTable);
-  assert.equal(res.selectionStart, 5 + expectedTable.length);
-  assert.equal(res.selectionEnd, 5 + expectedTable.length);
+  assert.equal(table.newText, "前置文本\n" + expectedTable);
+  assert.equal(table.selectionStart, 5 + expectedTable.length);
+  assert.equal(table.selectionEnd, 5 + expectedTable.length);
 });

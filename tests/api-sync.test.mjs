@@ -199,7 +199,7 @@ test("corrupt stored JSON fails closed instead of replacing journals with an emp
   }
 });
 
-test("cross-origin mutations are rejected before authentication or body parsing", async () => {
+test("cross-origin mutations are rejected", async () => {
   const { sqlite, env } = makeEnv();
   try {
     const response = await handleApi(new Request("https://example.test/api/auth/login", {

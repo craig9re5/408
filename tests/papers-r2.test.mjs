@@ -164,10 +164,12 @@ test("missing R2 binding rejects upload and D1 failure cleans uploaded object", 
   assert.equal(quotas.get("main"), 0);
 });
 
-test("R2 deletion failure keeps a retryable queue and reserved quota", async () => {
+test("删除失败时保留可重试队列与配额，恢复后清理成功", async () => {
   const { env, rows, objects, quotas, pending, flags } = makeEnvironment();
   const upload = await handlePapersApi(uploadRequest(), env, "main");
   const { item } = await upload.json();
+
+  // R2 删除失败：D1 行已删，对象与配额保留，进入待清理队列
   flags.failDelete = true;
   const deletion = await handlePapersApi(new Request(`https://example.test/api/papers/${item.id}`, { method: "DELETE" }), env, "main");
   assert.equal(deletion.status, 200);
@@ -177,31 +179,32 @@ test("R2 deletion failure keeps a retryable queue and reserved quota", async () 
   assert.equal(pending.size, 1);
   assert.equal(quotas.get("main"), item.fileSize);
 
+  // 下次列表请求重试清理
   flags.failDelete = false;
   await handlePapersApi(new Request("https://example.test/api/papers"), env, "main");
   assert.equal(objects.size, 0);
   assert.equal(pending.size, 0);
   assert.equal(quotas.get("main"), 0);
-});
 
-test("D1 deletion failure leaves the R2 object available", async () => {
-  const { env, rows, objects, flags } = makeEnvironment();
-  const upload = await handlePapersApi(uploadRequest(), env, "main");
-  const { item } = await upload.json();
+  // D1 批量删除失败时，R2 对象保持可下载
+  const second = await (await handlePapersApi(uploadRequest(), env, "main")).json();
   flags.failBatch = true;
-  const deletion = await handlePapersApi(new Request(`https://example.test/api/papers/${item.id}`, { method: "DELETE" }), env, "main");
-  assert.equal(deletion.status, 500);
+  const failed = await handlePapersApi(new Request(`https://example.test/api/papers/${second.item.id}`, { method: "DELETE" }), env, "main");
+  assert.equal(failed.status, 500);
   assert.equal(rows.size, 1);
   assert.equal(objects.size, 1);
 });
 
-test("stream validation rejects disguised and mis-sized files and releases quota", async () => {
+test("上传校验：伪 PDF、尺寸不符与超配额均被拒绝且不落盘", async () => {
   const { env, objects, quotas } = makeEnvironment();
   assert.equal((await handlePapersApi(uploadRequest("fake.pdf", "<html>bad</html>"), env, "main")).status, 400);
   assert.equal((await handlePapersApi(uploadRequest("short.pdf", "%PDF-1.4", 6), env, "main")).status, 400);
   assert.equal((await handlePapersApi(uploadRequest("truncated.pdf", "%PDF-1.4", 100), env, "main")).status, 400);
+
+  quotas.set("main", DEFAULT_USER_QUOTA_BYTES - 1);
+  assert.equal((await handlePapersApi(uploadRequest(), env, "main")).status, 400);
   assert.equal(objects.size, 0);
-  assert.equal(quotas.get("main"), 0);
+  assert.equal(quotas.get("main"), DEFAULT_USER_QUOTA_BYTES - 1);
 });
 
 test("quota reservation rejects an upload that would exceed the workspace limit", async () => {

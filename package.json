@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply 408-progress --local",
     "db:migrate:remote": "wrangler d1 migrations apply 408-progress --remote",
-    "deploy": "npm run build && wrangler deploy"
+    "check:deploy": "node scripts/check-deploy-clean.mjs",
+    "deploy": "npm run check:deploy && npm run build && wrangler deploy"
   },
   "dependencies": {
     "@fontsource-variable/noto-serif-sc": "^5.3.1",
