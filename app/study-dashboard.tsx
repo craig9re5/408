@@ -2891,6 +2891,20 @@ export function StudyDashboard() {
                 <span className={`topbar-more-status topbar-more-status--${syncMeta.cls}`} role="status"><i aria-hidden="true" />{syncMeta.label}</span>
               </div>
             </div>
+            {/* 手机端右上角只保留设置入口：点一下直接进入设置，同步状态仍由圆点提示。 */}
+            <div className="topbar-settings-wrap">
+              <button
+                className={`topbar-mobile-settings${activePage === "settings" ? " active" : ""}`}
+                type="button"
+                data-page="settings"
+                aria-label={`打开设置，同步状态：${syncMeta.label}`}
+                aria-current={activePage === "settings" ? "page" : undefined}
+                onClick={() => navigateMobile("settings")}
+              >
+                <Icon name="settings" />
+                <i className={`topbar-settings-dot topbar-settings-dot--${syncMeta.cls}`} aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <nav className="mobile-navigation" aria-label="移动端页面导航">
             {mobileNavigation.map(({ page, label }) => (

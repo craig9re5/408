@@ -75,9 +75,9 @@
 | :--- | :--- | :--- |
 | > 900px | 左侧深色侧栏 + 页面标题 | 完整桌面布局；> 1120px 时冲刺页科目切换器固定 420px |
 | 600–900px | 顶部 4 个标签：进度 / 冲刺 / 今日 / 课表；设置在「⋯」菜单 | 平板样式集中在 `app/tablet.css`（最后加载）：页面标题视觉隐藏但保留给读屏；导航 `max-width: 380px`；内容区左右留白 24px；首页 hero 为 1.5fr / 1fr 双列 |
-| ≤ 600px | 顶部 3 个标签：进度 / 冲刺 / 今日；课表与设置在「⋯」菜单 | 手机紧凑布局，见 `progress-mobile.css`、`sprint-mobile.css`、`mobile-density.css` |
+| ≤ 600px | 顶部 3 个标签：进度 / 冲刺 / 今日；课表在「⋯」菜单；右上角齿轮直接进入设置 | 手机紧凑布局，见 `progress-mobile.css`、`sprint-mobile.css`、`mobile-density.css` |
 
-「⋯」按钮上的小圆点同时显示同步状态（已同步 / 同步中 / 离线 / 失败）。
+「⋯」按钮（平板）与手机端设置齿轮上的小圆点同时显示同步状态（已同步 / 同步中 / 离线 / 失败）。
 
 ### 样式文件加载顺序
 
@@ -96,7 +96,7 @@
 ## 5. 图标
 
 - 统一使用 `app/components/common/Icon.tsx`：`<Icon name="pen" />`。图标为 24×24 线性 SVG，颜色继承 `currentColor`，默认 `aria-hidden`。
-- 现有图标：`x` `check` `chevron-down` `chevron-up` `arrow-right` `arrow-down` `arrow-up` `arrow-up-right` `pen` `target` `coffee` `hourglass` `monitor` `smartphone` `star`（支持 `filled`）`alert` `link` `square-check` `quote` `table` `maximize` `note` `map-pin` `book-open` `library` `globe` `lightbulb` `sparkle`。
+- 现有图标：`x` `check` `chevron-down` `chevron-up` `arrow-right` `arrow-down` `arrow-up` `arrow-up-right` `pen` `target` `coffee` `hourglass` `monitor` `smartphone` `star`（支持 `filled`）`alert` `link` `square-check` `quote` `table` `maximize` `note` `map-pin` `book-open` `library` `globe` `lightbulb` `sparkle` `settings`。
 - 界面中不使用 emoji 或 Unicode 符号充当图标，提示文案中也不加 emoji。CSS 伪元素需要图标时，使用 `mask` + 内联 SVG。
 - 导航图标（`MobileNavIcon` / `navigation-symbol--*`）是单独的一套，保持不变。
 
@@ -106,6 +106,7 @@
 - 顶部切换 408 / 数学，再切换科目；hero 区为当前书目进度 + 本周节奏。
 - 目录筛选：全部 / 未学 / 未复习 / 逾期；支持编辑模式下批量排期。
 - 手机端隐藏本周节奏区，目录筛选使用紧凑下拉。
+- 手机端展开某一小节时，详情第一行是「新学勾选 + 完成日期」与「写日志」按钮，第二行是「新学计划」；写日志不再只剩一个加号。
 
 ### 套卷冲刺
 - 科目：408 / 数学 / 英语 / 政治；筛选：试卷类型、完成状态，真题可按年份排序。
@@ -119,6 +120,7 @@
 - 手机端当天课程明细**默认展开**，折叠箭头并入日期行右侧；「作息 / 复习课表 / 第 N 周」标题组隐藏。
 - 状态只在一处显示：进行中的课程行内标「进行中」，休息时在「当天安排」行右侧显示「午休 · 剩 N 分钟」。
 - 手机端一律不出现「复习课表」字样：更多菜单、页面标题都用「课表」。
+- 手机端顶栏右上角是齿轮（设置）入口，点一下直接进入设置；「⋯」只在平板显示。
 - 空任务面板在标题旁显示真实文本节点「暂无安排 / 无逾期」（`.task-panel-empty-note`），不再用 CSS `content` 写文案，便于读屏与翻译。
 - 学习日志：唯一的深色主按钮是「写今日记录」；时间流中的「写一条」和空状态的「记录第一条」都是文字按钮（`.journal-action-btn--text`）。
 - 日志筛选 5 项：全部 / 重点 / 408 / 数学 / 已发布。手机端（≤600px）排成一行，外层一道轻边框收成一个控件。

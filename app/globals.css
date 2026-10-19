@@ -406,7 +406,7 @@ input[type="number"] {
 .select-menu__option:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .select-menu__panel { animation: none; } }
 .book-select.book-select--hero, .sprint-mobile-intro, .sprint-mobile-controls, .mobile-secondary-heading, .schedule-mobile-back { display: none; }
-.topbar-more-wrap, .catalog-more { display: none; }
+.topbar-more-wrap, .topbar-settings-wrap, .catalog-more { display: none; }
 .area-switcher { display: grid; width: 116px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; padding: 3px; border: 1px solid #d7d4cc; border-radius: var(--radius-md); background: rgba(251, 250, 246, 0.78); box-shadow: var(--elevation-1); }
 .area-switcher button { width: 100%; min-width: 0; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); color: #7c8483; background: transparent; font-size: var(--text-2xs); font-weight: 600; cursor: pointer; transition: color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
 .area-switcher button:hover { color: var(--ink); }
@@ -1532,11 +1532,42 @@ button.date-text.late,
   }
   .topbar .study-switchers,
   .topbar .study-switchers.sprint-top-switchers { display: none; }
-  .topbar-actions { min-width: 44px; flex: 0 0 44px; margin-left: 0; }
+  .topbar-actions { min-width: 44px; flex: 0 0 44px; margin-left: 0; gap: 0; }
   .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mobile-navigation button[data-page="schedule"] { display: none; }
-  /* 底部导航收起课表后，在「更多」面板恢复该入口，否则手机端无路可达课表页。 */
-  .topbar-more-panel button[data-page="schedule"] { display: flex; }
+  /* 手机端不再有「⋯」菜单：右上角直接是设置入口。 */
+  .topbar-more-wrap { display: none; }
+  .topbar-settings-wrap { position: relative; display: block; flex: 0 0 44px; }
+  .topbar-mobile-settings {
+    position: relative;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: #53615d;
+    background: transparent;
+    cursor: pointer;
+  }
+  .topbar-mobile-settings::before { position: absolute; inset: 5px; border-radius: var(--radius-md); background: transparent; content: ""; }
+  .topbar-mobile-settings .ui-icon { position: relative; width: 19px; height: 19px; }
+  .topbar-mobile-settings:hover::before,
+  .topbar-mobile-settings.active::before,
+  .topbar-mobile-settings:focus-visible::before { background: #e7ece8; }
+  .topbar-mobile-settings:focus-visible { outline-offset: 0; }
+  .topbar-settings-dot {
+    position: absolute;
+    top: 6px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border: 1px solid #f8f7f2;
+    border-radius: 50%;
+    background: #8b918f;
+  }
+  .topbar-settings-dot--saved { background: #528867; }
+  .topbar-settings-dot--saving { background: #bb831e; }
+  .topbar-settings-dot--offline, .topbar-settings-dot--error { background: #c25949; }
   .mobile-navigation button { min-height: 44px; }
   .mobile-navigation button strong { font-size: var(--text-md); }
 

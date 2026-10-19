@@ -210,6 +210,22 @@
     font-size: var(--text-xs);
   }
 
+  /* 展开行占满整行：次要操作给出完整文案，避免只剩一个「+」。 */
+  .section-row.is-detail-open .section-record-btn {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 14px;
+    border: 1px dashed var(--mobile-border);
+    border-radius: var(--radius-md);
+    color: var(--mobile-text-accent);
+    background: var(--mobile-surface);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .section-row.is-detail-open .section-record-btn .record-plus { font-size: var(--text-base); }
+
   .section-row.is-detail-open .section-plan,
   .section-row.is-detail-open .section-plan .date-text,
   .section-row.is-detail-open .section-plan .date-editor,
@@ -484,22 +500,32 @@
   .chapter-review-inline .date-text { border: 0; background: transparent; padding: 0 2px; }
   .chapter-review-inline .date-editor { width: 126px; }
   .page-content--progress .section-table { margin: 0 12px 8px; }
+  /* 展开的小节：摘要之后是「新学 + 完成日期」与次要操作同一行，
+     新学计划单独一行，避免日期与操作分散在两端、中间留出大片空白。 */
   .page-content--progress .section-table .section-row.is-detail-open {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "summary summary" "base-plan name" "learned learned";
+    grid-template-areas: "summary summary" "learned name" "base-plan base-plan";
     gap: 4px 8px;
     padding: 0 12px 12px;
     margin-bottom: 8px;
     border-radius: var(--radius-md);
     background: var(--green-soft);
   }
-  .page-content--progress .section-row.is-detail-open .section-name { min-height: 44px; }
-  .page-content--progress .section-row.is-detail-open .section-name .section-actions > button { min-height: 44px; }
-  .page-content--progress .section-row.is-detail-open .section-plan { height: auto; justify-content: flex-start; }
-  .page-content--progress .section-row.is-detail-open .section-plan .date-text { width: auto; gap: 8px; }
-  .page-content--progress .section-row.is-detail-open .check-with-date { justify-content: space-between; min-height: 44px; }
+  .page-content--progress .section-row.is-detail-open .check-with-date { justify-content: flex-start; gap: 8px; min-height: 44px; }
   .page-content--progress .section-row.is-detail-open .check-with-date > .date-text,
-  .page-content--progress .section-row.is-detail-open .check-with-date > .date-editor { flex: 0 1 auto; min-width: 88px; }
-  .page-content--progress .section-row.is-detail-open .check-with-date label { min-width: 88px; }
+  .page-content--progress .section-row.is-detail-open .check-with-date > .date-editor { flex: 0 1 auto; min-width: 0; }
+  .page-content--progress .section-row.is-detail-open .check-with-date label { min-width: 0; }
+  .page-content--progress .section-row.is-detail-open .section-name { min-height: 44px; justify-content: flex-end; align-items: center; }
+  .page-content--progress .section-row.is-detail-open .section-actions { flex-wrap: wrap; gap: 8px; }
+  .page-content--progress .section-row.is-detail-open .section-plan { min-height: 44px; justify-content: flex-start; }
+  .page-content--progress .section-row.is-detail-open .section-plan .date-text { width: auto; gap: 8px; }
+  /* 已完成日期紧贴「新学」勾选，不再被基础样式拉成整行宽。 */
+  .page-content--progress .section-row.is-detail-open .check-with-date > .date-text {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    padding-left: 4px;
+    color: var(--mobile-text-muted);
+  }
 }
 
