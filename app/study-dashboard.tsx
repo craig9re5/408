@@ -102,7 +102,7 @@ import {
 } from "./study-data";
 
 
-type AuthState = "locked" | "authenticated";
+type AuthState = "checking" | "locked" | "authenticated";
 type SyncStatus = "loading" | "saving" | "saved" | "offline" | "error";
 type StudyPlanStatus = "completed" | "overdue" | "due_today" | "upcoming" | "unscheduled";
 type CatalogFilter = "all" | "unlearned" | "unreviewed" | "overdue";
@@ -543,7 +543,7 @@ export function StudyDashboard() {
   const [isPaperNetdiskOpen, setIsPaperNetdiskOpen] = useState(false);
 
   const [loaded, setLoaded] = useState(false);
-  const [authState, setAuthState] = useState<AuthState>("locked");
+  const [authState, setAuthState] = useState<AuthState>("checking");
   const [workspaceId, setWorkspaceId] = useState("");
   const workspaceUserLabel = useMemo(() => {
     const raw = (workspaceId || "main").trim();
@@ -825,12 +825,17 @@ export function StudyDashboard() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
     async function initialize() {
       try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        const response = await fetch("/api/auth/session", { cache: "no-store", signal: controller.signal });
         const body = await response.json() as { authenticated?: boolean; workspaceId?: string } & Partial<StudyAppData>;
         if (cancelled) return;
-        if (!body.authenticated) return;
+        if (!response.ok || !body.authenticated) {
+          setAuthState("locked");
+          return;
+        }
         const wid = typeof body.workspaceId === "string" && body.workspaceId ? body.workspaceId : "main";
         resetSpaceState(wid);
         setAuthState("authenticated");
@@ -838,12 +843,18 @@ export function StudyDashboard() {
         setLoaded(true);
         setSyncStatus("saved");
       } catch {
-        // Keep the invite form visible so a transient session-check failure
-        // does not block the user from trying to log in.
+        // A failed session check must still let the user try the invite form.
+        if (!cancelled) setAuthState("locked");
+      } finally {
+        window.clearTimeout(timeout);
       }
     }
     void initialize();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [applyRemoteData, resetSpaceState]);
 
   useEffect(() => {
@@ -2690,8 +2701,35 @@ export function StudyDashboard() {
     ? summarizeImport(pendingImport, 2, books.length)
     : null;
 
-  if (authState === "authenticated" && !loaded) {
-    return <main className="auth-shell"><div className="auth-card"><strong>正在连接学习空间</strong><p>正在读取云端进度…</p></div></main>;
+  if (authState === "checking" || (authState === "authenticated" && !loaded)) {
+    return (
+      <main className="app-loading">
+        <div className="app-skeleton" role="status" aria-live="polite">
+          <span className="visually-hidden">正在连接学习空间，读取云端进度…</span>
+          <div aria-hidden="true">
+            <div className="app-skeleton__topbar">
+              {Array.from({ length: 3 }, (_, i) => <span className="app-skeleton__tab" key={i} />)}
+              <span className="app-skeleton__action" />
+            </div>
+            <div className="app-skeleton__body">
+              <div className="app-skeleton__hero">
+                <span className="app-skeleton__line app-skeleton__line--title" />
+                <span className="app-skeleton__number" />
+              </div>
+              <div className="app-skeleton__heading"><span className="app-skeleton__line app-skeleton__line--short" /></div>
+              <div className="app-skeleton__rows">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <div className="app-skeleton__row" key={i}>
+                    <span className="app-skeleton__line app-skeleton__line--title" />
+                    <span className="app-skeleton__line app-skeleton__line--meta" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   if (authState === "locked") {

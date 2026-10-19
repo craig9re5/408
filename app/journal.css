@@ -16,14 +16,16 @@
   border: 1px solid #d9d5cb;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   white-space: nowrap;
 }
-.section-journal-badge:hover {
-  background: #e5e1d6;
-  border-color: #8c9793;
-  color: var(--ink);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .section-journal-badge:hover {
+    background: #e5e1d6;
+    border-color: #8c9793;
+    color: var(--ink);
+    transform: translateY(-1px);
+  }
 }
 .section-journal-badge span {
   font-variant-numeric: tabular-nums;
@@ -44,7 +46,7 @@
   border-radius: var(--radius-pill);
   cursor: pointer;
   opacity: 0;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   white-space: nowrap;
 }
 .section-record-btn .record-plus {
@@ -55,22 +57,29 @@
 .section-record-btn .record-label {
   font-size: var(--text-2xs);
 }
-.section-row:hover .section-record-btn,
 .section-record-btn:focus-visible {
   opacity: 0.85;
   background: #faf8f2;
+}
+@media (hover: hover) and (pointer: fine) {
+  .section-row:hover .section-record-btn {
+    opacity: 0.85;
+    background: #faf8f2;
+  }
 }
 .sprint-bento-card .section-record-btn {
   opacity: 1;
   background: #faf8f2;
 }
-.section-record-btn:hover {
-  opacity: 1;
-  color: #fff;
-  background: var(--sidebar);
-  border-color: var(--sidebar);
-  border-style: solid;
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .section-record-btn:hover {
+    opacity: 1;
+    color: #fff;
+    background: var(--sidebar);
+    border-color: var(--sidebar);
+    border-style: solid;
+    transform: translateY(-1px);
+  }
 }
 
 /* Today Page Header Banner */
@@ -121,7 +130,7 @@
   font-weight: 600;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
   text-decoration: none;
 }
 .journal-action-btn--primary {
@@ -129,28 +138,34 @@
   background: var(--sidebar);
   border: 1px solid var(--sidebar);
 }
-.journal-action-btn--primary:hover {
-  background: var(--sidebar-soft);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .journal-action-btn--primary:hover {
+    background: var(--sidebar-soft);
+    transform: translateY(-1px);
+  }
 }
 .journal-action-btn--secondary {
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
 }
-.journal-action-btn--secondary:hover {
-  background: var(--canvas);
-  border-color: var(--ink-soft);
+@media (hover: hover) and (pointer: fine) {
+  .journal-action-btn--secondary:hover {
+    background: var(--canvas);
+    border-color: var(--ink-soft);
+  }
 }
 .journal-action-btn--ghost {
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid var(--line);
 }
-.journal-action-btn--ghost:hover {
-  color: var(--ink);
-  background: var(--paper);
-  border-color: var(--ink-soft);
+@media (hover: hover) and (pointer: fine) {
+  .journal-action-btn--ghost:hover {
+    color: var(--ink);
+    background: var(--paper);
+    border-color: var(--ink-soft);
+  }
 }
 /* 文字型次级入口：同一页面只保留一个深色主按钮（“写今日记录”），其余写日志入口用此样式 */
 .journal-action-btn--text {
@@ -159,9 +174,11 @@
   background: transparent;
   border: 1px solid transparent;
 }
-.journal-action-btn--text:hover {
-  color: var(--blue-deep);
-  background: var(--blue-soft);
+@media (hover: hover) and (pointer: fine) {
+  .journal-action-btn--text:hover {
+    color: var(--blue-deep);
+    background: var(--blue-soft);
+  }
 }
 
 /* Journal Stream Section (Screen 2) */
@@ -237,7 +254,7 @@
   background: var(--canvas);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 .journal-search-input:focus {
   background: var(--paper);
@@ -256,8 +273,10 @@
   background: transparent;
   cursor: pointer;
 }
-.journal-search-clear:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .journal-search-clear:hover {
+    color: var(--ink);
+  }
 }
 
 .journal-filter-pills {
@@ -274,11 +293,13 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.filter-pill:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .filter-pill:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 .filter-pill.active {
   color: #ffffff;
@@ -366,9 +387,11 @@
   box-shadow: var(--elevation-1);
   transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
-.journal-card:hover {
-  border-color: var(--line);
-  box-shadow: var(--elevation-2);
+@media (hover: hover) and (pointer: fine) {
+  .journal-card:hover {
+    border-color: var(--line);
+    box-shadow: var(--elevation-2);
+  }
 }
 
 .journal-card-meta {
@@ -405,11 +428,13 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.journal-context-badge:hover {
-  background: var(--line-soft);
-  border-color: var(--sidebar);
+@media (hover: hover) and (pointer: fine) {
+  .journal-context-badge:hover {
+    background: var(--line-soft);
+    border-color: var(--sidebar);
+  }
 }
 .journal-publish-badge {
   display: inline-flex;
@@ -423,11 +448,13 @@
   border: 1px solid #c8e6c9;
   border-radius: var(--radius-sm);
   text-decoration: none;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
-.journal-publish-badge:hover {
-  background: #c8e6c9;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .journal-publish-badge:hover {
+    background: #c8e6c9;
+    text-decoration: underline;
+  }
 }
 
 .journal-card--important {
@@ -463,28 +490,40 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.journal-btn-tool:hover {
-  color: var(--ink);
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn-tool:hover {
+    color: var(--ink);
+    background: var(--canvas);
+  }
 }
 .journal-btn-tool--star {
   color: var(--ink-soft);
 }
-.journal-btn-tool--star.is-active,
-.journal-btn-tool--star:hover {
+.journal-btn-tool--star.is-active {
   color: #b45309;
   background: #fef3c7;
   border-color: #fde68a;
 }
-.journal-btn-tool--publish:hover {
-  color: #1e6b48;
-  border-color: #7cac85;
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn-tool--star:hover {
+    color: #b45309;
+    background: #fef3c7;
+    border-color: #fde68a;
+  }
 }
-.journal-btn-tool--delete:hover {
-  color: #c53030;
-  border-color: #feb2b2;
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn-tool--publish:hover {
+    color: #1e6b48;
+    border-color: #7cac85;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn-tool--delete:hover {
+    color: #c53030;
+    border-color: #feb2b2;
+  }
 }
 
 .journal-card-title {
@@ -516,10 +555,12 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.journal-expand-toggle:hover {
-  background: var(--line-soft);
+@media (hover: hover) and (pointer: fine) {
+  .journal-expand-toggle:hover {
+    background: var(--line-soft);
+  }
 }
 
 /* Markdown Renderer Styles */
@@ -683,9 +724,11 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
 }
-.journal-modal-close:hover {
-  color: var(--ink);
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .journal-modal-close:hover {
+    color: var(--ink);
+    background: var(--canvas);
+  }
 }
 
 .journal-editor-meta-bar {
@@ -752,12 +795,14 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.journal-clear-sections-btn:hover {
-  color: #dc2626;
-  border-color: #fca5a5;
-  background: #fef2f2;
+@media (hover: hover) and (pointer: fine) {
+  .journal-clear-sections-btn:hover {
+    color: #dc2626;
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
 }
 .journal-selected-sections-list {
   display: flex;
@@ -775,7 +820,7 @@
   font-weight: 500;
   border-radius: var(--radius-sm);
   line-height: 1.3;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: none;
 }
 .journal-section-chip.area-408 {
   color: var(--blue-deep);
@@ -804,9 +849,11 @@
   padding: 0;
   transition: opacity var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
 }
-.journal-section-chip .chip-remove-btn:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .journal-section-chip .chip-remove-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.1);
+  }
 }
 .journal-title-field {
   flex: 1;
@@ -822,9 +869,11 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.journal-add-title-btn:hover {
-  background: var(--paper);
-  border-color: var(--sidebar);
+@media (hover: hover) and (pointer: fine) {
+  .journal-add-title-btn:hover {
+    background: var(--paper);
+    border-color: var(--sidebar);
+  }
 }
 .journal-title-input-wrap {
   display: flex;
@@ -847,8 +896,10 @@
   background: transparent;
   cursor: pointer;
 }
-.title-remove-btn:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .title-remove-btn:hover {
+    color: var(--ink);
+  }
 }
 
 .journal-important-field {
@@ -864,14 +915,16 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
 }
-.journal-important-toggle-btn:hover {
-  border-color: #f59e0b;
-  color: #b45309;
+@media (hover: hover) and (pointer: fine) {
+  .journal-important-toggle-btn:hover {
+    border-color: #f59e0b;
+    color: #b45309;
+  }
 }
 .journal-important-toggle-btn.is-important {
   color: #92400e;
@@ -915,13 +968,15 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-.journal-tb-btn:hover {
-  color: var(--ink);
-  background: var(--paper);
-  border-color: var(--line);
-  box-shadow: var(--elevation-2);
+@media (hover: hover) and (pointer: fine) {
+  .journal-tb-btn:hover {
+    color: var(--ink);
+    background: var(--paper);
+    border-color: var(--line);
+    box-shadow: var(--elevation-2);
+  }
 }
 .journal-tb-btn:active {
   transform: translateY(1px);
@@ -1042,33 +1097,39 @@
   font-weight: 600;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 .journal-btn--ghost {
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid var(--line);
 }
-.journal-btn--ghost:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn--ghost:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 .journal-btn--primary {
   color: #ffffff;
   background: var(--sidebar);
   border: 1px solid var(--sidebar);
 }
-.journal-btn--primary:hover {
-  background: var(--sidebar-soft);
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn--primary:hover {
+    background: var(--sidebar-soft);
+  }
 }
 .journal-btn--danger-ghost {
   color: #b91c1c;
   background: transparent;
   border: 1px solid #f3c1c1;
 }
-.journal-btn--danger-ghost:hover {
-  background: #fef2f2;
-  border-color: #eda1a1;
+@media (hover: hover) and (pointer: fine) {
+  .journal-btn--danger-ghost:hover {
+    background: #fef2f2;
+    border-color: #eda1a1;
+  }
 }
 
 /* 草稿恢复提示横幅 */
@@ -1104,15 +1165,19 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
-.journal-draft-banner__btn:hover {
-  background: #f7efdb;
+@media (hover: hover) and (pointer: fine) {
+  .journal-draft-banner__btn:hover {
+    background: #f7efdb;
+  }
 }
 .journal-draft-banner__btn--danger {
   color: #b91c1c;
   border-color: #f0c4c4;
 }
-.journal-draft-banner__btn--danger:hover {
-  background: #fef2f2;
+@media (hover: hover) and (pointer: fine) {
+  .journal-draft-banner__btn--danger:hover {
+    background: #fef2f2;
+  }
 }
 
 /* 关闭前未保存确认 */
@@ -1214,9 +1279,11 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
 }
-.drawer-close-btn:hover {
-  color: var(--ink);
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .drawer-close-btn:hover {
+    color: var(--ink);
+    background: var(--canvas);
+  }
 }
 
 .drawer-action-row {
@@ -1280,18 +1347,22 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.drawer-card-tools button:hover {
-  color: var(--ink);
-  border-color: var(--sidebar);
+@media (hover: hover) and (pointer: fine) {
+  .drawer-card-tools button:hover {
+    color: var(--ink);
+    border-color: var(--sidebar);
+  }
 }
 .drawer-card-tools button.drawer-tool--starred {
   color: #b45309;
   background: #fef3c7;
   border-color: #fde68a;
 }
-.drawer-card-tools button.text-danger:hover {
-  color: #c53030;
-  border-color: #feb2b2;
+@media (hover: hover) and (pointer: fine) {
+  .drawer-card-tools button.text-danger:hover {
+    color: #c53030;
+    border-color: #feb2b2;
+  }
 }
 .drawer-card-title {
   margin: 0 0 var(--space-1);

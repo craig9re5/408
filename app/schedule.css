@@ -53,9 +53,10 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
-
-.schedule-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-icon-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
 }
 
 .schedule-header__title {
@@ -81,7 +82,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .schedule-pill-btn--today {
@@ -89,9 +90,10 @@
   color: #ffffff;
   box-shadow: 0 2px 8px rgb(var(--blue-ink-rgb) / 0.25);
 }
-
-.schedule-pill-btn--today:hover {
-  background: var(--blue-deep);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-pill-btn--today:hover {
+    background: var(--blue-deep);
+  }
 }
 
 .schedule-pill-btn--ghost {
@@ -99,10 +101,11 @@
   color: var(--ink-soft);
   border: 1px solid var(--line);
 }
-
-.schedule-pill-btn--ghost:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-pill-btn--ghost:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--ink);
+  }
 }
 
 .schedule-header__week-bar {
@@ -169,9 +172,10 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
-
-.schedule-week-nav__btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-week-nav__btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.05);
+  }
 }
 
 .schedule-week-nav__btn:disabled {
@@ -355,11 +359,12 @@
   -webkit-user-select: none;
   transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), filter var(--duration-fast) var(--ease-out);
 }
-
-.timetable-card:hover {
-  transform: translateY(-2px);
-  filter: brightness(0.98);
-  box-shadow: var(--elevation-2);
+@media (hover: hover) and (pointer: fine) {
+  .timetable-card:hover {
+    transform: translateY(-2px);
+    filter: brightness(0.98);
+    box-shadow: var(--elevation-2);
+  }
 }
 
 .timetable-card:active {
@@ -573,9 +578,10 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
-
-.banner-nav-btn:hover {
-  background: rgb(var(--blue-ink-rgb) / 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .banner-nav-btn:hover {
+    background: rgb(var(--blue-ink-rgb) / 0.08);
+  }
 }
 
 .today-schedule-banner__body {
@@ -719,12 +725,13 @@
   background: transparent;
   cursor: pointer;
   font-size: var(--text-base);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.schedule-modal-close:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-modal-close:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--ink);
+  }
 }
 
 .schedule-modal-title {
@@ -778,7 +785,7 @@
   font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .schedule-action-btn--primary {
@@ -786,9 +793,10 @@
   color: #ffffff;
   box-shadow: 0 2px 10px rgb(var(--blue-ink-rgb) / 0.28);
 }
-
-.schedule-action-btn--primary:hover {
-  background: var(--blue-deep);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-action-btn--primary:hover {
+    background: var(--blue-deep);
+  }
 }
 
 .schedule-action-btn--secondary {
@@ -796,9 +804,10 @@
   color: var(--ink);
   border: 1px solid var(--line);
 }
-
-.schedule-action-btn--secondary:hover {
-  background: rgba(0, 0, 0, 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-action-btn--secondary:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
 }
 
 /* Mobile Responsiveness for Schedule */
@@ -971,13 +980,14 @@
   padding: 3px var(--space-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.cockpit-action-btn:hover {
-  color: var(--blue-ink);
-  border-color: var(--blue-ink);
-  background: rgb(var(--blue-ink-rgb) / 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .cockpit-action-btn:hover {
+    color: var(--blue-ink);
+    border-color: var(--blue-ink);
+    background: rgb(var(--blue-ink-rgb) / 0.05);
+  }
 }
 
 .timetable-container--compact {
@@ -1120,9 +1130,10 @@
   padding: 2px var(--space-1);
   border-radius: var(--radius-sm);
 }
-
-.cockpit-clear-focus-btn:hover {
-  background: rgb(var(--blue-ink-rgb) / 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .cockpit-clear-focus-btn:hover {
+    background: rgb(var(--blue-ink-rgb) / 0.12);
+  }
 }
 
 .task-panel--cockpit {
@@ -1185,13 +1196,14 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.task-reschedule-btn:hover {
-  background: var(--blue-ink);
-  color: #ffffff;
-  border-color: var(--blue-ink);
+@media (hover: hover) and (pointer: fine) {
+  .task-reschedule-btn:hover {
+    background: var(--blue-ink);
+    color: #ffffff;
+    border-color: var(--blue-ink);
+  }
 }
 
 @media (width <= 1120px) {
@@ -1243,13 +1255,14 @@
   font-size: var(--text-lg);
   font-weight: 700;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.schedule-week-arrow-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: var(--blue-ink);
-  color: var(--blue-ink);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-week-arrow-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: var(--blue-ink);
+    color: var(--blue-ink);
+  }
 }
 
 .schedule-week-arrow-btn:disabled {
@@ -1286,12 +1299,13 @@
   font-weight: 700;
   color: var(--ink);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
-
-.schedule-week-display-badge:hover {
-  border-color: var(--blue-ink);
-  color: var(--blue-ink);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-week-display-badge:hover {
+    border-color: var(--blue-ink);
+    color: var(--blue-ink);
+  }
 }
 
 .schedule-today-week-pill {
@@ -1303,12 +1317,13 @@
   padding: 3px var(--space-2);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.schedule-today-week-pill:hover {
-  background: var(--blue-ink);
-  color: #ffffff;
+@media (hover: hover) and (pointer: fine) {
+  .schedule-today-week-pill:hover {
+    background: var(--blue-ink);
+    color: #ffffff;
+  }
 }
 
 /* 视图模式切换 (横向时间轴 vs 竖向周课表) */
@@ -1332,7 +1347,7 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .layout-switch-btn.active {
@@ -1351,13 +1366,14 @@
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.schedule-reset-btn:hover {
-  color: var(--coral-ink);
-  border-color: var(--coral-line);
-  background: var(--coral-soft);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-reset-btn:hover {
+    color: var(--coral-ink);
+    border-color: var(--coral-line);
+    background: var(--coral-soft);
+  }
 }
 
 /* ==========================================================================
@@ -1526,7 +1542,7 @@
   background: rgba(0, 0, 0, 0.015);
   border: 1px dashed rgba(220, 217, 208, 0.4);
   overflow: hidden;
-  transition: all var(--duration-base) var(--ease-out);
+  transition: background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
 }
 
 .bg-cell-idle-label {

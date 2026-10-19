@@ -68,10 +68,11 @@
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-back-btn:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-back-btn:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 
 .netdisk-title-group {
@@ -149,13 +150,14 @@
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
   box-shadow: 0 2px 6px rgba(239, 132, 109, 0.3);
 }
-
-.netdisk-upload-btn:hover:not(:disabled) {
-  background: #e4745c;
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-upload-btn:hover:not(:disabled) {
+    background: #e4745c;
+    transform: translateY(-1px);
+  }
 }
 
 .netdisk-upload-btn:disabled {
@@ -176,10 +178,11 @@
   align-items: center;
   justify-content: center;
 }
-
-.netdisk-close-btn:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-close-btn:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 
 .netdisk-cloud-banner {
@@ -235,12 +238,13 @@
   color: var(--ink-soft);
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-tab:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-tab:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 
 .netdisk-tab--active {
@@ -278,7 +282,7 @@
   background: #fff;
   color: var(--ink);
   outline: none;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: width var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 
 .netdisk-search-input:focus {
@@ -317,12 +321,13 @@
   background: #fff;
   color: var(--ink-soft);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-btn-batch:hover {
-  border-color: var(--coral);
-  color: var(--coral);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-btn-batch:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+  }
 }
 
 .netdisk-btn-batch--active {
@@ -405,9 +410,10 @@
   transition: background var(--duration-fast) var(--ease-out);
   cursor: default;
 }
-
-.netdisk-file-row:hover {
-  background: #faf8f5;
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-file-row:hover {
+    background: #faf8f5;
+  }
 }
 
 .netdisk-file-row--selected {
@@ -505,12 +511,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-btn-icon:hover {
-  background: var(--canvas);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-btn-icon:hover {
+    background: var(--canvas);
+    color: var(--ink);
+  }
 }
 
 .netdisk-btn-download {
@@ -523,10 +530,11 @@
   background: var(--blue-soft);
   border: 1px solid rgb(var(--blue-ink-rgb) / 0.2);
 }
-
-.netdisk-btn-download:hover {
-  background: var(--blue-ink);
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-btn-download:hover {
+    background: var(--blue-ink);
+    color: #fff;
+  }
 }
 
 /* 下拉菜单 */
@@ -559,17 +567,19 @@
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-dropdown-item:hover {
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-dropdown-item:hover {
+    background: var(--canvas);
+  }
 }
 
 .netdisk-dropdown-item--danger {
   color: #dc2626;
 }
-
-.netdisk-dropdown-item--danger:hover {
-  background: #fee2e2;
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-dropdown-item--danger:hover {
+    background: #fee2e2;
+  }
 }
 
 .netdisk-dropdown-divider {
@@ -618,13 +628,14 @@
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   box-shadow: 0 4px 12px rgba(239, 132, 109, 0.3);
 }
-
-.netdisk-btn-primary:hover {
-  background: #e4745c;
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-btn-primary:hover {
+    background: #e4745c;
+    transform: translateY(-1px);
+  }
 }
 
 .netdisk-spinner {
@@ -685,20 +696,22 @@
   background: #fff;
   color: var(--ink);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.netdisk-batch-action-btn:hover:not(:disabled) {
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-batch-action-btn:hover:not(:disabled) {
+    background: var(--canvas);
+  }
 }
 
 .netdisk-batch-action-btn--danger {
   color: #dc2626;
   border-color: rgba(220, 38, 38, 0.3);
 }
-
-.netdisk-batch-action-btn--danger:hover:not(:disabled) {
-  background: #fee2e2;
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-batch-action-btn--danger:hover:not(:disabled) {
+    background: #fee2e2;
+  }
 }
 
 .netdisk-batch-action-btn:disabled {
@@ -906,12 +919,13 @@
   color: var(--ink);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
   text-align: center;
 }
-
-.netdisk-subject-chip:hover {
-  background: var(--canvas);
+@media (hover: hover) and (pointer: fine) {
+  .netdisk-subject-chip:hover {
+    background: var(--canvas);
+  }
 }
 
 .netdisk-subject-chip--active {

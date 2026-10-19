@@ -32,11 +32,12 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
-
-.analytics-scope-switch button:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .analytics-scope-switch button:hover {
+    color: var(--ink);
+  }
 }
 
 .analytics-scope-switch button.active {
@@ -455,14 +456,21 @@
   transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), outline var(--duration-fast) var(--ease-out);
 }
 
-.heatmap-cell:not(.future-cell):hover,
-.heatmap-cell:focus-visible,
-.heatmap-cell.is-selected {
+.heatmap-cell:focus-visible, .heatmap-cell.is-selected {
   transform: scale(1.18);
   z-index: 5;
   box-shadow: var(--elevation-2);
   outline: 1.5px solid rgba(23, 33, 41, 0.5);
   outline-offset: 1px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .heatmap-cell:not(.future-cell):hover {
+    transform: scale(1.18);
+    z-index: 5;
+    box-shadow: var(--elevation-2);
+    outline: 1.5px solid rgba(23, 33, 41, 0.5);
+    outline-offset: 1px;
+  }
 }
 
 .heatmap-cell:focus-visible {
@@ -700,8 +708,13 @@
   border-radius: var(--radius-sm);
 }
 
-.trend-col:hover, .trend-col.is-hovered {
+.trend-col.is-hovered {
   background: rgba(116, 164, 181, 0.08);
+}
+@media (hover: hover) and (pointer: fine) {
+  .trend-col:hover {
+    background: rgba(116, 164, 181, 0.08);
+  }
 }
 
 .trend-col-track {
@@ -726,9 +739,15 @@
   transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), height var(--duration-base) var(--ease-out);
 }
 
-.trend-col:hover .trend-bar-stack, .trend-col.is-hovered .trend-bar-stack {
+.trend-col.is-hovered .trend-bar-stack {
   transform: translateY(-2px);
   box-shadow: var(--elevation-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .trend-col:hover .trend-bar-stack {
+    transform: translateY(-2px);
+    box-shadow: var(--elevation-2);
+  }
 }
 
 .bar-segment {
@@ -754,10 +773,17 @@
   line-height: 1;
 }
 
-.trend-col:hover .bar-total-num, .trend-col.is-hovered .bar-total-num {
+.trend-col.is-hovered .bar-total-num {
   color: var(--ink);
   opacity: 1;
   transform: scale(1.1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .trend-col:hover .bar-total-num {
+    color: var(--ink);
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .trend-col-label {
