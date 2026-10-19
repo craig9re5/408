@@ -20,24 +20,31 @@
 | 作答状态 | `--state-correct(-ink)` `--state-partial(-ink)` `--state-wrong(-ink/-deep)` | 答题卡、热力图、正答率 |
 | 课表主题 | `--theme-{408,math-intense,math-regular,english-pol,custom}-{bg,fg,line,bar}` | 课程卡片底色、文字、边框、进度条 |
 | 字体 | `--serif` `--sans` | 标题衬线 / 正文无衬线 |
-| 阴影 | `--shadow` | 卡片投影（目前仅少数位置使用，见第 7 节） |
+| 阴影 | `--elevation-1/2/3` | 普通卡片与控件 / 悬浮卡片与概览 / 弹层与菜单 |
 
 课表主题配色：408 = 蓝，数学强化 = 绿，数学常规 = 石板灰，英语与政治 = 珊瑚，自定义 = 赭黄。
 
 ## 1.5 数值阶梯
 
-字号、圆角、间距、动效、阴影都只允许取下列令牌值（定义在 `globals.css` 的 `:root`）。新增样式先查表，不要再临时决定 13px 还是 14px。
+桌面与手机共用 `globals.css` 的 `:root` 数值阶梯。桌面基础样式、学习日志、套卷冲刺、课表、试卷云盘和分析页均已接入；新增样式先按用途选择令牌。
 
-| 类别 | 令牌 | 值 |
+| 类别 | 令牌 | 值 / 用途 |
 | :--- | :--- | :--- |
-| 字号 | `--text-xs/sm/base/lg/xl/2xl` | 11 / 12 / 14 / 16 / 18 / 22 |
+| 辅助字号 | `--text-2xs/xs/sm/md` | 10 / 11 / 12 / 13 |
+| 正文与小标题 | `--text-base/lg/xl/2xl` | 14 / 16 / 18 / 22 |
+| 指标数字 | `--text-3xl/4xl/5xl/6xl` | 26 / 34 / 58 / 74 |
 | 圆角 | `--radius-sm/md/lg/xl/pill` | 6 / 10 / 14 / 20 / 999 |
 | 间距 | `--space-1..6` | 4 / 8 / 12 / 16 / 24 / 32 |
 | 动效 | `--duration-fast/base` | 120ms / 220ms |
 | 缓动 | `--ease-out` / `--ease-in-out` | `cubic-bezier(.16,1,.3,1)` / `cubic-bezier(.4,0,.2,1)` |
-| 阴影 | `--elevation-1/2/3` | 三级 |
+| 阴影 | `--elevation-1/2/3` | 普通表面 / 悬浮与概览 / 弹层与菜单 |
 
-`font` 简写里不要嵌 CSS 变量（部分浏览器解析失败），一律拆成 `font-weight` / `font-size` / `line-height` / `font-family`。
+- 桌面的主进度与本周节奏保留独立的大数字层级，正文、表格和元信息使用较小档位；不同宽度可选用不同令牌。
+- 常规留白与间距按 4px 网格取值；20px、28px 和更大留白用 `calc()` 组合现有间距令牌。1–3px 的微调、图标绘制、固定侧栏偏移和安全区不强行套用容器间距。
+- 容器圆角使用四档与胶囊令牌；圆形、绘制图标的微小曲率保留原几何值。
+- 交互过渡统一使用两档时长与两条曲线；加载旋转、同步脉冲与错误抖动保留专用节奏。减少动态效果的系统设置仍会关闭动画与过渡。
+- 普通表面投影使用三级阴影；焦点环、状态光晕、内描边、图标绘制和抽屉的方向性边缘阴影保留各自语义。
+- 字体样式采用 `font-weight` / `font-size` / `line-height` / `font-family` 分项声明，方便响应式覆盖；`font: inherit` 仍用于继承父级样式。图标容器的 24px、公式的相对字号与触屏输入框的 16px 属于几何或可读性约束，保留专用值。
 
 ## 2. 字体与字号
 
@@ -81,7 +88,7 @@
 原生 `<select>` 的展开列表由浏览器/系统绘制（Windows 上是深灰高亮、无圆角、字号不受页面控制），无法与站点风格统一。手机端的科目切换、目录筛选、冲刺科目一律使用 `app/components/common/SelectMenu.tsx`：
 
 - 触发区沿用原外观（`book-select__surface` / 药丸形）；
-- 展开面板为纸色 `--mobile-surface`、13px 圆角、分组标题 + 选中打勾；
+- 展开面板为纸色 `--mobile-surface`、`--radius-lg` 圆角、分组标题 + 选中打勾；
 - 支持 ↑↓ / Home / End / Enter / Esc、点击外部关闭，`role="listbox"` + `aria-selected`。
 
 桌面端不受影响。
@@ -135,7 +142,7 @@
 | 项目 | 说明 |
 | :--- | :--- |
 | 死 CSS | 部分类名已无 TSX 引用，例如 `globals.css` 的 `.placeholder-page` `.today-sections` `.university-logo`，`sprint.css` 的 `.mini-subj-chip` `.paper-q-pill`，`journal.css` 的 `.journal-editor-toolbar` `.blog-status-badge`，`schedule.css` 的 `.schedule-week-picker` `.idle-badge` `.schedule-icon-btn`，`analytics.css` 的 `.forecast-insight-banner` 等。删除前注意排除模板字符串拼接的类名（如 `.timetable-card--${theme}`、`.sync-note--${cls}`）和 KaTeX 输出的类名。 |
-| 阴影令牌 | `--shadow` 只在少数位置使用，其余 `box-shadow` 仍是字面量。 |
+| 数值阶梯范围 | 桌面六个基础/功能样式表已接入间距、交互动效和表面投影令牌；手机专用样式表仍有历史间距与阴影字面量。 |
 | 触屏热力图 | 试卷卡片热力图的逐题信息只在 `title` 中，触屏无法查看，需通过「打开答题卡」进入。 |
 | 中性色字面量 | 已收敛（2026-10-18）：`sprint-mobile.css`、`progress-mobile.css` 与 `globals.css` 手机断点内的卡片底、描边、分隔线、次要文字、强调文字全部改用 `--mobile-*` 令牌，三个手机样式文件不再有颜色字面量。 |
 

@@ -25,7 +25,7 @@
   .sprint-stat-card .stat-card-main { gap: 0; }
   .sprint-stat-card .stat-card-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .sprint-stat-card .stat-card-head span { color: var(--mobile-text-muted); font-size: var(--text-xs); line-height: 1.25; }
-  .sprint-stat-card .stat-card-head strong { color: var(--ink); font-weight: 700; font-size: 25px; line-height: 1.1; font-family: var(--sans); }
+  .sprint-stat-card .stat-card-head strong { color: var(--ink); font-weight: 700; font-size: var(--text-3xl); line-height: 1.1; font-family: var(--sans); }
   .sprint-stat-card .stat-card-head .stat-unit { font-size: var(--text-xs); }
   .sprint-stat-card .stat-card-body { display: none; }
   .stat-card-score-box { width: 100%; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 8px; padding: 0; border: 0; }
@@ -95,7 +95,7 @@
   .bento-score-unit { font-weight: 700; font-size: var(--text-2xl); line-height: 28px; font-family: var(--sans); }
   .bento-mobile-record-menu { position: absolute; top: 0; right: 0; z-index: 12; display: block; }
   .bento-card-top--mock .bento-mobile-record-menu { right: 30px; }
-  .bento-mobile-record-menu summary { display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--radius-md); color: var(--mobile-text-accent); font-size: 23px; line-height: 1; cursor: pointer; list-style: none; }
+  .bento-mobile-record-menu summary { display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--radius-md); color: var(--mobile-text-accent); font-size: var(--text-2xl); line-height: 1; cursor: pointer; list-style: none; }
   .bento-mobile-record-menu summary::-webkit-details-marker { display: none; }
   .bento-mobile-record-panel { position: absolute; top: 35px; right: 0; display: grid; width: 184px; gap: 2px; padding: 8px; border: 1px solid var(--mobile-border); border-radius: var(--radius-md); background: var(--mobile-surface); box-shadow: 0 9px 25px rgba(17, 27, 36, .13); }
   .bento-mobile-record-panel > button { min-height: 40px; padding: 0 8px; border-radius: var(--radius-sm); color: var(--ink); background: transparent; font-size: var(--text-sm); text-align: left; cursor: pointer; }
@@ -233,7 +233,7 @@
   .sprint-stat-card,
   .sprint-stat-card.sprint-stat-card--dual { padding-right: 12px; padding-left: 12px; }
   .sprint-stat-card .stat-card-head span { font-size: var(--text-xs); }
-  .sprint-stat-card .stat-card-head strong { font-size: 23px; }
+  .sprint-stat-card .stat-card-head strong { font-size: var(--text-2xl); }
   .mini-group-dots { gap: 4px; }
   .mini-dot { width: 10px; height: 10px; }
 }

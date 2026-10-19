@@ -46,7 +46,7 @@
   .streak-flame { font-size: var(--text-xl); }
   .rhythm-metrics { justify-content: flex-start; gap: 16px; margin-top: 16px; }
   .rhythm-metrics > i { min-height: 32px; }
-  .rhythm-metric strong { font-size: 34px; line-height: 1; }
+  .rhythm-metric strong { font-size: var(--text-4xl); line-height: 1; }
   .rhythm-metric span { font-size: var(--text-xs); }
   .week-dots { width: 100%; justify-content: space-between; gap: 0; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.18); }
   .week-dots div { flex: 1; gap: 4px; }
