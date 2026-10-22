@@ -1587,7 +1587,9 @@ button.date-text.late,
     min-width: 176px;
     min-height: 44px;
     flex: 1 1 224px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 入口数量随功能开关变化（桌面课表隐藏后为 3 项），按实际子项均分。 */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 0;
     padding: 0;
     border: 0;
@@ -1665,9 +1667,7 @@ button.date-text.late,
     box-shadow: var(--elevation-3);
   }
   .topbar-more-panel[hidden], .catalog-more-list[hidden] { display: none; }
-  /* 601–900px 底部导航仍显示「课表」，更多面板不重复该入口；
-     ≤600px 底部导航隐藏课表，改由下面的 600px 断点重新放出。 */
-  .topbar-more-panel button[data-page="schedule"] { display: none; }
+  /* 入口是否渲染由 SHOW_DESKTOP_SCHEDULE 决定；不再用 CSS 单独隐藏「课表」。 */
   .topbar-more-panel button {
     display: flex;
     min-height: 44px;
@@ -1723,8 +1723,7 @@ button.date-text.late,
   .topbar .study-switchers,
   .topbar .study-switchers.sprint-top-switchers { display: none; }
   .topbar-actions { min-width: 44px; flex: 0 0 44px; margin-left: 0; gap: 0; }
-  .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .mobile-navigation button[data-page="schedule"] { display: none; }
+  .mobile-navigation { min-width: 0; min-height: 44px; flex: 1 1 auto; }
   /* 手机端不再有「⋯」菜单：右上角直接是设置入口。 */
   .topbar-more-wrap { display: none; }
   .topbar-settings-wrap { position: relative; display: block; flex: 0 0 44px; }

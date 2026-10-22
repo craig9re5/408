@@ -4,7 +4,7 @@ import { Icon } from "./components/common/Icon";
 import { SelectMenu } from "./components/common/SelectMenu";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
-import { SHOW_DATA_ANALYSIS } from "./feature-flags";
+import { SHOW_DATA_ANALYSIS, SHOW_DESKTOP_SCHEDULE } from "./feature-flags";
 import { JournalActions } from "./components/journal/JournalActions";
 import {
   buildChapterReviewAnalyticsProgress,
@@ -131,8 +131,14 @@ const mobileNavigation: { page: AppPage; label: string }[] = [
   { page: "progress", label: "进度" },
   { page: "sprint", label: "冲刺" },
   { page: "today", label: "今日" },
-  { page: "schedule", label: "课表" },
+  // 桌面端不提供整页课表时，若手机端仍放出该入口即可进入一个空页面，因此同步隐藏。
+  ...(SHOW_DESKTOP_SCHEDULE ? [{ page: "schedule" as const, label: "课表" }] : []),
 ];
+
+// 侧栏页面入口按开关过滤；页面标题与图标表保留全部键，避免类型与回退渲染断裂。
+const visiblePageNavigation = SHOW_DESKTOP_SCHEDULE
+  ? pageNavigation
+  : pageNavigation.filter(({ page }) => page !== "schedule");
 
 const sprintAreaLabels: Record<StudyArea, string> = {
   "408": "408",
@@ -1888,6 +1894,7 @@ export function StudyDashboard() {
 
   function navigateMobile(page: AppPage) {
     if (page === "analytics" && !SHOW_DATA_ANALYSIS) return;
+    if (page === "schedule" && !SHOW_DESKTOP_SCHEDULE) return;
     setActivePage(page);
     setTopbarMoreOpen(false);
     setCatalogMoreOpen(false);
@@ -2822,7 +2829,7 @@ export function StudyDashboard() {
 
         <nav className="page-navigation" aria-label="页面导航">
           <span className="navigation-kicker">工作台</span>
-          {pageNavigation.map(({ page, icon, label }) => (
+          {visiblePageNavigation.map(({ page, icon, label }) => (
             <button
               className={activePage === page ? "active" : ""}
               type="button"
@@ -2919,7 +2926,7 @@ export function StudyDashboard() {
                 <i className={`topbar-more-dot topbar-more-dot--${syncMeta.cls}`} aria-hidden="true" />
               </button>
               <div className="topbar-more-panel" id="mobile-more-pages" role="group" aria-label="更多页面" hidden={!topbarMoreOpen}>
-                {(["schedule", "settings"] as AppPage[]).map((page) => (
+                {(SHOW_DESKTOP_SCHEDULE ? ["schedule", "settings"] as AppPage[] : ["settings"] as AppPage[]).map((page) => (
                   <button type="button" key={page} data-page={page} aria-current={activePage === page ? "page" : undefined} onClick={() => navigateMobile(page)}>
                     <MobileNavIcon page={page} />
                     {/* 手机端不出现「复习课表」这一叫法，与底部导航的「课表」统一。 */}
@@ -3469,14 +3476,16 @@ export function StudyDashboard() {
 
                     <div className="cockpit-schedule-controls">
                       {/* 休息/进行中状态已并入「当天安排」标题行，这里只留操作。 */}
-                      <button
-                        type="button"
-                        className="cockpit-action-btn"
-                        onClick={() => navigateMobile("schedule")}
-                        title="查看/编辑全屏课表"
-                      >
-                        <Icon name="maximize" /> 全屏/设置
-                      </button>
+                      {SHOW_DESKTOP_SCHEDULE && (
+                        <button
+                          type="button"
+                          className="cockpit-action-btn"
+                          onClick={() => navigateMobile("schedule")}
+                          title="查看/编辑全屏课表"
+                        >
+                          <Icon name="maximize" /> 全屏/设置
+                        </button>
+                      )}
 
                       {/* 折叠开关并入标题行，不再单独占一行。手机端只留箭头。 */}
                       <button
@@ -4223,7 +4232,7 @@ export function StudyDashboard() {
                   )}
                 </div>
             </section>
-          ) : activePage === "schedule" ? (
+          ) : SHOW_DESKTOP_SCHEDULE && activePage === "schedule" ? (
             <section className="page-view schedule-page" aria-labelledby="schedule-title">
               <button className="schedule-mobile-back" type="button" onClick={() => navigateMobile("today")}>‹ 返回今日</button>
               <ScheduleView
