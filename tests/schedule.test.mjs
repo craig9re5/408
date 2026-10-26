@@ -31,11 +31,11 @@ test("Schedule 时间工具与周次推算", () => {
 test("Schedule 进行中状态机与默认数据清洗", () => {
   const schedule = buildDefaultSchedule();
 
-  // 周四 20:43 正在上数学（19:30–21:20）
-  const active = calculateScheduleStatus(schedule, new Date(), 4, "20:43");
+  // 周四 19:00 正在上数学（18:30–20:20）
+  const active = calculateScheduleStatus(schedule, new Date(), 4, "19:00");
   assert.equal(active.status, "in_progress");
   assert.equal(active.activeEvent?.title, "数学");
-  assert.equal(active.remainingMinutes, 37);
+  assert.equal(active.remainingMinutes, 80);
 
   // 午休与课间是两个不同分支
   const rest = calculateScheduleStatus(schedule, new Date(), 1, "12:45");
@@ -50,12 +50,20 @@ test("Schedule 进行中状态机与默认数据清洗", () => {
   assert.equal(idle.status, "idle");
   assert.equal(idle.activeEvent, null);
 
-  // 空数据回退到默认预设
+  // 空数据回退到默认预设（周日 5~7 节总结复习）
   const empty = normalizeSchedule(null);
   assert.ok(empty.events.length > 0);
-  assert.ok(empty.events.some((e) => e.dayOfWeek === 7 && e.startPeriod === 5 && e.title === "数学"));
+  assert.ok(empty.events.some((e) => e.dayOfWeek === 7 && e.startPeriod === 5 && e.endPeriod === 7 && e.title === "总结复习"));
 
-  // 非法节次被滤除，数学强化统一归入 math_intense
+  // 旧版默认模板存档（v1）升级到当前模板，周日晚间英政落到 9~10 节
+  const upgraded = normalizeSchedule({ version: 1, activeWeek: 3, events: [
+    { id: "sched_sun_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 7, startPeriod: 12, endPeriod: 13 },
+  ]});
+  assert.equal(upgraded.version, 2);
+  assert.equal(upgraded.activeWeek, 3);
+  assert.ok(upgraded.events.some((e) => e.dayOfWeek === 7 && e.startPeriod === 9 && e.endPeriod === 10 && e.title === "英政"));
+
+  // 非法节次被滤除，数学强化统一归入 math_intense，含自定义条目的课表不按模板覆盖
   const cleaned = normalizeSchedule({
     version: 1,
     activeWeek: 3,

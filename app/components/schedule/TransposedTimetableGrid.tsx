@@ -24,7 +24,7 @@ interface TransposedTimetableGridProps {
 // 列 6: 午休 (贯穿垂直分隔带)
 // 列 7~10: 下午 5~8 节
 // 列 11: 晚休 (贯穿垂直分隔带)
-// 列 12~16: 晚上 9~13 节
+// 列 12~16: 晚间 9~13 节
 function periodToCol(p: number): number {
   if (p <= 4) return p + 1;
   if (p <= 8) return p + 2;

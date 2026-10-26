@@ -1131,46 +1131,50 @@ export const DEFAULT_SCHEDULE_PERIODS: CustomPeriodConfig[] = [
   { period: 13, start: "22:30", end: "23:20" },
 ];
 
+/** 默认排课模板版本；用户存档版本更低且仍是模板时按此迁移。 */
+export const SCHEDULE_VERSION = 2;
+
 export const DEFAULT_SCHEDULE_EVENTS: ScheduleEvent[] = [
-  // ── 上午：周一至周五 2~4 节 (09:10 - 12:00) 数学 ──
+  // ── 上午：周一至周六 2~4 节 (09:10 - 12:00) 数学 ──
   { id: "sched_mon_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 1, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
   { id: "sched_tue_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 2, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
   { id: "sched_wed_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 3, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
   { id: "sched_thu_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 4, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
   { id: "sched_fri_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 5, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
+  { id: "sched_sat_math_intense", title: "数学", theme: "math_intense", dayOfWeek: 6, startPeriod: 2, endPeriod: 4, linkedArea: "math" },
 
-  // ── 下午：周一至周六 5~8 节 (14:00 - 18:00) 408 统考 ──
-  { id: "sched_mon_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
-  { id: "sched_tue_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 2, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
-  { id: "sched_wed_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
-  { id: "sched_thu_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 4, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
-  { id: "sched_fri_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
-  { id: "sched_sat_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 6, startPeriod: 5, endPeriod: 8, linkedArea: "408" },
+  // ── 下午：周一至周六 5~7 节 (14:00 - 17:00) 408 统考 ──
+  { id: "sched_mon_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
+  { id: "sched_tue_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 2, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
+  { id: "sched_wed_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
+  { id: "sched_thu_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 4, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
+  { id: "sched_fri_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
+  { id: "sched_sat_408_afternoon", title: "408", theme: "cs408", dayOfWeek: 6, startPeriod: 5, endPeriod: 7, linkedArea: "408" },
 
-  // ── 下午：周日 5~8 节 (14:00 - 18:00) 数学 ──
-  { id: "sched_sun_math_afternoon", title: "数学", theme: "math_intense", dayOfWeek: 7, startPeriod: 5, endPeriod: 8, linkedArea: "math" },
+  // ── 下午：周日 5~7 节 (14:00 - 17:00) 总结复习 ──
+  { id: "sched_sun_review_afternoon", title: "总结复习", theme: "custom", dayOfWeek: 7, startPeriod: 5, endPeriod: 7 },
 
-  // ── 晚间前半场：10~11 节 (19:30 - 21:20) 408 与数学交替 ──
-  { id: "sched_mon_408_eve", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_tue_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 2, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
-  { id: "sched_wed_408_eve", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_thu_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 4, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
-  { id: "sched_fri_408_eve", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 10, endPeriod: 11, linkedArea: "408" },
-  { id: "sched_sat_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 6, startPeriod: 10, endPeriod: 11, linkedArea: "math" },
+  // ── 晚间前半场：周一至周六 9~10 节 (18:30 - 20:20) 408 与数学交替 ──
+  { id: "sched_mon_408_eve", title: "408", theme: "cs408", dayOfWeek: 1, startPeriod: 9, endPeriod: 10, linkedArea: "408" },
+  { id: "sched_tue_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 2, startPeriod: 9, endPeriod: 10, linkedArea: "math" },
+  { id: "sched_wed_408_eve", title: "408", theme: "cs408", dayOfWeek: 3, startPeriod: 9, endPeriod: 10, linkedArea: "408" },
+  { id: "sched_thu_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 4, startPeriod: 9, endPeriod: 10, linkedArea: "math" },
+  { id: "sched_fri_408_eve", title: "408", theme: "cs408", dayOfWeek: 5, startPeriod: 9, endPeriod: 10, linkedArea: "408" },
+  { id: "sched_sat_math_eve", title: "数学", theme: "math_intense", dayOfWeek: 6, startPeriod: 9, endPeriod: 10, linkedArea: "math" },
 
-  // ── 晚间后半场：13 节 (22:30 - 23:20) / 周日 12~13 节 (21:30 - 23:20) 英政 ──
-  { id: "sched_mon_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 1, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_tue_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 2, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_wed_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 3, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_thu_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 4, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_fri_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 5, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_sat_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 6, startPeriod: 13, endPeriod: 13 },
-  { id: "sched_sun_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 7, startPeriod: 12, endPeriod: 13 },
+  // ── 晚间后半场：周一至周六 12~13 节 (21:30 - 23:20) / 周日 9~10 节 英政 ──
+  { id: "sched_mon_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 1, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_tue_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 2, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_wed_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 3, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_thu_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 4, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_fri_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 5, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_sat_ep_night", title: "英政", theme: "english_pol", dayOfWeek: 6, startPeriod: 12, endPeriod: 13 },
+  { id: "sched_sun_ep_eve", title: "英政", theme: "english_pol", dayOfWeek: 7, startPeriod: 9, endPeriod: 10 },
 ];
 
 export function buildDefaultSchedule(): ScheduleAppData {
   return {
-    version: 1,
+    version: SCHEDULE_VERSION,
     activeWeek: 2,
     semesterStartDate: "2026-08-24",
     periods: DEFAULT_SCHEDULE_PERIODS.map((p) => ({ ...p })),
@@ -1277,6 +1281,7 @@ export function normalizeSchedule(value: unknown): ScheduleAppData {
   }
 
   let events: ScheduleEvent[] = fallback.events;
+  let resolvedVersion = version;
   if (Array.isArray(value.events)) {
     const validThemes = new Set<ScheduleThemeKey>(["cs408", "math_intense", "math_regular", "english_pol", "custom"]);
     const cleanedEvents: ScheduleEvent[] = value.events
@@ -1312,29 +1317,18 @@ export function normalizeSchedule(value: unknown): ScheduleAppData {
         };
       });
 
-    // 默认排课平滑补全：若当前基于默认排课模板但尚未增设周日 5~8 节数学，自动平滑补齐
-    const isDefaultTemplate = cleanedEvents.some((e) => e.id.startsWith("sched_"));
-    const hasSundayAfternoon = cleanedEvents.some((e) => e.dayOfWeek === 7 && e.startPeriod <= 8 && e.endPeriod >= 5);
-    if (isDefaultTemplate && !hasSundayAfternoon) {
-      cleanedEvents.push({
-        id: "sched_sun_math_afternoon",
-        title: "数学",
-        theme: "math_intense",
-        dayOfWeek: 7,
-        startPeriod: 5,
-        endPeriod: 8,
-        linkedArea: "math",
-      });
-      cleanedEvents.sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startPeriod - b.startPeriod);
-    }
-
-    if (cleanedEvents.length > 0 || value.events.length === 0) {
+    // 仍是默认模板的旧存档（条目全部是默认 id）升级到当前模板；自定义条目原样保留
+    const isDefaultTemplate = cleanedEvents.every((e) => e.id.startsWith("sched_"));
+    if (isDefaultTemplate && version < SCHEDULE_VERSION) {
+      events = fallback.events;
+      resolvedVersion = SCHEDULE_VERSION;
+    } else if (cleanedEvents.length > 0 || value.events.length === 0) {
       events = cleanedEvents;
     }
   }
 
   return {
-    version,
+    version: resolvedVersion,
     activeWeek,
     semesterStartDate,
     periods,
