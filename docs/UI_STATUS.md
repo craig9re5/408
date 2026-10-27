@@ -105,7 +105,7 @@
 - 现有图标：`x` `check` `chevron-down` `chevron-up` `arrow-right` `arrow-down` `arrow-up` `arrow-up-right` `pen` `target` `coffee` `hourglass` `monitor` `smartphone` `star`（支持 `filled`）`alert` `link` `square-check` `quote` `table` `maximize` `note` `map-pin` `book-open` `library` `globe` `lightbulb` `sparkle` `settings`。
 - 界面中不使用 emoji 或 Unicode 符号充当图标，提示文案中也不加 emoji。CSS 伪元素需要图标时，使用 `mask` + 内联 SVG。
 - 导航图标（`MobileNavIcon` / `navigation-symbol--*`）是单独的一套，保持不变。
-- 站点图标（浏览器标签页与 iOS 主屏）为 `public/ruc-logo.svg`，由 `app/layout.tsx` 的 `metadata.icons` 引用；侧栏品牌标记是内联的 Atlas 线条图标，两者互不替换。
+- 站点图标（浏览器标签页与 iOS 主屏）与侧栏品牌标记都用人大校徽 `public/ruc-logo.svg`。前者由 `app/layout.tsx` 的 `metadata.icons` 引用；后者是 `.brand-emblem` 的 `background-image`，配 26px 米白圆底，保证红色印章在深色侧栏上的对比度。「Atlas」字标保留。校徽文件为多路径 SVG，修改时不要用手写脚本重新压平数字（会丢失路径笔画），用 SVGO 的 `--precision=2` 处理并保留 `viewBox`。
 
 ## 6. 各页面现状
 

@@ -2801,12 +2801,8 @@ export function StudyDashboard() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <svg className="atlas-logo" viewBox="0 0 28 28" aria-hidden="true">
-            <path d="M3 10.5 14 5l11 5.5L14 16 3 10.5Z" />
-            <path d="M7.2 13v5.1c0 2.2 3.1 4 6.8 4s6.8-1.8 6.8-4V13" />
-            <path d="M25 10.5v7" />
-            <circle cx="25" cy="19" r="1.25" />
-          </svg>
+          {/* 品牌标记使用人大校徽（与站点图标同一文件），白色圆底保证红色印章在深色侧栏上的对比度 */}
+          <span className="brand-emblem" aria-hidden="true" />
           <strong>Atlas</strong>
         </div>
 

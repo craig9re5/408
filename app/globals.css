@@ -213,8 +213,7 @@ input[type="number"] {
   box-shadow: 0 0 0 38px rgba(116, 164, 181, 0.035), 0 0 0 76px rgba(116, 164, 181, 0.018);
 }
 .brand { position: relative; z-index: 1; display: flex; min-height: 34px; align-items: center; gap: var(--space-2); padding-left: 3px; }
-.atlas-logo { width: 26px; height: 26px; flex: 0 0 26px; overflow: visible; color: #78a9b9; fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
-.atlas-logo circle { fill: currentColor; stroke: none; }
+.brand-emblem { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: #f7f4ee url("/ruc-logo.svg") center / 24px 24px no-repeat; }
 .brand > strong { color: #f2efe7; font-weight: 600; font-size: var(--text-xl); font-family: var(--serif); letter-spacing: .035em; }
 
 .semester-card {
