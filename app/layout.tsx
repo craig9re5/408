@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   title: "学习进度",
   description: "记录数学与 408 各科目章节的学习、复习和计划进度。",
   icons: {
-    icon: [{ url: "/pku-logo.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/pku-logo.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/ruc-logo.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/ruc-logo.svg", type: "image/svg+xml" }],
   },
   appleWebApp: {
     capable: true,
