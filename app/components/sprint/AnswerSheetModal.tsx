@@ -1,7 +1,9 @@
 import { Icon } from "../common/Icon";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PaperRecord, QuestionState } from "../../../shared/types.ts";
 import { answerSheetScore, bentoChoiceGroups, maxPaperScore, modalChoiceGroups } from "../../study-data.ts";
+import { useImeGuard } from "../../lib/ime";
+import { useFocusTrap } from "../../lib/use-focus-trap";
 
 export type QuestionSummaryMetrics = {
   correctCount: number;
@@ -22,6 +24,102 @@ export type AnswerSheetModalProps = {
   getPaperQuestionSummary: (paper: PaperRecord) => QuestionSummaryMetrics;
 };
 
+/** 题号按行折行，上下方向键需要先按 offsetTop 还原实际行，再落到相邻行的同列。 */
+function verticalTarget(buttons: Array<HTMLButtonElement | null>, index: number, direction: -1 | 1): number {
+  const rows: number[][] = [];
+  buttons.forEach((button, i) => {
+    if (!button) return;
+    const top = button.offsetTop;
+    const row = rows.find((candidate) => Math.abs((buttons[candidate[0]]?.offsetTop ?? top) - top) <= 1);
+    if (row) row.push(i);
+    else rows.push([i]);
+  });
+  rows.sort((a, b) => (buttons[a[0]]?.offsetTop ?? 0) - (buttons[b[0]]?.offsetTop ?? 0));
+  const rowIndex = rows.findIndex((row) => row.includes(index));
+  if (rowIndex === -1) return index;
+  const targetRow = rows[rowIndex + direction];
+  if (!targetRow) return index;
+  return targetRow[Math.min(rows[rowIndex].indexOf(index), targetRow.length - 1)];
+}
+
+/** 题号组：整组只占一个 Tab 位，方向键 / Home / End 在组内移动。 */
+function QuestionChipRow({
+  group,
+  label,
+  labelTitle,
+  questions,
+  onToggleQuestion,
+}: {
+  group: { name: string; start: number; count: number };
+  /** 读屏与悬停提示里的分组描述（分值或科目全名）。 */
+  label: string;
+  labelTitle?: string;
+  questions: PaperRecord["questions"];
+  onToggleQuestion: (questionNum: number, isSingleChoice: boolean) => void;
+}) {
+  const numbers = useMemo(
+    () => Array.from({ length: group.count }, (_, i) => group.start + i),
+    [group.start, group.count]
+  );
+  const [focusIndex, setFocusIndex] = useState(0);
+  const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const moveFocus = (index: number) => {
+    const next = Math.max(0, Math.min(numbers.length - 1, index));
+    setFocusIndex(next);
+    buttonsRef.current[next]?.focus();
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let next: number | null = null;
+    if (event.key === "ArrowRight") next = index + 1;
+    else if (event.key === "ArrowLeft") next = index - 1;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = numbers.length - 1;
+    else if (event.key === "ArrowDown") next = verticalTarget(buttonsRef.current, index, 1);
+    else if (event.key === "ArrowUp") next = verticalTarget(buttonsRef.current, index, -1);
+    if (next === null) return;
+    event.preventDefault();
+    moveFocus(next);
+  };
+
+  return (
+    <div className="q-heatmap-row">
+      <div className="q-subject-label">
+        <strong className="q-label-name" title={labelTitle}>{group.name}</strong>
+        <span className="q-label-range">{group.start}~{group.start + group.count - 1}</span>
+      </div>
+      <div
+        className="q-heatmap-chips"
+        role="group"
+        aria-label={`${group.name}，第 ${group.start} 至 ${group.start + group.count - 1} 题`}
+      >
+        {numbers.map((num, index) => {
+          const state = questions?.[num];
+          return (
+            <button
+              key={num}
+              ref={(el) => {
+                buttonsRef.current[index] = el;
+              }}
+              type="button"
+              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
+              aria-label={`第 ${num} 题 [${label}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
+              title={`第 ${num} 题 [${label}]：点击切换 正确 / 错题 / 取消`}
+              tabIndex={index === focusIndex ? 0 : -1}
+              onFocus={() => setFocusIndex(index)}
+              onKeyDown={(event) => handleKeyDown(event, index)}
+              onClick={() => onToggleQuestion(num, true)}
+            >
+              {num}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AnswerSheetModal({
   paper,
   onClose,
@@ -38,6 +136,8 @@ export function AnswerSheetModal({
   const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
   const clearTriggerRef = useRef<HTMLButtonElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const { isImeKey, markCompositionEnd } = useImeGuard();
   const qSummary = getPaperQuestionSummary(paper);
   const scoreSummary = answerSheetScore(paper);
 
@@ -49,6 +149,13 @@ export function AnswerSheetModal({
     setClearConfirmationOpen(false);
     clearTriggerRef.current?.focus();
   }
+
+  useFocusTrap(dialogRef, {
+    onEscape: () => {
+      if (clearConfirmationOpen) cancelClearConfirmation();
+      else onClose();
+    },
+  });
 
   const wrongNums = Object.entries(paper.questions ?? {})
     .filter(([_, st]) => st === "wrong")
@@ -63,7 +170,7 @@ export function AnswerSheetModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title">
+      <div ref={dialogRef} className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title" tabIndex={-1}>
         <div className="paper-q-modal-header">
           <h2 id="q-modal-title">{paper.title.replace(/(\d{4})年\s*/, "$1 ")}</h2>
           <div className="paper-q-header-right">
@@ -100,11 +207,13 @@ export function AnswerSheetModal({
               value={quickWrongInput}
               onChange={(e) => setQuickWrongInput(e.target.value)}
               onKeyDown={(e) => {
+                if (isImeKey(e)) return;
                 if (e.key === "Enter" && quickWrongInput.trim()) {
                   e.preventDefault();
                   onBatchSetWrong(quickWrongInput);
                 }
               }}
+              onCompositionEnd={markCompositionEnd}
             />
             <button
               type="button"
@@ -185,29 +294,13 @@ export function AnswerSheetModal({
                 </div>
                 <div className="q-type-rows">
                   {modalChoiceGroups(paper.area).map((grp) => (
-                    <div className="q-heatmap-row" key={grp.name}>
-                      <div className="q-subject-label">
-                        <strong className="q-label-name">{grp.name}</strong>
-                        <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                      </div>
-                      <div className="q-heatmap-chips">
-                        {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                          const state = paper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
-                              title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                              onClick={() => onToggleQuestion(num, true)}
-                            >
-                              {num}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <QuestionChipRow
+                      key={grp.name}
+                      group={grp}
+                      label={grp.scoreLabel}
+                      questions={paper.questions}
+                      onToggleQuestion={onToggleQuestion}
+                    />
                   ))}
                 </div>
               </div>
@@ -307,29 +400,13 @@ export function AnswerSheetModal({
                 </div>
                 <div className="q-type-rows">
                   {modalChoiceGroups(paper.area).map((grp) => (
-                    <div className="q-heatmap-row" key={grp.name}>
-                      <div className="q-subject-label">
-                        <strong className="q-label-name">{grp.name}</strong>
-                        <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                      </div>
-                      <div className="q-heatmap-chips">
-                        {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                          const state = paper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
-                              title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                              onClick={() => onToggleQuestion(num, true)}
-                            >
-                              {num}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <QuestionChipRow
+                      key={grp.name}
+                      group={grp}
+                      label={grp.scoreLabel}
+                      questions={paper.questions}
+                      onToggleQuestion={onToggleQuestion}
+                    />
                   ))}
                 </div>
               </div>
@@ -355,29 +432,13 @@ export function AnswerSheetModal({
                 </div>
                 <div className="q-type-rows">
                   {modalChoiceGroups(paper.area).map((grp) => (
-                    <div className="q-heatmap-row" key={grp.name}>
-                      <div className="q-subject-label">
-                        <strong className="q-label-name">{grp.name}</strong>
-                        <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                      </div>
-                      <div className="q-heatmap-chips">
-                        {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                          const state = paper.questions?.[num];
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                              aria-label={`第 ${num} 题 [${grp.scoreLabel}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
-                              title={`第 ${num} 题 [${grp.scoreLabel}]：点击切换 正确 / 错题 / 取消`}
-                              onClick={() => onToggleQuestion(num, true)}
-                            >
-                              {num}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <QuestionChipRow
+                      key={grp.name}
+                      group={grp}
+                      label={grp.scoreLabel}
+                      questions={paper.questions}
+                      onToggleQuestion={onToggleQuestion}
+                    />
                   ))}
                 </div>
               </div>
@@ -546,30 +607,15 @@ export function AnswerSheetModal({
                 </div>
                 <div className="q-type-rows">
                   {bentoChoiceGroups("408").map((grp) => (
-                      <div className="q-heatmap-row" key={grp.name}>
-                        <div className="q-subject-label">
-                          <strong className="q-label-name" title={grp.label}>{grp.name}</strong>
-                          <span className="q-label-range">{grp.start}~{grp.start + grp.count - 1}</span>
-                        </div>
-                        <div className="q-heatmap-chips">
-                          {Array.from({ length: grp.count }, (_, i) => grp.start + i).map((num) => {
-                            const state = paper.questions?.[num];
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                className={`q-chip-btn ${state ? `state-${state}` : "state-unset"}`}
-                                aria-label={`第 ${num} 题 [${grp.label}]，当前状态：${state === "correct" ? "正确" : state === "wrong" ? "错题" : "未标记"}；点击切换`}
-                                title={`第 ${num} 题 [${grp.label}]：点击切换 正确 / 错题 / 取消`}
-                                onClick={() => onToggleQuestion(num, true)}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                    <QuestionChipRow
+                      key={grp.name}
+                      group={grp}
+                      label={grp.label}
+                      labelTitle={grp.label}
+                      questions={paper.questions}
+                      onToggleQuestion={onToggleQuestion}
+                    />
+                  ))}
                 </div>
               </div>
 

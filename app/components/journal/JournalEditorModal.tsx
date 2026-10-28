@@ -20,6 +20,8 @@ import {
   toggleLinePrefix,
   wrapSelection,
 } from "../../lib/markdown-editor-utils";
+import { useImeGuard } from "../../lib/ime";
+import { useFocusTrap } from "../../lib/use-focus-trap";
 
 export type JournalSavePayload = {
   id: string | null;
@@ -138,6 +140,8 @@ export function JournalEditorModal({
   );
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const { isImeKey, markCompositionEnd } = useImeGuard();
 
   // 脏检查：与初始快照比对（草稿恢复后自然为脏，保证自动保存持续刷新草稿）
   const [initialFingerprint] = useState(() =>
@@ -265,6 +269,19 @@ export function JournalEditorModal({
     }
   }, [isDirty, onClose]);
 
+  const dismissCloseConfirm = useCallback(() => {
+    setShowCloseConfirm(false);
+    textareaRef.current?.focus();
+  }, []);
+
+  useFocusTrap(dialogRef, {
+    initialFocus: ".journal-textarea",
+    onEscape: () => {
+      if (showCloseConfirm) dismissCloseConfirm();
+      else requestClose();
+    },
+  });
+
   const applyEditorFormat = useCallback(
     (
       formatter: (
@@ -287,6 +304,8 @@ export function JournalEditorModal({
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const textarea = textareaRef.current;
       if (!textarea) return;
+      // 选词阶段的回车属于输入法；WebKit 合成结束后补送的 Enter 也只吞一次。
+      if (isImeKey(e)) return;
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -457,12 +476,12 @@ export function JournalEditorModal({
         }
       }
     },
-    [editorContent, handleSave]
+    [editorContent, handleSave, isImeKey]
   );
 
   return (
     <div className="confirm-overlay journal-editor-overlay" role="presentation">
-      <div className="journal-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-editor-title">
+      <div ref={dialogRef} className="journal-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-editor-title">
         <header className="journal-editor-header">
           <div className="journal-editor-title-wrap">
             <span className="dialog-kicker">{editingJournalId ? "编辑记录" : "新建记录"}</span>
@@ -818,6 +837,7 @@ export function JournalEditorModal({
                 if (validationError) setValidationError(null);
               }}
               onKeyDown={handleEditorKeyDown}
+              onCompositionEnd={markCompositionEnd}
               autoFocus
             />
             <div className="journal-editor-statusbar">
@@ -866,13 +886,7 @@ export function JournalEditorModal({
           className="journal-close-confirm"
           role="presentation"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setShowCloseConfirm(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.stopPropagation();
-              setShowCloseConfirm(false);
-            }
+            if (e.target === e.currentTarget) dismissCloseConfirm();
           }}
         >
           <div
@@ -890,7 +904,7 @@ export function JournalEditorModal({
               <button
                 type="button"
                 className="journal-btn journal-btn--ghost"
-                onClick={() => setShowCloseConfirm(false)}
+                onClick={dismissCloseConfirm}
                 autoFocus
               >
                 继续编辑
@@ -912,7 +926,7 @@ export function JournalEditorModal({
                 onClick={() => {
                   if (flushDraft()) onClose();
                   else {
-                    setShowCloseConfirm(false);
+                    dismissCloseConfirm();
                     setValidationError("无法缓存到本机，请先保存日志或导出内容后再关闭。");
                   }
                 }}
