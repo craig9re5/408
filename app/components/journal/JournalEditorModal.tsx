@@ -108,8 +108,10 @@ export function JournalEditorModal({
   onClose,
   onSave,
 }: JournalEditorModalProps) {
-  // 草稿按「学习空间 + 日志」隔离：新建日志统一挂在 new 键下
-  const draftStorageKey = `study-journal-draft:${draftScope || "main"}:${editingJournalId ?? "new"}`;
+  // 草稿按「学习空间 + 日志上下文」隔离，防止自由随笔的残留草稿覆盖试卷/小节复盘模板
+  const draftTargetKey = editingJournalId
+    ?? (initialPaper ? `new:paper:${initialPaper.paperId}` : initialSections.length === 1 ? `new:section:${initialSections[0].sectionId}` : "new");
+  const draftStorageKey = `study-journal-draft:${draftScope || "main"}:${draftTargetKey}`;
   // 挂载时读取一次本机草稿（编辑器每次打开都是重新挂载，不会过期）
   const [initialDraft] = useState<JournalDraft | null>(() => readJournalDraft(draftStorageKey));
 
@@ -141,6 +143,7 @@ export function JournalEditorModal({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const closeConfirmRef = useRef<HTMLDivElement>(null);
   const { isImeKey, markCompositionEnd } = useImeGuard();
 
   // 脏检查：与初始快照比对（草稿恢复后自然为脏，保证自动保存持续刷新草稿）
@@ -276,10 +279,13 @@ export function JournalEditorModal({
 
   useFocusTrap(dialogRef, {
     initialFocus: ".journal-textarea",
-    onEscape: () => {
-      if (showCloseConfirm) dismissCloseConfirm();
-      else requestClose();
-    },
+    onEscape: requestClose,
+  });
+
+  useFocusTrap(closeConfirmRef, {
+    enabled: showCloseConfirm,
+    initialFocus: "[data-safe-focus]",
+    onEscape: dismissCloseConfirm,
   });
 
   const applyEditorFormat = useCallback(
@@ -564,7 +570,7 @@ export function JournalEditorModal({
                           const isSelected = editorSections.some((es) => es.sectionId === s.id);
                           return (
                             <option key={s.id} value={s.id} disabled={isSelected}>
-                              {s.number} {s.title} {isSelected ? <><Icon name="check" /> 已选</> : ""}
+                              {s.number} {s.title}{isSelected ? "（已选）" : ""}
                             </option>
                           );
                         })}
@@ -704,6 +710,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn"
                 title="一级标题 (Ctrl+1)"
+                aria-label="一级标题 H1"
                 onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 1))}
               >
                 H1
@@ -712,6 +719,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn"
                 title="二级标题 (Ctrl+2)"
+                aria-label="二级标题 H2"
                 onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 2))}
               >
                 H2
@@ -720,6 +728,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn"
                 title="三级标题 (Ctrl+3)"
+                aria-label="三级标题 H3"
                 onClick={() => applyEditorFormat((t, s, e) => applyHeading(t, s, e, 3))}
               >
                 H3
@@ -729,6 +738,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn journal-tb-btn--bold journal-tb-btn--mobile-primary"
                 title="加粗 (Ctrl+B)"
+                aria-label="加粗 B"
                 onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "**", "**", "加粗文本"))}
               >
                 <strong>B</strong>
@@ -737,6 +747,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn journal-tb-btn--italic"
                 title="斜体 (Ctrl+I)"
+                aria-label="斜体 I"
                 onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "*", "*", "斜体文本"))}
               >
                 <em>I</em>
@@ -745,6 +756,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn"
                 title="下划线 (Ctrl+U)"
+                aria-label="下划线 U"
                 onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "<u>", "</u>", "下划线"))}
               >
                 <u>U</u>
@@ -753,6 +765,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn"
                 title="删除线 (Ctrl+Shift+X)"
+                aria-label="删除线 S"
                 onClick={() => applyEditorFormat((t, s, e) => wrapSelection(t, s, e, "~~", "~~", "删除线"))}
               >
                 <s>S</s>
@@ -762,6 +775,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn journal-tb-btn--math journal-tb-btn--mobile-primary"
                 title="数学公式 LaTeX (Ctrl+M)"
+                aria-label="插入数学公式"
                 onClick={() => applyEditorFormat((t, s, e) => applyMath(t, s, e))}
               >
                 $fx$
@@ -770,6 +784,7 @@ export function JournalEditorModal({
                 type="button"
                 className="journal-tb-btn journal-tb-btn--mono"
                 title="代码块 (Ctrl+`)"
+                aria-label="插入代码"
                 onClick={() => applyEditorFormat((t, s, e) => applyCode(t, s, e))}
               >
                 &lt;/&gt;
@@ -890,11 +905,13 @@ export function JournalEditorModal({
           }}
         >
           <div
+            ref={closeConfirmRef}
             className="journal-close-confirm__dialog"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="journal-close-confirm-title"
             aria-describedby="journal-close-confirm-desc"
+            tabIndex={-1}
           >
             <h3 id="journal-close-confirm-title">当前日志有未保存的修改</h3>
             <p id="journal-close-confirm-desc">
@@ -903,9 +920,9 @@ export function JournalEditorModal({
             <div className="journal-close-confirm__actions">
               <button
                 type="button"
+                data-safe-focus
                 className="journal-btn journal-btn--ghost"
                 onClick={dismissCloseConfirm}
-                autoFocus
               >
                 继续编辑
               </button>

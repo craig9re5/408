@@ -109,7 +109,7 @@
   .journal-actions-disclosure[open] { z-index: 10; }
   .journal-actions-disclosure .journal-card-actions { position: absolute; top: 46px; right: 0; display: flex; width: 160px; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px; margin: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); box-shadow: 0 6px 20px rgba(17,27,36,.12); }
   .journal-actions-disclosure .journal-card-actions .journal-btn-tool { width: 100%; min-height: 44px; padding: 0 8px; text-align: left; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: var(--text-sm); }
-  .journal-actions-disclosure summary:focus-visible { outline: 2px solid var(--blue); border-radius: var(--radius-sm); }
+  .journal-actions-disclosure summary:focus-visible { outline: 2px solid var(--blue-ink); border-radius: var(--radius-sm); }
 
   .page-content--settings { padding-top: 12px; }
   /* 与平板断点的 .mobile-secondary-heading 保持一致：标题用衬线体。

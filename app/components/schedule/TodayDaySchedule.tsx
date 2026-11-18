@@ -40,20 +40,31 @@ export function TodayDaySchedule({ schedule, todayStr, activeInfo, focusedEventI
             const start = periods.get(event.startPeriod)?.start ?? "";
             const end = periods.get(event.endPeriod)?.end ?? "";
             const isActive = activeInfo.status === "in_progress" && activeInfo.activeEvent?.id === event.id;
+            const canFilterTasks = event.linkedArea === "408" || event.linkedArea === "math";
+            const periodLabel = event.startPeriod === event.endPeriod ? `第 ${event.startPeriod} 节` : `第 ${event.startPeriod}–${event.endPeriod} 节`;
+            const isFocused = focusedEventId === event.id;
             return (
               <li key={event.id}>
                 <time className="today-day-schedule__time" dateTime={start}>{start}<span>{end}</span></time>
-                <button
-                  type="button"
-                  className={`today-day-schedule__event today-day-schedule__event--${event.theme}${isActive ? " is-active" : ""}${focusedEventId === event.id ? " is-focused" : ""}`}
-                  aria-pressed={focusedEventId === event.id}
-                  aria-label={`${event.title}，${event.startPeriod === event.endPeriod ? `第 ${event.startPeriod} 节` : `第 ${event.startPeriod} 至 ${event.endPeriod} 节`}，${start} 至 ${end}`}
-                  onClick={() => onSelectEvent(event)}
-                >
-                  <span><strong>{event.title}</strong><small>{event.startPeriod === event.endPeriod ? `第 ${event.startPeriod} 节` : `第 ${event.startPeriod}–${event.endPeriod} 节`}</small></span>
-                  {isActive && <em>进行中</em>}
-                  <span className="today-day-schedule__arrow" aria-hidden="true">›</span>
-                </button>
+                {canFilterTasks ? (
+                  <button
+                    type="button"
+                    className={`today-day-schedule__event today-day-schedule__event--${event.theme}${isActive ? " is-active" : ""}${isFocused ? " is-focused" : ""}`}
+                    aria-pressed={isFocused}
+                    aria-label={`${event.title}，${event.startPeriod === event.endPeriod ? `第 ${event.startPeriod} 节` : `第 ${event.startPeriod} 至 ${event.endPeriod} 节`}，${start} 至 ${end}，点击筛选今日任务`}
+                    onClick={() => onSelectEvent(event)}
+                  >
+                    <span><strong>{event.title}</strong><small>{periodLabel}</small></span>
+                    {isActive && <em>进行中</em>}
+                  </button>
+                ) : (
+                  <div
+                    className={`today-day-schedule__event today-day-schedule__event--static today-day-schedule__event--${event.theme}${isActive ? " is-active" : ""}`}
+                  >
+                    <span><strong>{event.title}</strong><small>{periodLabel}</small></span>
+                    {isActive && <em>进行中</em>}
+                  </div>
+                )}
               </li>
             );
           })}

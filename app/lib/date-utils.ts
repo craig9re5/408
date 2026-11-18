@@ -8,30 +8,37 @@ export function formatDateShort(value: string): string {
 }
 
 export function parseFlexibleDate(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
+  const normalized = input
+    .trim()
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[／－．。]/g, "-")
+    .replace(/年|月/g, "-")
+    .replace(/[日号]$/u, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!normalized) return "";
 
   const currentYear = new Date().getFullYear();
   let year = currentYear;
   let month = 0;
   let day = 0;
 
-  const ymdMatch = trimmed.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+  const ymdMatch = normalized.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
   if (ymdMatch) {
     year = parseInt(ymdMatch[1], 10);
     month = parseInt(ymdMatch[2], 10);
     day = parseInt(ymdMatch[3], 10);
   } else {
-    const mdMatch = trimmed.match(/^(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+    const mdMatch = normalized.match(/^(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
     if (mdMatch) {
       month = parseInt(mdMatch[1], 10);
       day = parseInt(mdMatch[2], 10);
-    } else if (/^\d{4}$/.test(trimmed)) {
-      month = parseInt(trimmed.slice(0, 2), 10);
-      day = parseInt(trimmed.slice(2, 4), 10);
-    } else if (/^\d{3}$/.test(trimmed)) {
-      month = parseInt(trimmed.slice(0, 1), 10);
-      day = parseInt(trimmed.slice(1, 3), 10);
+    } else if (/^\d{4}$/.test(normalized)) {
+      month = parseInt(normalized.slice(0, 2), 10);
+      day = parseInt(normalized.slice(2, 4), 10);
+    } else if (/^\d{3}$/.test(normalized)) {
+      month = parseInt(normalized.slice(0, 1), 10);
+      day = parseInt(normalized.slice(1, 3), 10);
     } else {
       return null;
     }

@@ -597,8 +597,8 @@
 
 .bento-score-inline:focus-within {
   background: #ffffff;
-  border-color: var(--line);
-  box-shadow: var(--elevation-1);
+  border-color: var(--blue-ink);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.16);
 }
 
 /* The input's own sharp-cornered outline must not compete with the soft ring. */
@@ -700,7 +700,7 @@
 }
 
 .bento-check-label input:focus-visible + .bento-check-box {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--blue-ink);
   outline-offset: 1px;
 }
 
@@ -807,7 +807,7 @@
 }
 
 .mini-heatmap-open-btn:focus-visible {
-  outline: 2px solid var(--coral);
+  outline: 2px solid var(--blue-ink);
   outline-offset: 2px;
 }
 
@@ -904,7 +904,8 @@
 }
 
 .mini-dot.dot-wrong {
-  background: var(--state-wrong);
+  background: var(--state-wrong-ink);
+  border-radius: 2px;
 }
 
 .mini-dot.dot-unset {
@@ -931,18 +932,20 @@
 }
 
 .mini-subj-chip.chip-correct {
-  background: var(--state-correct);
+  background: var(--state-correct-ink);
   color: #ffffff;
 }
 
 .mini-subj-chip.chip-partial {
-  background: var(--state-partial);
-  color: #ffffff;
+  background: #fef3c7;
+  color: var(--state-partial-ink);
+  border: 1px solid rgba(232, 178, 119, 0.45);
 }
 
 .mini-subj-chip.chip-wrong {
-  background: var(--state-wrong);
-  color: #ffffff;
+  background: var(--coral-soft);
+  color: var(--state-wrong-deep);
+  border: 1px solid rgba(239, 132, 109, 0.45);
 }
 
 .mini-subj-chip.chip-unset {
@@ -1027,7 +1030,7 @@
   box-sizing: border-box;
 }
 
-.confirm-dialog.paper-mock-dialog > .paper-modal-form,
+.confirm-dialog.paper-mock-dialog .paper-modal-form,
 .confirm-dialog.paper-score-dialog > .paper-modal-form {
   display: flex;
   flex-direction: column;
@@ -1113,6 +1116,7 @@
 }
 
 /* Visual Question Board Modal (Academic Warm Paper Theme) */
+.confirm-overlay.paper-q-modal-overlay,
 .paper-q-modal-overlay {
   z-index: 1100;
 }
@@ -1278,9 +1282,9 @@
 }
 
 .q-quick-input-group input:focus {
-  border-color: var(--coral);
+  border-color: var(--blue-ink);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(239, 132, 109, 0.15);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.16);
 }
 
 .btn-apply-quick-wrong {
@@ -1491,21 +1495,23 @@
 }
 
 .q-chip-btn.state-correct {
-  background: var(--state-correct);
+  background: var(--state-correct-ink);
   color: #ffffff;
-  border-color: var(--state-correct);
+  border-color: var(--state-correct-ink);
 }
 
 .q-chip-btn.state-partial {
-  background: var(--state-partial);
-  color: #ffffff;
+  background: #fef3c7;
+  color: var(--state-partial-ink);
   border-color: var(--state-partial);
 }
 
 .q-chip-btn.state-wrong {
-  background: var(--state-wrong);
-  color: #ffffff;
-  border-color: var(--state-wrong);
+  background: var(--coral-soft);
+  color: var(--state-wrong-deep);
+  border: 1.5px solid var(--state-wrong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .q-subjective-container {
@@ -1689,8 +1695,8 @@
 }
 
 .q-score-input-wrap input:focus {
-  border-color: var(--coral);
-  box-shadow: 0 0 0 2px rgba(239, 132, 109, 0.15);
+  border-color: var(--blue-ink);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.16);
 }
 
 .q-score-unit {

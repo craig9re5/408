@@ -1,8 +1,10 @@
 "use client";
 
 import { Icon } from "./components/common/Icon";
+import { ModalDialog } from "./components/common/ModalDialog";
 import { SelectMenu } from "./components/common/SelectMenu";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusTrap } from "./lib/use-focus-trap";
 import { books, type Book, type Chapter, type Section, type StudyArea } from "./data/books";
 import { SHOW_DATA_ANALYSIS, SHOW_DESKTOP_SCHEDULE } from "./feature-flags";
 import { JournalActions } from "./components/journal/JournalActions";
@@ -555,7 +557,9 @@ export function StudyDashboard() {
     const raw = (workspaceId || "main").trim();
     return raw.toLowerCase() === "main" || raw === "261219" ? "Main" : raw;
   }, [workspaceId]);
-  const [inviteCode, setInviteCode] = useState("");
+  const [otpSlots, setOtpSlots] = useState<string[]>(["", "", "", "", "", ""]);
+  const inviteCode = otpSlots.join("");
+  const isInviteCodeComplete = otpSlots.every((digit) => /^\d$/.test(digit));
   const [authError, setAuthError] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const syncMeta = useMemo(() => {
@@ -606,12 +610,14 @@ export function StudyDashboard() {
   const [isAddMockModalOpen, setIsAddMockModalOpen] = useState(false);
   const [newMockTitle, setNewMockTitle] = useState("");
   const [newMockGroup, setNewMockGroup] = useState("");
-  const [editingScorePaper, setEditingScorePaper] = useState<{ id: string; score: string } | null>(null);
   const [activePaperQuestionModalId, setActivePaperQuestionModalId] = useState<string | null>(null);
   const [pendingDeletePaperId, setPendingDeletePaperId] = useState<string | null>(null);
   const [pendingClearAllPapers, setPendingClearAllPapers] = useState(false);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const drawerRef = useRef<HTMLElement>(null);
+  const drawerBackdropPressedRef = useRef(false);
+  const scrollToJournalOnTodayRef = useRef(false);
   const topbarMoreRef = useRef<HTMLDivElement>(null);
   const topbarMoreButtonRef = useRef<HTMLButtonElement>(null);
   const catalogMoreRef = useRef<HTMLDivElement>(null);
@@ -632,11 +638,13 @@ export function StudyDashboard() {
   const hasUserExplicitlyNavigatedRef = useRef(false);
 
   useEffect(() => {
-    if (!topbarMoreOpen && !catalogMoreOpen) return;
+    if (!topbarMoreOpen && !catalogMoreOpen && !shiftSectionId) return;
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (topbarMoreOpen && !topbarMoreRef.current?.contains(event.target as Node)) setTopbarMoreOpen(false);
-      if (catalogMoreOpen && !catalogMoreRef.current?.contains(event.target as Node)) setCatalogMoreOpen(false);
+      const target = event.target as Element | null;
+      if (topbarMoreOpen && !topbarMoreRef.current?.contains(target)) setTopbarMoreOpen(false);
+      if (catalogMoreOpen && !catalogMoreRef.current?.contains(target)) setCatalogMoreOpen(false);
+      if (shiftSectionId && !target?.closest(".shift-anchor")) setShiftSectionId(null);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -648,6 +656,11 @@ export function StudyDashboard() {
         setCatalogMoreOpen(false);
         catalogMoreButtonRef.current?.focus();
       }
+      if (shiftSectionId) {
+        const trigger = document.querySelector<HTMLButtonElement>(".shift-anchor:has(.shift-popover) > button");
+        setShiftSectionId(null);
+        trigger?.focus({ preventScroll: true });
+      }
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePointer);
@@ -656,7 +669,26 @@ export function StudyDashboard() {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [topbarMoreOpen, catalogMoreOpen]);
+  }, [topbarMoreOpen, catalogMoreOpen, shiftSectionId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (authState === "locked") {
+      document.title = "登录 · Atlas";
+      return;
+    }
+    document.title = `${pageTitles[activePage]} · Atlas`;
+  }, [activePage, authState]);
+
+  useEffect(() => {
+    if (activePage !== "today" || !scrollToJournalOnTodayRef.current) return;
+    scrollToJournalOnTodayRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      document.getElementById("journal-timeline-section")?.scrollIntoView({ behavior, block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePage]);
 
   useEffect(() => {
     if (hasLoadedRef.current) {
@@ -978,16 +1010,18 @@ export function StudyDashboard() {
     };
   }, [authState, loadRemoteData]);
 
+  const isErrorFeedback = /(失败|无效|无法|错误|不能|过大|请先)/.test(feedbackMessage);
+
   useEffect(() => {
     if (!feedbackMessage) return;
     const timer = window.setTimeout(() => {
       setFeedbackMessage("");
-    }, 5000);
+    }, isErrorFeedback ? 7500 : 4500);
     return () => window.clearTimeout(timer);
-  }, [feedbackMessage]);
+  }, [feedbackMessage, isErrorFeedback]);
 
   const performLogin = useCallback(async (codeToSubmit: string) => {
-    if (codeToSubmit.length !== 6 || isSubmitting) return;
+    if (!/^\d{6}$/.test(codeToSubmit) || isSubmitting) return;
     setIsSubmitting(true);
     setAuthError("");
     try {
@@ -1020,55 +1054,108 @@ export function StudyDashboard() {
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await performLogin(inviteCode);
+    if (isInviteCodeComplete) {
+      await performLogin(inviteCode);
+    }
   }
 
   const handleOtpChange = (index: number, value: string) => {
-    const digitsOnly = value.replace(/\D/g, "");
-    if (!digitsOnly && value !== "") return;
-
-    const char = digitsOnly.slice(-1);
-    const codeArr = inviteCode.padEnd(6, " ").split("").map((c) => (c === " " ? "" : c));
-    codeArr[index] = char;
-    const newCode = codeArr.join("").trim();
-    setInviteCode(newCode);
-
-    if (char && index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
+    if (authError) setAuthError("");
+    if (value === "") {
+      setOtpSlots((prev) => {
+        const next = [...prev];
+        next[index] = "";
+        return next;
+      });
+      return;
     }
 
-    const fullCode = codeArr.slice(0, 6).join("");
-    if (fullCode.length === 6 && !fullCode.includes(" ")) {
-      void performLogin(fullCode);
+    const digitsOnly = value.replace(/\D/g, "");
+    if (!digitsOnly) return;
+
+    if (digitsOnly.length >= 6) {
+      const filled = digitsOnly.slice(0, 6).split("");
+      setOtpSlots(filled);
+      otpInputsRef.current[5]?.focus();
+      void performLogin(filled.join(""));
+      return;
+    }
+
+    const prevDigit = otpSlots[index];
+    // 已填格子未全选时追加输入单个数字：替换当前格并前进，避免把原数字挤到下一格
+    if (digitsOnly.length === 2 && prevDigit && (digitsOnly.startsWith(prevDigit) || digitsOnly.endsWith(prevDigit))) {
+      const nextChar = digitsOnly.startsWith(prevDigit) ? digitsOnly[1] : digitsOnly[0];
+      const next = [...otpSlots];
+      next[index] = nextChar;
+      setOtpSlots(next);
+      if (index < 5) otpInputsRef.current[index + 1]?.focus();
+      if (next.every((d) => /^\d$/.test(d))) void performLogin(next.join(""));
+      return;
+    }
+
+    const next = [...otpSlots];
+    for (let offset = 0; offset < digitsOnly.length && index + offset < 6; offset += 1) {
+      next[index + offset] = digitsOnly[offset];
+    }
+    setOtpSlots(next);
+    const focusTarget = Math.min(index + digitsOnly.length, 5);
+    if (index + digitsOnly.length <= 5) {
+      otpInputsRef.current[focusTarget]?.focus();
+    }
+    if (next.every((d) => /^\d$/.test(d))) {
+      void performLogin(next.join(""));
     }
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Backspace") {
-      if (!inviteCode[index] && index > 0) {
-        const codeArr = inviteCode.split("");
-        codeArr[index - 1] = "";
-        setInviteCode(codeArr.join(""));
+      if (otpSlots[index]) {
+        e.preventDefault();
+        setOtpSlots((prev) => {
+          const next = [...prev];
+          next[index] = "";
+          return next;
+        });
+      } else if (index > 0) {
+        e.preventDefault();
+        setOtpSlots((prev) => {
+          const next = [...prev];
+          next[index - 1] = "";
+          return next;
+        });
         otpInputsRef.current[index - 1]?.focus();
       }
+    } else if (e.key === "Delete") {
+      e.preventDefault();
+      setOtpSlots((prev) => {
+        const next = [...prev];
+        next[index] = "";
+        return next;
+      });
     } else if (e.key === "ArrowLeft" && index > 0) {
+      e.preventDefault();
       otpInputsRef.current[index - 1]?.focus();
     } else if (e.key === "ArrowRight" && index < 5) {
+      e.preventDefault();
       otpInputsRef.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleOtpPaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (pastedData) {
-      setInviteCode(pastedData);
-      const nextFocusIndex = Math.min(pastedData.length, 5);
-      otpInputsRef.current[nextFocusIndex]?.focus();
+    if (!pastedData) return;
+    const startIndex = pastedData.length === 6 ? 0 : index;
+    const next = [...otpSlots];
+    for (let offset = 0; offset < pastedData.length && startIndex + offset < 6; offset += 1) {
+      next[startIndex + offset] = pastedData[offset];
+    }
+    setOtpSlots(next);
+    const nextFocusIndex = Math.min(startIndex + pastedData.length, 5);
+    otpInputsRef.current[nextFocusIndex]?.focus();
 
-      if (pastedData.length === 6) {
-        void performLogin(pastedData);
-      }
+    if (next.every((d) => /^\d$/.test(d))) {
+      void performLogin(next.join(""));
     }
   };
 
@@ -1080,7 +1167,7 @@ export function StudyDashboard() {
     setAuthState("locked");
     setLoaded(false);
     setWorkspaceId("");
-    setInviteCode("");
+    setOtpSlots(["", "", "", "", "", ""]);
     setAuthError("");
     setIsSubmitting(false);
     repositoryRef.current = new StorageRepository(window.localStorage, "");
@@ -1872,7 +1959,7 @@ export function StudyDashboard() {
     setCatalogFilter("all");
   }
 
-  function selectBookAcrossAreas(bookId: string) {
+  const selectBookAcrossAreas = useCallback((bookId: string) => {
     const book = books.find((candidate) => candidate.id === bookId);
     if (!book) return;
     hasUserExplicitlyNavigatedRef.current = true;
@@ -1885,7 +1972,7 @@ export function StudyDashboard() {
     setExpandedChapters([]);
     setCollapsedCurrentChapterId(null);
     setCatalogFilter("all");
-  }
+  }, []);
 
   function selectSprintArea(area: StudyArea) {
     setActiveArea(area);
@@ -1898,8 +1985,19 @@ export function StudyDashboard() {
     setActivePage(page);
     setTopbarMoreOpen(false);
     setCatalogMoreOpen(false);
+    setShiftSectionId(null);
     window.scrollTo({ top: 0, behavior: "auto" });
     window.requestAnimationFrame(() => document.getElementById(`${page}-title`)?.focus({ preventScroll: true }));
+  }
+
+  function navigateDesktop(page: AppPage) {
+    if (page === "analytics" && !SHOW_DATA_ANALYSIS) return;
+    if (page === "schedule" && !SHOW_DESKTOP_SCHEDULE) return;
+    setActivePage(page);
+    setTopbarMoreOpen(false);
+    setCatalogMoreOpen(false);
+    setShiftSectionId(null);
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   function toggleCatalogExpansion() {
@@ -2428,33 +2526,36 @@ export function StudyDashboard() {
 
       if (journalSearchQuery.trim()) {
         const q = journalSearchQuery.trim().toLowerCase();
-        const titleMatch = entry.title?.toLowerCase().includes(q) ?? false;
-        const contentMatch = entry.content.toLowerCase().includes(q);
+        const qNorm = q.replace(/\s+/g, "");
+        const matchesQuery = (text?: string | null) =>
+          Boolean(text && (text.toLowerCase().includes(q) || (qNorm && text.toLowerCase().replace(/\s+/g, "").includes(qNorm))));
+        const titleMatch = matchesQuery(entry.title);
+        const contentMatch = matchesQuery(entry.content);
         let contextMatch = false;
         if (entry.context) {
           if (entry.context.type === "sections") {
             contextMatch = entry.context.sections.some((s) =>
-              s.sectionTitle?.toLowerCase().includes(q)
-              || s.bookTitle?.toLowerCase().includes(q)
-              || s.sectionNumber?.toLowerCase().includes(q),
+              matchesQuery(s.sectionTitle)
+              || matchesQuery(s.bookTitle)
+              || matchesQuery(s.sectionNumber),
             );
           } else if (entry.context.type === "section") {
             contextMatch = Boolean(
-              entry.context.sectionTitle?.toLowerCase().includes(q)
-              || entry.context.bookTitle?.toLowerCase().includes(q)
-              || entry.context.sectionNumber?.toLowerCase().includes(q),
+              matchesQuery(entry.context.sectionTitle)
+              || matchesQuery(entry.context.bookTitle)
+              || matchesQuery(entry.context.sectionNumber),
             );
           } else if (entry.context.type === "subject") {
             contextMatch = Boolean(
-              entry.context.bookTitle?.toLowerCase().includes(q)
-              || entry.context.bookId.toLowerCase().includes(q),
+              matchesQuery(entry.context.bookTitle)
+              || matchesQuery(entry.context.bookId),
             );
           } else if (entry.context.type === "project") {
-            contextMatch = entry.context.area.toLowerCase().includes(q);
+            contextMatch = matchesQuery(entry.context.area);
           } else if (entry.context.type === "paper") {
             contextMatch = Boolean(
-              entry.context.paperTitle?.toLowerCase().includes(q)
-              || entry.context.paperId.toLowerCase().includes(q),
+              matchesQuery(entry.context.paperTitle)
+              || matchesQuery(entry.context.paperId),
             );
           }
         }
@@ -2488,25 +2589,48 @@ export function StudyDashboard() {
 
   const activeDrawerSection = findSectionById(activeDrawerSectionId);
 
-  const openCreateJournal = useCallback((context?: JournalContext | null) => {
+  useFocusTrap(drawerRef, {
+    enabled: Boolean(activeDrawerSection),
+    onEscape: () => setActiveDrawerSectionId(null),
+  });
+
+  const openCreateJournal = useCallback((context?: JournalContext | null, paperOverride?: PaperRecord) => {
     setEditingJournalId(null);
     setEditorTitle("");
     setEditorContent("");
     setEditorImportant(false);
     if (context?.type === "paper") {
-      setEditorPaper(context);
+      const paperRecord = paperOverride ?? papers.find((p) => p.id === context.paperId);
+      const canonicalTitle = paperRecord?.title || context.paperTitle;
+      setEditorPaper({
+        ...context,
+        paperTitle: canonicalTitle,
+      });
       setEditorSections([]);
-      const paperRecord = papers.find((p) => p.id === context.paperId);
-      const cleanTitle = (context.paperTitle || paperRecord?.title || "").replace(/^(\d{4}年)\s+/, "$1");
+      const cleanTitle = (canonicalTitle || "").replace(/^(\d{4}年)\s+/, "$1");
       const scoreStr = typeof paperRecord?.score === "number" ? `${paperRecord.score}` : "--";
+      const wrongNums = Object.entries(paperRecord?.questions ?? {})
+        .filter(([, state]) => state === "wrong")
+        .map(([k]) => Number(k))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
       setEditorTitle(`【模考复盘】${cleanTitle}`);
-      setEditorContent(`## 整体情况\n- **模考得分**：${scoreStr} 分\n\n## 做后感悟\n`);
+      setEditorContent(
+        `## 整体情况\n- **模考得分**：${scoreStr} 分${wrongNums.length > 0 ? `\n- **错题题号**：第 ${wrongNums.join("、")} 题` : ""}\n\n## 做后感悟\n`
+      );
     } else {
       setEditorPaper(null);
       setEditorSections(extractJournalSections(context ?? null));
     }
     setIsEditorOpen(true);
   }, [papers]);
+
+  const viewPaperJournals = useCallback((paper: PaperRecord) => {
+    setJournalFilter("all");
+    setJournalSearchQuery(paper.title);
+    scrollToJournalOnTodayRef.current = true;
+    setActivePage("today");
+  }, []);
 
   const openEditJournal = useCallback((journal: JournalEntry) => {
     setEditingJournalId(journal.id);
@@ -2748,7 +2872,7 @@ export function StudyDashboard() {
 
           <div className="otp-container">
             {Array.from({ length: 6 }).map((_, i) => {
-              const digit = inviteCode[i] || "";
+              const digit = otpSlots[i] || "";
               return (
                 <input
                   key={i}
@@ -2756,15 +2880,19 @@ export function StudyDashboard() {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  maxLength={1}
+                  maxLength={6}
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  onPaste={handleOtpPaste}
+                  onPaste={(e) => handleOtpPaste(i, e)}
                   onFocus={(e) => e.target.select()}
                   className={`otp-box ${digit ? "filled" : ""} ${authError ? "error" : ""}`}
                   disabled={isSubmitting}
                   aria-label={`访问码第 ${i + 1} 位`}
+                  autoComplete={i === 0 ? "one-time-code" : "off"}
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   autoFocus={i === 0}
                 />
               );
@@ -2774,7 +2902,7 @@ export function StudyDashboard() {
           <button
             className={`invite-button ${isSubmitting ? "submitting" : ""}`}
             type="submit"
-            disabled={inviteCode.length < 6 || isSubmitting}
+            disabled={!isInviteCodeComplete || isSubmitting}
           >
             {isSubmitting ? (
               <span className="spinner-wrap">
@@ -2831,7 +2959,7 @@ export function StudyDashboard() {
               type="button"
               key={page}
               aria-current={activePage === page ? "page" : undefined}
-              onClick={() => setActivePage(page)}
+              onClick={() => navigateDesktop(page)}
             >
               <span className={`navigation-symbol navigation-symbol--${icon}`} aria-hidden="true" />
               <span className="navigation-copy"><strong>{label}</strong></span>
@@ -2840,7 +2968,12 @@ export function StudyDashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className={`settings-navigation${activePage === "settings" ? " active" : ""}`} type="button" onClick={() => setActivePage("settings")}>
+          <button
+            className={`settings-navigation${activePage === "settings" ? " active" : ""}`}
+            type="button"
+            aria-current={activePage === "settings" ? "page" : undefined}
+            onClick={() => navigateDesktop("settings")}
+          >
             <span className="navigation-symbol navigation-symbol--settings" aria-hidden="true" />
             <span className="navigation-copy"><strong>设置</strong></span>
           </button>
@@ -2965,7 +3098,15 @@ export function StudyDashboard() {
         </header>
 
         <div className={`page-content page-content--${activePage}`}>
-          {feedbackMessage && <div className="feedback-notice feedback-notice--global" role="status"><span>{feedbackMessage}</span><button type="button" aria-label="关闭提示" onClick={() => setFeedbackMessage("")}>×</button></div>}
+          {feedbackMessage && (
+            <div
+              className={`feedback-notice feedback-notice--global${isErrorFeedback ? " feedback-notice--error" : ""}`}
+              role={isErrorFeedback ? "alert" : "status"}
+            >
+              <span>{feedbackMessage}</span>
+              <button type="button" aria-label="关闭提示" onClick={() => setFeedbackMessage("")}>×</button>
+            </div>
+          )}
           {(activePage === "analytics" || activePage === "settings") && <h2 className="mobile-secondary-heading" aria-hidden="true">{pageTitles[activePage]}</h2>}
           {activePage === "progress" ? <>
           <section className="mobile-progress-overview" aria-label="学习概览与本周节奏">
@@ -3218,6 +3359,7 @@ export function StudyDashboard() {
                               emptyLabel="未安排"
                               tone={planTone(reviewScheduleStatus === "today" ? "due_today" : reviewScheduleStatus)}
                               ariaLabel={`第${chapter.number}章 ${chapter.title} 复习计划日期`}
+                              onError={setFeedbackMessage}
                               onChange={(value) => updateChapterReviewedPlannedAt(chapter, value)}
                             />
                           </div>
@@ -3265,9 +3407,9 @@ export function StudyDashboard() {
                       <button
                         className="chapter-expand-button"
                         type="button"
+                        tabIndex={-1}
+                        aria-hidden="true"
                         onClick={() => toggleChapterExpansion(chapter.id, open)}
-                        aria-label={`${open ? "收起" : "展开"}第${chapter.number}章 ${chapter.title}`}
-                        aria-expanded={open}
                       ><span className="chevron" aria-hidden="true" /></button>
                     </div>
 
@@ -3398,6 +3540,7 @@ export function StudyDashboard() {
                                     emptyLabel="未设置"
                                     tone={planTone(baseStatus)}
                                     ariaLabel={`${section.number} 新学计划日期`}
+                                    onError={setFeedbackMessage}
                                     onChange={(value) => updatePlannedAt(section.id, value)}
                                   />
                                 )}
@@ -3504,6 +3647,7 @@ export function StudyDashboard() {
                     todayStr={today}
                     activeWeek={cockpitWeek}
                     onSelectEvent={(evt) => {
+                      if (evt.linkedArea !== "408" && evt.linkedArea !== "math") return;
                       setCockpitFocusedEvent((prev) => (prev?.id === evt.id ? null : evt));
                     }}
                     isCompact={true}
@@ -3514,7 +3658,10 @@ export function StudyDashboard() {
                     todayStr={today}
                     activeInfo={activeScheduleInfo}
                     focusedEventId={cockpitFocusedEvent?.id ?? null}
-                    onSelectEvent={(event) => setCockpitFocusedEvent((previous) => previous?.id === event.id ? null : event)}
+                    onSelectEvent={(event) => {
+                      if (event.linkedArea !== "408" && event.linkedArea !== "math") return;
+                      setCockpitFocusedEvent((previous) => previous?.id === event.id ? null : event);
+                    }}
                   />
                   </div>
                 </div>
@@ -3704,6 +3851,13 @@ export function StudyDashboard() {
                             const displayContent = isLong && !isExpanded
                               ? getMarkdownSummary(entry.content, 240)
                               : entry.content;
+                            const entrySections = extractJournalSections(entry.context);
+                            const subjCtx = entry.context?.type === "subject" ? entry.context : null;
+                            const projCtx = entry.context?.type === "project" ? entry.context : null;
+                            const projLabel = projCtx
+                              ? (projCtx.area === "408" ? "408" : projCtx.area === "math" ? "数学" : projCtx.area === "english" ? "英语" : "政治")
+                              : "";
+                            const paperCtx = entry.context?.type === "paper" ? entry.context : null;
 
                             return (
                               <article className={`journal-card ${entry.important ? "journal-card--important" : ""}`} key={entry.id}>
@@ -3715,61 +3869,72 @@ export function StudyDashboard() {
                                       </span>
                                     )}
                                     <span className="journal-time-tag">{formatTimeShort(entry.createdAt)}</span>
-                                    {entry.context && (() => {
-                                      const sections = extractJournalSections(entry.context);
-                                      if (sections.length > 0) {
-                                        return sections.map((sec) => (
-                                          <button
-                                            key={sec.sectionId}
-                                            type="button"
-                                            className={`journal-context-badge area-${sec.area}`}
-                                            title={`${sec.bookTitle ?? ""} ${sec.sectionNumber ?? ""} ${sec.sectionTitle ?? ""}`.trim()}
-                                            onClick={() => setActiveDrawerSectionId(sec.sectionId)}
-                                          >
-                                            <Icon name="book-open" /> {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
-                                          </button>
-                                        ));
-                                      }
-                                      if (entry.context.type === "subject") {
-                                        return (
-                                          <button
-                                            type="button"
-                                            className={`journal-context-badge area-${entry.context.area}`}
-                                            title={entry.context.bookTitle ?? entry.context.bookId}
-                                          >
-                                            <Icon name="library" /> {entry.context.bookTitle ?? entry.context.bookId}
-                                          </button>
-                                        );
-                                      }
-                                      if (entry.context.type === "project") {
-                                        return (
-                                          <button
-                                            type="button"
-                                            className={`journal-context-badge area-${entry.context.area}`}
-                                            title={entry.context.area === "408" ? "408" : "数学"}
-                                          >
-                                            <Icon name="target" /> {entry.context.area === "408" ? "408" : "数学"}
-                                          </button>
-                                        );
-                                      }
-                                      if (entry.context?.type === "paper") {
-                                        const paperCtx = entry.context;
-                                        return (
-                                          <button
-                                            type="button"
-                                            className={`journal-context-badge area-${paperCtx.area}`}
-                                            title={paperCtx.paperTitle}
-                                            onClick={() => {
-                                              setActiveArea(paperCtx.area);
-                                              setActivePage("sprint");
-                                            }}
-                                          >
-                                            <Icon name="target" /> {paperCtx.paperTitle}
-                                          </button>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {entrySections.length > 0 ? (
+                                      entrySections.map((sec) => (
+                                        <button
+                                          key={sec.sectionId}
+                                          type="button"
+                                          className={`journal-context-badge area-${sec.area}`}
+                                          title={`${sec.bookTitle ?? ""} ${sec.sectionNumber ?? ""} ${sec.sectionTitle ?? ""}`.trim()}
+                                          onClick={() => setActiveDrawerSectionId(sec.sectionId)}
+                                        >
+                                          <Icon name="book-open" /> {sec.bookTitle} · {sec.sectionNumber} {sec.sectionTitle}
+                                        </button>
+                                      ))
+                                    ) : subjCtx ? (
+                                      <button
+                                        type="button"
+                                        className={`journal-context-badge area-${subjCtx.area}`}
+                                        title={subjCtx.bookTitle ?? subjCtx.bookId}
+                                        onClick={() => {
+                                          const book = books.find((candidate) => candidate.id === subjCtx.bookId);
+                                          if (book) {
+                                            hasUserExplicitlyNavigatedRef.current = true;
+                                            setActiveArea(book.area);
+                                            setSelectedBookByArea((current) => {
+                                              const next = { ...current, [book.area]: book.id };
+                                              saveLastViewedStudyState({ activeArea: book.area, selectedBookByArea: next });
+                                              return next;
+                                            });
+                                            setExpandedChapters([]);
+                                            setCollapsedCurrentChapterId(null);
+                                            setCatalogFilter("all");
+                                          }
+                                          navigateDesktop("progress");
+                                        }}
+                                      >
+                                        <Icon name="library" /> {subjCtx.bookTitle ?? subjCtx.bookId}
+                                      </button>
+                                    ) : projCtx ? (
+                                      <button
+                                        type="button"
+                                        className={`journal-context-badge area-${projCtx.area}`}
+                                        title={projLabel}
+                                        onClick={() => {
+                                          if (projCtx.area === "408" || projCtx.area === "math") {
+                                            setActiveArea(projCtx.area);
+                                            navigateDesktop("progress");
+                                          } else {
+                                            selectSprintArea(projCtx.area);
+                                            navigateDesktop("sprint");
+                                          }
+                                        }}
+                                      >
+                                        <Icon name="target" /> {projLabel}
+                                      </button>
+                                    ) : paperCtx ? (
+                                      <button
+                                        type="button"
+                                        className={`journal-context-badge area-${paperCtx.area}`}
+                                        title={paperCtx.paperTitle}
+                                        onClick={() => {
+                                          selectSprintArea(paperCtx.area);
+                                          navigateDesktop("sprint");
+                                        }}
+                                      >
+                                        <Icon name="target" /> {paperCtx.paperTitle}
+                                      </button>
+                                    ) : null}
                                     {entry.publish?.status === "published" && (
                                       <a
                                         href={entry.publish.blogUrl || "#"}
@@ -4003,11 +4168,10 @@ export function StudyDashboard() {
               <div className="sprint-toolbar">
                 <div className="sprint-filter-section">
                   <span className="sprint-filter-label">类型</span>
-                  <div className="sprint-tab-group" role="tablist" aria-label="试卷类型筛选">
+                  <div className="sprint-tab-group" role="group" aria-label="试卷类型筛选">
                     <button
                       type="button"
-                      role="tab"
-                      aria-selected={effectiveSprintTab === "all"}
+                      aria-pressed={effectiveSprintTab === "all"}
                       className={effectiveSprintTab === "all" ? "active" : ""}
                       onClick={() => setSprintTab("all")}
                     >
@@ -4015,8 +4179,7 @@ export function StudyDashboard() {
                     </button>
                     <button
                       type="button"
-                      role="tab"
-                      aria-selected={effectiveSprintTab === "past"}
+                      aria-pressed={effectiveSprintTab === "past"}
                       className={effectiveSprintTab === "past" ? "active" : ""}
                       onClick={() => setSprintTab("past")}
                     >
@@ -4025,8 +4188,7 @@ export function StudyDashboard() {
                     {activeArea !== "english" && activeArea !== "politics" && (
                       <button
                         type="button"
-                        role="tab"
-                        aria-selected={effectiveSprintTab === "mock"}
+                        aria-pressed={effectiveSprintTab === "mock"}
                         className={effectiveSprintTab === "mock" ? "active" : ""}
                         onClick={() => setSprintTab("mock")}
                       >
@@ -4042,6 +4204,7 @@ export function StudyDashboard() {
                     <div className="sprint-status-filters" role="group" aria-label="完成状态筛选">
                       <button
                         type="button"
+                        aria-pressed={sprintStatusFilter === "all"}
                         className={sprintStatusFilter === "all" ? "active" : ""}
                         onClick={() => setSprintStatusFilter("all")}
                       >
@@ -4049,6 +4212,7 @@ export function StudyDashboard() {
                       </button>
                       <button
                         type="button"
+                        aria-pressed={sprintStatusFilter === "uncompleted"}
                         className={sprintStatusFilter === "uncompleted" ? "active" : ""}
                         onClick={() => setSprintStatusFilter("uncompleted")}
                       >
@@ -4056,6 +4220,7 @@ export function StudyDashboard() {
                       </button>
                       <button
                         type="button"
+                        aria-pressed={sprintStatusFilter === "completed"}
                         className={sprintStatusFilter === "completed" ? "active" : ""}
                         onClick={() => setSprintStatusFilter("completed")}
                       >
@@ -4113,6 +4278,7 @@ export function StudyDashboard() {
                       <div className="sprint-sort-filters" role="group" aria-label="真题年份排序">
                         <button
                           type="button"
+                          aria-pressed={pastPaperSortOrder === "desc"}
                           className={`sprint-sort-btn ${pastPaperSortOrder === "desc" ? "active" : ""}`}
                           onClick={() => setPastPaperSortOrder("desc")}
                           title="按年份倒序排列（2026 至 2010）"
@@ -4121,6 +4287,7 @@ export function StudyDashboard() {
                         </button>
                         <button
                           type="button"
+                          aria-pressed={pastPaperSortOrder === "asc"}
                           className={`sprint-sort-btn ${pastPaperSortOrder === "asc" ? "active" : ""}`}
                           onClick={() => setPastPaperSortOrder("asc")}
                           title="按年份正序排列（2010 至 2026）"
@@ -4158,11 +4325,9 @@ export function StudyDashboard() {
                               paperId: p.id,
                               paperTitle: p.title,
                             })}
-                            onViewJournals={(p) => {
-                              setJournalSearchQuery(p.title);
-                              setActivePage("today");
-                            }}
+                            onViewJournals={viewPaperJournals}
                             onChangeCompletedAt={(id, completedAt) => updatePaper(id, { completedAt })}
+                            onDateError={setFeedbackMessage}
                             qSummary={getPaperQuestionSummary(paper)}
                           />
                         ))}
@@ -4213,12 +4378,10 @@ export function StudyDashboard() {
                                 paperId: p.id,
                                 paperTitle: p.title,
                               })}
-                              onViewJournals={(p) => {
-                                setJournalSearchQuery(p.title);
-                                setActivePage("today");
-                              }}
+                              onViewJournals={viewPaperJournals}
                               onDelete={(id) => setPendingDeletePaperId(id)}
                               onChangeCompletedAt={(id, completedAt) => updatePaper(id, { completedAt })}
+                              onDateError={setFeedbackMessage}
                               qSummary={getPaperQuestionSummary(paper)}
                             />
                           ))}
@@ -4251,11 +4414,10 @@ export function StudyDashboard() {
             <Suspense fallback={null}>
             <section className="page-view analytics-page" aria-labelledby="analytics-title">
               <div className="analytics-toolbar">
-                <div className="analytics-scope-switch" role="tablist" aria-label="数据分析范围切换">
+                <div className="analytics-scope-switch" role="group" aria-label="数据分析范围切换">
                   <button
                     type="button"
-                    role="tab"
-                    aria-selected={analyticsScope === "all"}
+                    aria-pressed={analyticsScope === "all"}
                     className={analyticsScope === "all" ? "active" : ""}
                     onClick={() => setAnalyticsScope("all")}
                   >
@@ -4263,8 +4425,7 @@ export function StudyDashboard() {
                   </button>
                   <button
                     type="button"
-                    role="tab"
-                    aria-selected={analyticsScope === "408"}
+                    aria-pressed={analyticsScope === "408"}
                     className={analyticsScope === "408" ? "active" : ""}
                     onClick={() => setAnalyticsScope("408")}
                   >
@@ -4272,8 +4433,7 @@ export function StudyDashboard() {
                   </button>
                   <button
                     type="button"
-                    role="tab"
-                    aria-selected={analyticsScope === "math"}
+                    aria-pressed={analyticsScope === "math"}
                     className={analyticsScope === "math" ? "active" : ""}
                     onClick={() => setAnalyticsScope("math")}
                   >
@@ -4557,92 +4717,101 @@ export function StudyDashboard() {
         </div>
       </main>
       {planPreview && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="plan-preview-title">
-            <span className="dialog-kicker">变更预览</span><h2 id="plan-preview-title">确认调整学习计划？</h2>
-            <p>{planPreview.message}，共影响 {visiblePlanPreviewEntries(planPreview.values, planPreview.field).length} 个未完成{planPreview.field === "reviewedPlannedAt" ? "章节" : "小节"}。</p>
-            <div className="plan-preview-list">
-              {visiblePlanPreviewEntries(planPreview.values, planPreview.field).map(([sectionId, nextDate]) => {
-                const task = projectTasks.find(({ section }) => section.id === sectionId) ?? projectTaskEntries(activeArea === "408" ? "math" : "408").find(({ section }) => section.id === sectionId);
-                const isReviewPlan = planPreview.field === "reviewedPlannedAt";
-                const currentVal = isReviewPlan && task
-                  ? summarizeChapterReview(task.chapter, progress).reviewedPlannedAt
-                  : progress[sectionId]?.[planPreview.field || "plannedAt"];
-                const title = task
-                  ? isReviewPlan
-                    ? `${task.book.shortTitle} · 第${task.chapter.number}章 ${task.chapter.title}`
-                    : `${task.book.shortTitle} · ${task.section.number} ${task.section.title}`
-                  : sectionId;
-                return <article key={sectionId}><div><strong>{title}</strong><span>{isReviewPlan ? "整章复习计划" : task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i><Icon name="arrow-right" /></i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
-              })}
-            </div>
-            <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source, planPreview.field); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
+        <ModalDialog
+          labelledBy="plan-preview-title"
+          dialogClassName="confirm-dialog confirm-dialog--wide"
+          onClose={() => setPlanPreview(null)}
+        >
+          <span className="dialog-kicker">变更预览</span><h2 id="plan-preview-title">确认调整学习计划？</h2>
+          <p>{planPreview.message}，共影响 {visiblePlanPreviewEntries(planPreview.values, planPreview.field).length} 个未完成{planPreview.field === "reviewedPlannedAt" ? "章节" : "小节"}。</p>
+          <div className="plan-preview-list">
+            {visiblePlanPreviewEntries(planPreview.values, planPreview.field).map(([sectionId, nextDate]) => {
+              const task = projectTasks.find(({ section }) => section.id === sectionId) ?? projectTaskEntries(activeArea === "408" ? "math" : "408").find(({ section }) => section.id === sectionId);
+              const isReviewPlan = planPreview.field === "reviewedPlannedAt";
+              const currentVal = isReviewPlan && task
+                ? summarizeChapterReview(task.chapter, progress).reviewedPlannedAt
+                : progress[sectionId]?.[planPreview.field || "plannedAt"];
+              const title = task
+                ? isReviewPlan
+                  ? `${task.book.shortTitle} · 第${task.chapter.number}章 ${task.chapter.title}`
+                  : `${task.book.shortTitle} · ${task.section.number} ${task.section.title}`
+                : sectionId;
+              return <article key={sectionId}><div><strong>{title}</strong><span>{isReviewPlan ? "整章复习计划" : task?.chapterTitle ?? ""}</span></div><p><del>{currentVal ? formatDateShort(currentVal) : "未设置"}</del><i><Icon name="arrow-right" /></i><b>{nextDate ? formatDateShort(nextDate) : "未设置"}</b></p></article>;
+            })}
           </div>
-        </div>
+          <div><button type="button" onClick={() => setPlanPreview(null)}>取消</button><button className="primary" type="button" onClick={() => { applyPlanChanges(planPreview.values, planPreview.message, planPreview.source, planPreview.field); setPlanPreview(null); setShiftSectionId(null); }}>确认应用</button></div>
+        </ModalDialog>
       )}
       {pendingImport && pendingImportSummary && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
-            <span className="dialog-kicker">导入检查通过</span><h2 id="import-title">用文件数据替换当前数据？</h2>
-            <p>导入前会自动保留一份本地备份。云端与本机数据都会更新。</p>
-            <dl className="import-summary">
-              <div><dt>项目</dt><dd>{pendingImportSummary.projects}</dd></div>
-              <div><dt>科目</dt><dd>{pendingImportSummary.subjects}</dd></div>
-              <div><dt>小节</dt><dd>{pendingImportSummary.sections}</dd></div>
-              <div><dt>计划历史</dt><dd>{pendingImportSummary.planHistory}</dd></div>
-              <div><dt>学习日志</dt><dd>{pendingImportSummary.journals}</dd></div>
-            </dl>
-            <div><button type="button" onClick={() => setPendingImport(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmImport()}>确认导入</button></div>
-          </div>
-        </div>
+        <ModalDialog labelledBy="import-title" onClose={() => setPendingImport(null)}>
+          <span className="dialog-kicker">导入检查通过</span><h2 id="import-title">用文件数据替换当前数据？</h2>
+          <p>导入前会自动保留一份本地备份。云端与本机数据都会更新。</p>
+          <dl className="import-summary">
+            <div><dt>项目</dt><dd>{pendingImportSummary.projects}</dd></div>
+            <div><dt>科目</dt><dd>{pendingImportSummary.subjects}</dd></div>
+            <div><dt>小节</dt><dd>{pendingImportSummary.sections}</dd></div>
+            <div><dt>计划历史</dt><dd>{pendingImportSummary.planHistory}</dd></div>
+            <div><dt>学习日志</dt><dd>{pendingImportSummary.journals}</dd></div>
+          </dl>
+          <div><button type="button" onClick={() => setPendingImport(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmImport()}>确认导入</button></div>
+        </ModalDialog>
       )}
       {pendingRestore && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="restore-title">
-            <span className="dialog-kicker">{backupKindLabel(pendingRestore.kind)} · {formatLocalDateTime(pendingRestore.createdAt)}</span><h2 id="restore-title">恢复这份备份？</h2>
-            <p>恢复前也会自动备份当前数据，随后同步替换云端与本机记录。</p>
-            <div><button type="button" onClick={() => setPendingRestore(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmRestore()}>确认恢复</button></div>
-          </div>
-        </div>
+        <ModalDialog labelledBy="restore-title" onClose={() => setPendingRestore(null)}>
+          <span className="dialog-kicker">{backupKindLabel(pendingRestore.kind)} · {formatLocalDateTime(pendingRestore.createdAt)}</span><h2 id="restore-title">恢复这份备份？</h2>
+          <p>恢复前也会自动备份当前数据，随后同步替换云端与本机记录。</p>
+          <div><button type="button" onClick={() => setPendingRestore(null)}>取消</button><button className="primary" type="button" onClick={() => void confirmRestore()}>确认恢复</button></div>
+        </ModalDialog>
       )}
       {pendingDeleteBackup && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="delete-backup-dialog-title">
-            <span className="dialog-kicker">{backupKindLabel(pendingDeleteBackup.kind)} · {formatLocalDateTime(pendingDeleteBackup.createdAt)}</span>
-            <h2 id="delete-backup-dialog-title">确认删除该本地快照？</h2>
-            <p>删除后此份历史快照将无法再用于恢复，当前数据不受影响。</p>
-            <div className="confirm-actions">
-              <button type="button" className="btn-cancel" onClick={() => setPendingDeleteBackup(null)}>取消</button>
-              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteBackup(pendingDeleteBackup.id)}>
-                确认删除
-              </button>
-            </div>
+        <ModalDialog
+          role="alertdialog"
+          labelledBy="delete-backup-dialog-title"
+          dialogClassName="confirm-dialog confirm-dialog--danger"
+          initialFocus="[data-safe-focus]"
+          onClose={() => setPendingDeleteBackup(null)}
+        >
+          <span className="dialog-kicker">{backupKindLabel(pendingDeleteBackup.kind)} · {formatLocalDateTime(pendingDeleteBackup.createdAt)}</span>
+          <h2 id="delete-backup-dialog-title">确认删除该本地快照？</h2>
+          <p>删除后此份历史快照将无法再用于恢复，当前数据不受影响。</p>
+          <div className="confirm-actions">
+            <button type="button" className="btn-cancel" data-safe-focus onClick={() => setPendingDeleteBackup(null)}>取消</button>
+            <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteBackup(pendingDeleteBackup.id)}>
+              确认删除
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
       {pendingClearAllPapers && (
-        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingClearAllPapers(false); }}>
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="clear-papers-dialog-title">
-            <span className="dialog-kicker">危险操作 · 数据重置</span>
-            <h2 id="clear-papers-dialog-title">确认清空全部套卷完成记录？</h2>
-            <p>确定要清空全部套卷和题目的完成记录与打分吗？此操作将重置 408、数学、英语所有历年真题与模拟卷的做题状态、得分与错题点阵，并在云端和本地同步生效。</p>
-            <div className="confirm-actions">
-              <button type="button" className="btn-cancel" onClick={() => setPendingClearAllPapers(false)}>取消</button>
-              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => void clearAllPaperRecords()}>
-                确认清空
-              </button>
-            </div>
+        <ModalDialog
+          role="alertdialog"
+          labelledBy="clear-papers-dialog-title"
+          dialogClassName="confirm-dialog confirm-dialog--danger"
+          initialFocus="[data-safe-focus]"
+          onClose={() => setPendingClearAllPapers(false)}
+        >
+          <span className="dialog-kicker">危险操作 · 数据重置</span>
+          <h2 id="clear-papers-dialog-title">确认清空全部套卷完成记录？</h2>
+          <p>确定要清空全部套卷和题目的完成记录与打分吗？此操作将重置 408、数学、英语所有历年真题与模拟卷的做题状态、得分与错题点阵，并在云端和本地同步生效。</p>
+          <div className="confirm-actions">
+            <button type="button" className="btn-cancel" data-safe-focus onClick={() => setPendingClearAllPapers(false)}>取消</button>
+            <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => void clearAllPaperRecords()}>
+              确认清空
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
       {pendingClearSectionId && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-progress-title">
-            <h2 id="clear-progress-title">取消本章复习记录？</h2>
-            <p>取消此小节的新学会同时取消本章复习并清除本章复习完成日期；其他小节的新学记录保留。</p>
-            <div><button type="button" onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
-          </div>
-        </div>
+        <ModalDialog
+          role="alertdialog"
+          labelledBy="clear-progress-title"
+          initialFocus="[data-safe-focus]"
+          onClose={() => setPendingClearSectionId(null)}
+        >
+          <h2 id="clear-progress-title">取消本章复习记录？</h2>
+          <p>取消此小节的新学会同时取消本章复习并清除本章复习完成日期；其他小节的新学记录保留。</p>
+          <div><button type="button" data-safe-focus onClick={() => setPendingClearSectionId(null)}>取消操作</button><button className="danger" type="button" onClick={() => { clearLearned(pendingClearSectionId); setPendingClearSectionId(null); }}>确认清除</button></div>
+        </ModalDialog>
       )}
 
       {/* Journal Editor Modal */}
@@ -4668,110 +4837,128 @@ export function StudyDashboard() {
 
       {/* Blog Publish Modal */}
       {blogPublishJournal && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog confirm-dialog--wide blog-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="blog-publish-title">
-            <span className="dialog-kicker">GitHub Blog 一键发布</span>
-            <h2 id="blog-publish-title">发布到个人博客</h2>
-            <p className="blog-publish-subtitle">
-              发布稿与原日志独立解耦，发布前的润色或标题调整不会自动改写原学习日志。
-            </p>
+        <ModalDialog
+          labelledBy="blog-publish-title"
+          dialogClassName="confirm-dialog confirm-dialog--wide blog-publish-dialog"
+          dismissOnBackdrop={!isPublishing}
+          onClose={() => { if (!isPublishing) setBlogPublishJournal(null); }}
+        >
+          <span className="dialog-kicker">GitHub Blog 一键发布</span>
+          <h2 id="blog-publish-title">发布到个人博客</h2>
+          <p className="blog-publish-subtitle">
+            发布稿与原日志独立解耦，发布前的润色或标题调整不会自动改写原学习日志。
+          </p>
 
-            {publishError && (
-              <div className="publish-error-banner" role="alert">
-                <span><Icon name="alert" /> {publishError}</span>
-              </div>
-            )}
-
-            <div className="blog-publish-form">
-              <label className="publish-form-field">
-                <span className="field-label">文章标题 <strong>*</strong></span>
-                <input
-                  type="text"
-                  className="publish-input"
-                  placeholder="请输入面向公开发布的文章标题"
-                  value={publishTitle}
-                  onChange={(e) => setPublishTitle(e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="publish-form-field">
-                <span className="field-label">文章 Slug (URL 路径标识) <strong>*</strong></span>
-                <input
-                  type="text"
-                  className="publish-input font-mono"
-                  placeholder="例如: 20260814001 或 cpu-scheduling-summary"
-                  value={publishSlug}
-                  onChange={(e) => setPublishSlug(e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="publish-form-field">
-                <span className="field-label">文章正文 (Markdown 格式) <strong>*</strong></span>
-                <textarea
-                  className="publish-textarea"
-                  rows={8}
-                  value={publishContent}
-                  onChange={(e) => setPublishContent(e.target.value)}
-                  placeholder="输入发布稿正文..."
-                />
-              </label>
+          {publishError && (
+            <div className="publish-error-banner" role="alert">
+              <span><Icon name="alert" /> {publishError}</span>
             </div>
+          )}
 
-            <div className="confirm-actions">
-              <button
-                type="button"
-                className="journal-btn journal-btn--ghost"
-                onClick={() => setBlogPublishJournal(null)}
-                disabled={isPublishing}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="journal-btn journal-btn--primary"
-                onClick={handleBlogPublish}
-                disabled={isPublishing}
-              >
-                {isPublishing ? "正在发布至 GitHub..." : "确认发布到 Blog"}
-              </button>
-            </div>
+          <div className="blog-publish-form">
+            <label className="publish-form-field">
+              <span className="field-label">文章标题 <strong>*</strong></span>
+              <input
+                type="text"
+                className="publish-input"
+                placeholder="请输入面向公开发布的文章标题"
+                value={publishTitle}
+                onChange={(e) => setPublishTitle(e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="publish-form-field">
+              <span className="field-label">文章 Slug (URL 路径标识) <strong>*</strong></span>
+              <input
+                type="text"
+                className="publish-input font-mono"
+                placeholder="例如: 20260814001 或 cpu-scheduling-summary"
+                value={publishSlug}
+                onChange={(e) => setPublishSlug(e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="publish-form-field">
+              <span className="field-label">文章正文 (Markdown 格式) <strong>*</strong></span>
+              <textarea
+                className="publish-textarea"
+                rows={8}
+                value={publishContent}
+                onChange={(e) => setPublishContent(e.target.value)}
+                placeholder="输入发布稿正文..."
+              />
+            </label>
           </div>
-        </div>
+
+          <div className="confirm-actions">
+            <button
+              type="button"
+              className="journal-btn journal-btn--ghost"
+              onClick={() => setBlogPublishJournal(null)}
+              disabled={isPublishing}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="journal-btn journal-btn--primary"
+              onClick={handleBlogPublish}
+              disabled={isPublishing}
+            >
+              {isPublishing ? "正在发布至 GitHub..." : "确认发布到 Blog"}
+            </button>
+          </div>
+        </ModalDialog>
       )}
 
       {/* Delete Confirmation Modal */}
       {pendingDeleteJournal && (
-        <div className="confirm-overlay" role="presentation">
-          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-journal-title">
-            <span className="dialog-kicker">删除日志</span>
-            <h2 id="delete-journal-title">确定删除这条学习日志？</h2>
-            <p>
-              删除后该日志将从时间流和小节关联记录中移除。
-              {pendingDeleteJournal.publish?.status === "published" && (
-                <strong className="delete-publish-warning">
-                  <br />注意：此日志已发布到 Blog，删除本地日志不会自动删除 GitHub 上的已发布文章。
-                </strong>
-              )}
-            </p>
-            <div className="confirm-actions">
-              <button type="button" onClick={() => setPendingDeleteJournal(null)}>取消</button>
-              <button className="danger" type="button" onClick={confirmDeleteJournal}>确认删除</button>
-            </div>
+        <ModalDialog
+          role="alertdialog"
+          labelledBy="delete-journal-title"
+          initialFocus="[data-safe-focus]"
+          onClose={() => setPendingDeleteJournal(null)}
+        >
+          <span className="dialog-kicker">删除日志</span>
+          <h2 id="delete-journal-title">确定删除这条学习日志？</h2>
+          <p>
+            删除后该日志将从时间流和小节关联记录中移除。
+            {pendingDeleteJournal.publish?.status === "published" && (
+              <strong className="delete-publish-warning">
+                <br />注意：此日志已发布到 Blog，删除本地日志不会自动删除 GitHub 上的已发布文章。
+              </strong>
+            )}
+          </p>
+          <div className="confirm-actions">
+            <button type="button" data-safe-focus onClick={() => setPendingDeleteJournal(null)}>取消</button>
+            <button className="danger" type="button" onClick={confirmDeleteJournal}>确认删除</button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* Section Journal Drawer */}
       {activeDrawerSection && (
-        <div className="drawer-overlay" role="presentation" onClick={() => setActiveDrawerSectionId(null)}>
+        <div
+          className="drawer-overlay"
+          role="presentation"
+          onPointerDown={(e) => {
+            drawerBackdropPressedRef.current = e.target === e.currentTarget;
+          }}
+          onClick={(e) => {
+            const shouldClose = drawerBackdropPressedRef.current && e.target === e.currentTarget;
+            drawerBackdropPressedRef.current = false;
+            if (shouldClose) setActiveDrawerSectionId(null);
+          }}
+        >
           <aside
+            ref={drawerRef}
             className="section-journal-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="drawer-section-title"
-            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
           >
             <header className="drawer-header">
               <div className="drawer-title-wrap">
@@ -4822,19 +5009,19 @@ export function StudyDashboard() {
                           )}
                           <span className="drawer-date-tag">{formatDateChinese(entry.createdAt.slice(0, 10))} {formatTimeShort(entry.createdAt)}</span>
                         </div>
-                        <div className="drawer-card-tools">
+                        <JournalActions label={`${formatTimeShort(entry.createdAt)} 日志操作`}>
                           <button
                             type="button"
-                            className={entry.important ? "drawer-tool--starred" : ""}
+                            className={`journal-btn-tool journal-btn-tool--star ${entry.important ? "is-active" : ""}`}
                             onClick={() => toggleJournalImportant(entry.id)}
                             title={entry.important ? "取消重点标记" : "标为重点"}
                           >
                             {entry.important ? <><Icon name="star" filled /> 重点</> : <><Icon name="star" /> 设为重点</>}
                           </button>
-                          <button type="button" onClick={() => openEditJournal(entry)}>编辑</button>
-                          <button type="button" onClick={() => openBlogPublishModal(entry)}>发布</button>
-                          <button type="button" className="text-danger" onClick={() => handleDeleteJournal(entry)}>删除</button>
-                        </div>
+                          <button type="button" className="journal-btn-tool" onClick={() => openEditJournal(entry)}>编辑</button>
+                          <button type="button" className="journal-btn-tool journal-btn-tool--publish" onClick={() => openBlogPublishModal(entry)}>发布</button>
+                          <button type="button" className="journal-btn-tool journal-btn-tool--delete" onClick={() => handleDeleteJournal(entry)}>删除</button>
+                        </JournalActions>
                       </div>
                       {entry.title && <h4 className="drawer-card-title">{entry.title}</h4>}
                       <div className="drawer-card-content">
@@ -4854,57 +5041,19 @@ export function StudyDashboard() {
         </div>
       )}
 
-      {/* Paper Score Modal */}
-      {editingScorePaper && (() => {
-        const currentPaper = papers.find((p) => p.id === editingScorePaper.id);
-        const maxScoreLimit = currentPaper?.area === "politics" ? 50 : currentPaper?.area === "english" ? 100 : 150;
-        return (
-          <div className="confirm-overlay" role="presentation">
-            <div className="confirm-dialog paper-score-dialog" role="dialog" aria-modal="true" aria-labelledby="paper-score-dialog-title">
-              <span className="dialog-kicker">全真模拟考记录</span>
-              <h2 id="paper-score-dialog-title">模考成绩录入</h2>
-              <p className="paper-score-sub">记录本套试卷的真实得分（0~{maxScoreLimit} 分）</p>
-              <div className="paper-modal-form">
-                <label className="publish-form-field">
-                  <span className="field-label">得分 (0~{maxScoreLimit} 分)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={maxScoreLimit}
-                    step={0.5}
-                    placeholder="如：78.5"
-                    value={editingScorePaper.score}
-                    onChange={(e) => setEditingScorePaper({ ...editingScorePaper, score: e.target.value })}
-                    autoFocus
-                  />
-                </label>
-              </div>
-              <div className="confirm-actions">
-                <button type="button" className="btn-cancel" onClick={() => setEditingScorePaper(null)}>取消</button>
-                <button
-                  type="button"
-                  className="btn-confirm"
-                  onClick={() => {
-                    const scoreVal = editingScorePaper.score.trim() === "" ? null : parseFloat(editingScorePaper.score);
-                    updatePaper(editingScorePaper.id, {
-                      score: Number.isNaN(scoreVal) ? null : scoreVal,
-                    });
-                    setEditingScorePaper(null);
-                    setFeedbackMessage("已保存模考成绩");
-                  }}
-                >
-                  保存成绩
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Add Mock Paper Modal */}
       {isAddMockModalOpen && (
-        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setIsAddMockModalOpen(false); }}>
-          <div className="confirm-dialog paper-mock-dialog" role="dialog" aria-modal="true" aria-labelledby="add-mock-dialog-title">
+        <ModalDialog
+          labelledBy="add-mock-dialog-title"
+          dialogClassName="confirm-dialog paper-mock-dialog"
+          onClose={() => setIsAddMockModalOpen(false)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newMockTitle.trim()) handleAddMockPaper();
+            }}
+          >
             <h2 id="add-mock-dialog-title">添加 {activeArea === "408" ? "408" : "数学"} 模拟试卷</h2>
             <div className="paper-modal-form">
               <label className="paper-form-field">
@@ -4921,32 +5070,35 @@ export function StudyDashboard() {
             <div className="confirm-actions">
               <button type="button" className="btn-cancel" onClick={() => setIsAddMockModalOpen(false)}>取消</button>
               <button
-                type="button"
+                type="submit"
                 className="btn-confirm"
                 disabled={!newMockTitle.trim()}
-                onClick={handleAddMockPaper}
               >
                 确认添加
               </button>
             </div>
-          </div>
-        </div>
+          </form>
+        </ModalDialog>
       )}
 
       {/* Delete Mock Paper Modal */}
       {pendingDeletePaperId && (
-        <div className="confirm-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setPendingDeletePaperId(null); }}>
-          <div className="confirm-dialog confirm-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="delete-mock-dialog-title">
-            <h2 id="delete-mock-dialog-title">确认删除该模拟试卷？</h2>
-            <p>删除后将清除此模拟试卷的做题记录与得分，关联的错题复盘日志仍将保留。</p>
-            <div className="confirm-actions">
-              <button type="button" className="btn-cancel" onClick={() => setPendingDeletePaperId(null)}>取消</button>
-              <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteMockPaper(pendingDeletePaperId)}>
-                确认删除
-              </button>
-            </div>
+        <ModalDialog
+          role="alertdialog"
+          labelledBy="delete-mock-dialog-title"
+          dialogClassName="confirm-dialog confirm-dialog--danger"
+          initialFocus="[data-safe-focus]"
+          onClose={() => setPendingDeletePaperId(null)}
+        >
+          <h2 id="delete-mock-dialog-title">确认删除该模拟试卷？</h2>
+          <p>删除后将清除此模拟试卷的做题记录与得分，关联的错题复盘日志仍将保留。</p>
+          <div className="confirm-actions">
+            <button type="button" className="btn-cancel" data-safe-focus onClick={() => setPendingDeletePaperId(null)}>取消</button>
+            <button type="button" className="btn-confirm btn-confirm--danger" onClick={() => handleDeleteMockPaper(pendingDeletePaperId)}>
+              确认删除
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* Visual Question Board Modal */}
@@ -4973,18 +5125,21 @@ export function StudyDashboard() {
           onBatchSetWrong={(wrongStr) => batchSetWrongQuestions(activeQuestionPaper.id, wrongStr)}
           onClearQuestions={() => clearPaperQuestions(activeQuestionPaper.id)}
           onCreateWrongJournal={(paper) => {
-            const cleanTitle = paper.title.replace(/^(\d{4}年)\s+/, "$1");
-            const scoreStr = typeof paper.score === "number" ? `${paper.score}` : "--";
-            const title = `【模考复盘】${cleanTitle}`;
-            const template = `## 整体情况\n- **模考得分**：\${scoreStr} 分\n\n## 做后感悟\n`;
+            const summary = answerSheetScore(paper);
+            const synced = syncAnswerSheetScore(paper);
+            if (summary.total !== null || synced.completed !== paper.completed) {
+              updatePaper(paper.id, {
+                score: synced.score,
+                completed: synced.completed,
+                completedAt: synced.completedAt,
+              });
+            }
             openCreateJournal({
               type: "paper",
               area: paper.area,
               paperId: paper.id,
-              paperTitle: cleanTitle,
-            });
-            setEditorTitle(title);
-            setEditorContent(template);
+              paperTitle: paper.title,
+            }, synced);
             setActivePaperQuestionModalId(null);
           }}
           getPaperQuestionSummary={getPaperQuestionSummary}

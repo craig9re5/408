@@ -143,7 +143,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  background: var(--coral);
+  background: var(--coral-ink);
   color: #fff;
   font-size: var(--text-md);
   font-weight: 600;
@@ -151,11 +151,11 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
-  box-shadow: 0 2px 6px rgba(239, 132, 109, 0.3);
+  box-shadow: 0 2px 6px rgba(180, 83, 62, 0.28);
 }
 @media (hover: hover) and (pointer: fine) {
   .netdisk-upload-btn:hover:not(:disabled) {
-    background: #e4745c;
+    background: var(--state-wrong-deep);
     transform: translateY(-1px);
   }
 }
@@ -287,7 +287,8 @@
 
 .netdisk-search-input:focus {
   width: 210px;
-  border-color: var(--coral);
+  border-color: var(--blue-ink);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.15);
 }
 
 .netdisk-search-clear {
@@ -309,6 +310,10 @@
   padding: 0 var(--space-2);
   cursor: pointer;
   outline: none;
+}
+.netdisk-sort-select:focus-visible {
+  border-color: var(--blue-ink);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.15);
 }
 
 .netdisk-btn-batch {
@@ -556,6 +561,12 @@
   z-index: 50;
   animation: netdisk-fade-in var(--duration-fast) var(--ease-out);
 }
+.netdisk-dropdown-menu--up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: var(--space-1);
+}
 
 .netdisk-dropdown-item {
   width: 100%;
@@ -621,7 +632,7 @@
 }
 
 .netdisk-btn-primary {
-  background: var(--coral);
+  background: var(--coral-ink);
   color: #fff;
   font-size: var(--text-md);
   font-weight: 600;
@@ -629,11 +640,11 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
-  box-shadow: 0 4px 12px rgba(239, 132, 109, 0.3);
+  box-shadow: 0 4px 12px rgba(180, 83, 62, 0.28);
 }
 @media (hover: hover) and (pointer: fine) {
   .netdisk-btn-primary:hover {
-    background: #e4745c;
+    background: var(--state-wrong-deep);
     transform: translateY(-1px);
   }
 }
@@ -879,6 +890,10 @@
   background: #fff;
   overflow: hidden;
 }
+.netdisk-input-with-ext:focus-within {
+  border-color: var(--blue-ink);
+  box-shadow: 0 0 0 2px rgb(var(--blue-ink-rgb) / 0.15);
+}
 
 .netdisk-input-with-ext input {
   flex: 1;
@@ -969,7 +984,15 @@
     border: none;
   }
   .netdisk-header {
-    padding: var(--space-2) var(--space-3);
+    padding: max(var(--space-2), env(safe-area-inset-top)) var(--space-3) var(--space-2);
+  }
+  .netdisk-close-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .netdisk-body,
+  .netdisk-batch-bar {
+    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
   }
   .netdisk-quota-box {
     display: none;

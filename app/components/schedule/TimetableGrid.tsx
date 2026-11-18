@@ -169,10 +169,42 @@ export function TimetableGrid({
             activeInfo.activeEvent?.id === evt.id;
 
           const isFocused = focusedEventId === evt.id;
+          const canSelect = !isCompact || evt.linkedArea === "408" || evt.linkedArea === "math";
 
           const startP = periodMap.get(evt.startPeriod);
           const endP = periodMap.get(evt.endPeriod);
           const timeRangeTooltip = `${startP?.start ?? ""} ~ ${endP?.end ?? ""}`;
+          const cardContent = (
+            <div className="timetable-card__inner">
+              <span className="timetable-card__title">{evt.title}</span>
+
+              {/* 截图同款【上课中】蓝色胶囊徽标 */}
+              {isActive && (
+                <div className="timetable-active-pill" aria-label="正在进行中">
+                  <span className="timetable-active-pill__dot" />
+                  <span>上课中</span>
+                </div>
+              )}
+            </div>
+          );
+
+          if (!canSelect) {
+            return (
+              <div
+                key={evt.id}
+                className={`timetable-card timetable-card--static timetable-card--${evt.theme} ${
+                  isActive ? "timetable-card--active" : ""
+                } ${rowSpan > 1 ? "timetable-card--merged" : ""}`}
+                style={{
+                  gridColumn: col,
+                  gridRow: `${startRow} / span ${rowSpan}`,
+                }}
+                title={`${evt.title} (${timeRangeTooltip})`}
+              >
+                {cardContent}
+              </div>
+            );
+          }
 
           return (
             <button
@@ -186,21 +218,12 @@ export function TimetableGrid({
                 gridColumn: col,
                 gridRow: `${startRow} / span ${rowSpan}`,
               }}
+              aria-pressed={isCompact ? isFocused : undefined}
               onClick={() => onSelectEvent(evt)}
               title={`${evt.title} (${timeRangeTooltip})`}
               aria-label={`${evt.title}，第 ${evt.startPeriod} 至 ${evt.endPeriod} 节，${timeRangeTooltip}`}
             >
-              <div className="timetable-card__inner">
-                <span className="timetable-card__title">{evt.title}</span>
-
-                {/* 截图同款【上课中】蓝色胶囊徽标 */}
-                {isActive && (
-                  <div className="timetable-active-pill" aria-label="正在进行中">
-                    <span className="timetable-active-pill__dot" />
-                    <span>上课中</span>
-                  </div>
-                )}
-              </div>
+              {cardContent}
             </button>
           );
         })}

@@ -26,6 +26,7 @@ export type PaperCardProps = {
   onViewJournals: (paper: PaperRecord) => void;
   onDelete?: (paperId: string) => void;
   onChangeCompletedAt: (paperId: string, date: string) => void;
+  onDateError?: (message: string) => void;
   qSummary: QuestionSummaryMetrics;
 };
 
@@ -33,7 +34,6 @@ type BigQuestion = { num: number; name: string; max?: number };
 
 export function PaperCard({
   paper,
-  activeArea,
   paperJournals,
   maxScore,
   onUpdateScore,
@@ -44,6 +44,7 @@ export function PaperCard({
   onViewJournals,
   onDelete,
   onChangeCompletedAt,
+  onDateError,
   qSummary,
 }: PaperCardProps) {
   const [mobileExpanded, setMobileExpanded] = useState(false);
@@ -199,6 +200,7 @@ export function PaperCard({
                   value={paper.completedAt}
                   emptyLabel="设置日期"
                   ariaLabel={`${paper.title}完成日期`}
+                  onError={onDateError}
                   onChange={(val) => onChangeCompletedAt(paper.id, val)}
                 />
               </div>
@@ -300,6 +302,7 @@ export function PaperCard({
               value={paper.completedAt}
               emptyLabel="设置日期"
               ariaLabel={`${paper.title}完成日期`}
+              onError={onDateError}
               onChange={(val) => onChangeCompletedAt(paper.id, val)}
             />
           ) : null}
@@ -311,6 +314,7 @@ export function PaperCard({
               type="button"
               className="section-journal-badge"
               title={`查看此试卷的 ${paperJournals.length} 条复盘日志`}
+              aria-label={`查看${paper.title}的 ${paperJournals.length} 条复盘日志`}
               onClick={() => onViewJournals(paper)}
             >
               <Icon name="note" /> <span>{paperJournals.length}</span>
@@ -320,6 +324,7 @@ export function PaperCard({
             type="button"
             className="section-record-btn"
             title="写一条关于该试卷的复盘日志"
+            aria-label={`为${paper.title}写复盘日志`}
             onClick={() => onOpenCreateJournal(paper)}
           >
             <span className="record-plus">+</span>

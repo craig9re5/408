@@ -371,6 +371,16 @@
   transform: scale(0.98);
 }
 
+.timetable-card--static {
+  cursor: default;
+}
+.timetable-card--static:hover,
+.timetable-card--static:active {
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
 .timetable-card__inner {
   display: flex;
   flex-direction: column;
@@ -1891,6 +1901,8 @@
   .today-day-schedule__time { display: flex; flex-direction: column; justify-content: center; color: var(--ink-soft); font-size: var(--text-xs); font-weight: 700; text-align: center; }
   .today-day-schedule__time span { color: var(--muted); font-size: var(--text-2xs); font-weight: 400; }
   .today-day-schedule__event { display: flex; min-width: 0; min-height: 54px; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: var(--radius-md); color: var(--ink); background: #fff; text-align: left; cursor: pointer; }
+  .today-day-schedule__event--static { cursor: default; }
+  .today-day-schedule__event--static:active { transform: none; }
   .today-day-schedule__event--cs408 { border-left-color: var(--theme-408-bar); }
   .today-day-schedule__event--math_intense { border-left-color: var(--theme-math-intense-bar); }
   .today-day-schedule__event--math_regular { border-left-color: var(--theme-math-regular-bar); }

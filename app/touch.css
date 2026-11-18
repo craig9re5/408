@@ -20,7 +20,7 @@
   .q-chip-btn::after {
     content: "";
     position: absolute;
-    inset: -6px;
+    inset: -4px;
     z-index: 1;
   }
 
@@ -49,6 +49,17 @@
   .bento-check-label {
     padding: 4px 6px;
     margin: -4px -6px;
+  }
+}
+
+/* iPad / coarse-pointer >600px: 36px + 4px inset on both sides = 44x44px hit box with 8px gap (0px overlap) */
+@media (pointer: coarse) and (width > 600px) {
+  .q-heatmap-chips {
+    gap: var(--space-2);
+  }
+  .q-chip-btn {
+    min-width: 36px;
+    min-height: 36px;
   }
 }
 

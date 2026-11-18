@@ -16,6 +16,7 @@ import {
 import { PaperListRow } from "./PaperListRow";
 import { RenameModal, MoveCategoryModal, DeleteConfirmModal } from "./PaperActionModals";
 import { PaperUploadZone, type UploadTask } from "./PaperUploadZone";
+import { useFocusTrap } from "../../lib/use-focus-trap";
 
 interface PaperNetdiskModalProps {
   isOpen: boolean;
@@ -53,6 +54,13 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const uploadFilesRef = useRef(new Map<string, { file: File; subject: ExamPaperSubject }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const pressedBackdropRef = useRef(false);
+
+  useFocusTrap(dialogRef, {
+    enabled: isOpen,
+    onEscape: onClose,
+  });
 
   // Toast/Feedback
   const [toastMessage, setToastMessage] = useState<string>("");
@@ -264,8 +272,27 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
   const totalMB = (quota.totalBytes / (1024 * 1024)).toFixed(0);
 
   return (
-    <div className="netdisk-overlay" role="dialog" aria-modal="true">
-      <div className="netdisk-container">
+    <div
+      className="netdisk-overlay"
+      role="presentation"
+      onPointerDown={(e) => {
+        pressedBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = pressedBackdropRef.current && e.target === e.currentTarget;
+        pressedBackdropRef.current = false;
+        if (shouldClose) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        data-focus-self
+        className="netdisk-container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="netdisk-modal-title"
+        tabIndex={-1}
+      >
         {/* Header */}
         <header className="netdisk-header">
           <div className="netdisk-header-left">
@@ -282,7 +309,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
               <span>返回</span>
             </button>
             <div className="netdisk-title-group">
-              <h1 className="netdisk-title">试卷云盘</h1>
+              <h1 id="netdisk-modal-title" className="netdisk-title">试卷云盘</h1>
             </div>
           </div>
 
@@ -322,10 +349,11 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
 
         {/* Navigation & Filter Bar */}
         <div className="netdisk-toolbar">
-          <div className="netdisk-tabs-scroll">
+          <div className="netdisk-tabs-scroll" role="group" aria-label="试卷学科筛选">
             <button
               type="button"
               className={`netdisk-tab ${selectedSubject === "all" ? "netdisk-tab--active" : ""}`}
+              aria-pressed={selectedSubject === "all"}
               onClick={() => setSelectedSubject("all")}
             >
               全部
@@ -335,6 +363,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
                 type="button"
                 key={key}
                 className={`netdisk-tab ${selectedSubject === key ? "netdisk-tab--active" : ""}`}
+                aria-pressed={selectedSubject === key}
                 onClick={() => setSelectedSubject(key)}
               >
                 {meta.label}
@@ -345,7 +374,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
           <div className="netdisk-controls">
             {/* Search */}
             <div className="netdisk-search-wrap">
-              <svg className="netdisk-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="netdisk-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -353,6 +382,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
                 type="text"
                 className="netdisk-search-input"
                 placeholder="搜索试卷文件名..."
+                aria-label="搜索试卷文件名"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
               />
@@ -360,6 +390,7 @@ export function PaperNetdiskModal({ isOpen, onClose, onQuotaUpdated }: PaperNetd
                 <button
                   type="button"
                   className="netdisk-search-clear"
+                  aria-label="清空搜索"
                   onClick={() => setSearchKeyword("")}
                 >
                   <Icon name="x" />

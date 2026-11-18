@@ -41,10 +41,17 @@ export function SelectMenu({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const listId = useId();
 
   const flat = groups.flatMap((group) => group.options);
   const current = flat.find((option) => option.value === value) ?? flat[0];
+
+  useEffect(() => {
+    if (!open) return;
+    optionRefs.current[activeIndex]?.focus({ preventScroll: false });
+  }, [open, activeIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,6 +60,13 @@ export function SelectMenu({
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus({ preventScroll: true });
+        return;
+      }
+      if (event.key === "Tab") {
         setOpen(false);
         return;
       }
@@ -77,6 +91,7 @@ export function SelectMenu({
         if (picked) {
           onChange(picked.value);
           setOpen(false);
+          triggerRef.current?.focus({ preventScroll: true });
         }
       }
     };
@@ -100,9 +115,10 @@ export function SelectMenu({
   return (
     <div className={`select-menu ${className}`} ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={`select-menu__trigger ${triggerClassName}`}
-        aria-label={ariaLabel}
+        aria-label={current ? `${ariaLabel}：${current.label}` : ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -124,15 +140,20 @@ export function SelectMenu({
                 const index = indexById.get(option.value) ?? 0;
                 return (
                   <button
+                    ref={(el) => {
+                      optionRefs.current[index] = el;
+                    }}
                     type="button"
                     key={option.value}
                     role="option"
+                    tabIndex={-1}
                     aria-selected={option.value === value}
                     className={`select-menu__option${option.value === value ? " is-selected" : ""}${index === activeIndex ? " is-active" : ""}`}
                     onPointerEnter={() => setActiveIndex(index)}
                     onClick={() => {
                       onChange(option.value);
                       setOpen(false);
+                      triggerRef.current?.focus({ preventScroll: true });
                     }}
                   >
                     <span>{option.label}</span>

@@ -137,6 +137,7 @@ export function AnswerSheetModal({
   const clearTriggerRef = useRef<HTMLButtonElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const pressedBackdropRef = useRef(false);
   const { isImeKey, markCompositionEnd } = useImeGuard();
   const qSummary = getPaperQuestionSummary(paper);
   const scoreSummary = answerSheetScore(paper);
@@ -166,11 +167,16 @@ export function AnswerSheetModal({
     <div
       className="confirm-overlay paper-q-modal-overlay"
       role="presentation"
+      onPointerDown={(e) => {
+        pressedBackdropRef.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        const shouldClose = pressedBackdropRef.current && e.target === e.currentTarget;
+        pressedBackdropRef.current = false;
+        if (shouldClose) onClose();
       }}
     >
-      <div ref={dialogRef} className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title" tabIndex={-1}>
+      <div ref={dialogRef} data-focus-self className="confirm-dialog paper-q-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="q-modal-title" tabIndex={-1}>
         <div className="paper-q-modal-header">
           <h2 id="q-modal-title">{paper.title.replace(/(\d{4})年\s*/, "$1 ")}</h2>
           <div className="paper-q-header-right">
@@ -190,6 +196,7 @@ export function AnswerSheetModal({
               className="paper-modal-close-btn"
               onClick={onClose}
               title="关闭"
+              aria-label="关闭答题卡"
             >
               <Icon name="x" />
             </button>

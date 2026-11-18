@@ -41,18 +41,31 @@ export function PaperListRow({
   onDelete,
 }: PaperListRowProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuFlipUp, setMenuFlipUp] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    if (!isMenuOpen) return;
+    function handleOutsidePointer(e: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsMenuOpen(false);
       }
     }
-    if (isMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsMenuOpen(false);
+        moreBtnRef.current?.focus({ preventScroll: true });
+      }
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape, true);
+    };
   }, [isMenuOpen]);
 
   const subjectMeta = EXAM_PAPER_SUBJECT_MAP[paper.subject] || { label: "其他", badgeClass: "badge-other" };
@@ -60,7 +73,7 @@ export function PaperListRow({
   return (
     <div
       className={`netdisk-file-row ${isSelected ? "netdisk-file-row--selected" : ""}`}
-      onClick={(e) => {
+      onClick={() => {
         if (isBatchMode) {
           onToggleSelect(paper.id);
         }
@@ -123,7 +136,7 @@ export function PaperListRow({
           aria-label={`下载 ${paper.fileName}`}
           onClick={() => onDownload(paper)}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
@@ -133,13 +146,22 @@ export function PaperListRow({
 
         <div className="netdisk-more-menu-wrap" ref={menuRef}>
           <button
+            ref={moreBtnRef}
             type="button"
             className="netdisk-btn-icon"
             title="更多操作"
             aria-label={`更多操作：${paper.fileName}`}
-            onClick={() => setIsMenuOpen((prev) => !prev)}
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+            onClick={() => {
+              if (!isMenuOpen && moreBtnRef.current) {
+                const rect = moreBtnRef.current.getBoundingClientRect();
+                setMenuFlipUp(window.innerHeight - rect.bottom < 170);
+              }
+              setIsMenuOpen((prev) => !prev);
+            }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="1" />
               <circle cx="19" cy="12" r="1" />
               <circle cx="5" cy="12" r="1" />
@@ -147,10 +169,11 @@ export function PaperListRow({
           </button>
 
           {isMenuOpen && (
-            <div className="netdisk-dropdown-menu">
+            <div className={`netdisk-dropdown-menu${menuFlipUp ? " netdisk-dropdown-menu--up" : ""}`} role="menu">
               {paper.storageKey.startsWith("local://") && (
                 <button
                   type="button"
+                  role="menuitem"
                   className="netdisk-dropdown-item"
                   onClick={() => {
                     setIsMenuOpen(false);
@@ -162,6 +185,7 @@ export function PaperListRow({
               )}
               <button
                 type="button"
+                role="menuitem"
                 className="netdisk-dropdown-item"
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -172,6 +196,7 @@ export function PaperListRow({
               </button>
               <button
                 type="button"
+                role="menuitem"
                 className="netdisk-dropdown-item"
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -180,9 +205,10 @@ export function PaperListRow({
               >
                 修改分类
               </button>
-              <div className="netdisk-dropdown-divider" />
+              <div className="netdisk-dropdown-divider" role="separator" />
               <button
                 type="button"
+                role="menuitem"
                 className="netdisk-dropdown-item netdisk-dropdown-item--danger"
                 onClick={() => {
                   setIsMenuOpen(false);
